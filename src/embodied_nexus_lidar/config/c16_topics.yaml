@@ -1,0 +1,8 @@
+device_id: lidar_main
+model: lslidar_c16
+backend: ros2_topics
+interface_mode: both
+source:
+  pointcloud_topic: /lslidar_point_cloud
+  output_topic: points
+  scan_output_topic: scan

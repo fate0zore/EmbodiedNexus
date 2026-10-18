@@ -1,0 +1,5 @@
+string lease_id
+---
+bool success
+bool stop_sent
+string error

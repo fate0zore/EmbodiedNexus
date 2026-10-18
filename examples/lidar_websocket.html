@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EmbodiedNexus C16 Lidar Preview</title>
+  <style>
+    :root { color-scheme: dark; font: 15px system-ui, sans-serif; background: #10151b; color: #e8edf2; }
+    body { max-width: 1280px; margin: auto; padding: 22px; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p, small { color: #94a0ad; }
+    .connect { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 8px; }
+    input { min-width: 150px; padding: 10px; border: 1px solid #34414d; border-radius: 8px; background: #171e26; color: inherit; }
+    #base { flex: 1; }
+    button { border: 0; border-radius: 8px; padding: 10px 17px; background: #2dd4bf; color: #062c2c; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #273442; color: #d9e2eb; }
+    #status { min-height: 22px; margin: 12px 0 16px; color: #7dd3fc; font: 13px ui-monospace, monospace; }
+    .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+    section, .metric { min-width: 0; padding: 13px; background: #171e26; border: 1px solid #283440; border-radius: 12px; }
+    h2 { margin: 0 0 10px; font-size: 14px; }
+    canvas { width: 100%; height: 410px; display: block; background: #0b1015; border-radius: 8px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-top: 14px; }
+    .metric small { display: block; margin-bottom: 5px; }
+    .metric b { font: 13px ui-monospace, monospace; }
+    @media(max-width: 760px) { body { padding: 13px; } .grid { grid-template-columns: 1fr; } canvas { height: 320px; } .metrics { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+  <h1>C16 lidar preview</h1>
+  <p>PointCloud2, projected LaserScan, freshness and device status over the authenticated WebSocket API.</p>
+  <div class="connect">
+    <input id="base" value="http://robot-host:8777" aria-label="HTTP base URL">
+    <input id="device" value="lidar_main" aria-label="Device ID">
+    <input id="token" type="password" placeholder="Bearer token" aria-label="Bearer token">
+    <button id="connect">Connect</button><button id="disconnect" class="secondary">Disconnect</button>
+  </div>
+  <div id="status">Disconnected</div>
+  <div class="grid">
+    <section><h2>3D point cloud (XYZ, meters)</h2><canvas id="points"></canvas></section>
+    <section><h2>LaserScan (polar, meters)</h2><canvas id="scan"></canvas></section>
+  </div>
+  <div class="metrics">
+    <div class="metric"><small>Lifecycle</small><b id="life">—</b></div>
+    <div class="metric"><small>Point rate</small><b id="fps">—</b></div>
+    <div class="metric"><small>Data age</small><b id="age">—</b></div>
+    <div class="metric"><small>Frame / dropped</small><b id="frame">—</b></div>
+  </div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let socket = null, metadata = null, gl = null, program = null, buffer = null, lastCloudAt = 0, yaw = 0;
+  const status = value => $('status').textContent = value;
+
+  function initGL() {
+    gl = $('points').getContext('webgl');
+    if (!gl) throw Error('WebGL is unavailable in this browser');
+    const vs = 'attribute vec4 p; uniform float yaw; void main(){float c=cos(yaw),s=sin(yaw);float x=c*p.x-s*p.y;float y=s*p.x+c*p.y;float d=3.0+y*0.035-p.z*0.12;gl_Position=vec4(x*0.12/d,p.z*0.18/d,0.0,1.0);gl_PointSize=3.0;}';
+    const fs = 'precision mediump float; void main(){gl_FragColor=vec4(0.18,0.82,0.73,1.0);}';
+    const shader = (type, src) => { const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw Error(gl.getShaderInfoLog(s)); return s; };
+    program=gl.createProgram(); gl.attachShader(program,shader(gl.VERTEX_SHADER,vs)); gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(program);
+    if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(program));
+    buffer=gl.createBuffer(); gl.clearColor(0.035,0.055,0.075,1); return gl;
+  }
+
+  function fieldReader(view, field, offset, little) {
+    const at=offset+field.offset;
+    switch(field.datatype) {
+      case 7: return view.getFloat32(at,little); case 8: return view.getFloat64(at,little);
+      case 2: return view.getUint8(at); case 3: return view.getInt16(at,little);
+      case 4: return view.getUint16(at,little); case 5: return view.getInt32(at,little);
+      case 6: return view.getUint32(at,little); default: return NaN;
+    }
+  }
+
+  function drawCloud(meta, payload) {
+    if(!gl) initGL();
+    const canvas=$('points'), dpr=window.devicePixelRatio||1, w=Math.max(1,Math.floor(canvas.clientWidth*dpr)), h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
+    if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}
+    const fields=Object.fromEntries(meta.fields.map(f=>[f.name,f])), view=new DataView(payload), points=new Float32Array(meta.point_count*4); let n=0;
+    const little=!meta.is_bigendian;
+    for(let r=0;r<meta.height;r++) for(let c=0;c<meta.width;c++) {
+      const off=r*meta.row_step+c*meta.point_step, x=fieldReader(view,fields.x,off,little), y=fieldReader(view,fields.y,off,little), z=fieldReader(view,fields.z,off,little);
+      if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(z)) continue;
+      points[n++]=x; points[n++]=y; points[n++]=z; points[n++]=1;
+    }
+    gl.clear(gl.COLOR_BUFFER_BIT); gl.useProgram(program); gl.bindBuffer(gl.ARRAY_BUFFER,buffer); gl.bufferData(gl.ARRAY_BUFFER,points.subarray(0,n),gl.DYNAMIC_DRAW);
+    const loc=gl.getAttribLocation(program,'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,4,gl.FLOAT,false,16,0);
+    gl.uniform1f(gl.getUniformLocation(program,'yaw'),yaw); gl.drawArrays(gl.POINTS,0,n/4);
+    $('frame').textContent=`${meta.frame_id||'—'} / ${meta.client_dropped_frames||0}`; lastCloudAt=Date.now();
+  }
+
+  function drawScan(meta,payload) {
+    const canvas=$('scan'),ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1,w=Math.max(1,Math.floor(canvas.clientWidth*dpr)),h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
+    if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+    ctx.fillStyle='#0b1015';ctx.fillRect(0,0,w,h);const cx=w/2,cy=h/2,R=Math.min(w,h)*.43,max=meta.range_max_m;
+    ctx.strokeStyle='#263440';ctx.lineWidth=dpr;
+    for(let k=1;k<=4;k++){ctx.beginPath();ctx.arc(cx,cy,R*k/4,0,Math.PI*2);ctx.stroke();}
+    const view=new DataView(payload);ctx.fillStyle='#2dd4bf';
+    for(let i=0;i<meta.count;i++){const range=view.getFloat32(meta.ranges_offset+i*4,true);if(!Number.isFinite(range)||range<meta.range_min_m||range>max)continue;const a=meta.angle_min_rad+i*meta.angle_increment_rad,r=R*range/max;ctx.fillRect(cx+Math.cos(a)*r-1.5*dpr,cy-Math.sin(a)*r-1.5*dpr,3*dpr,3*dpr);}
+  }
+
+  function drawStatus(s){$('life').textContent=s.lifecycle_state||'—';$('fps').textContent=s.pointcloud_fps==null?'—':`${Number(s.pointcloud_fps).toFixed(1)} Hz`;$('age').textContent=s.pointcloud_age_sec==null?'—':`${Number(s.pointcloud_age_sec).toFixed(3)} s`;if(s.last_error)status(s.last_error);else status(`${s.connected?'Connected':'Waiting'} · ${s.backend||''} · dropped ${s.client_dropped_frames||s.dropped_frames||0}`);}
+
+  $('connect').onclick=async()=>{try{
+    if(socket)socket.close(); const base=$('base').value.replace(/\/$/,''),device=encodeURIComponent($('device').value.trim()),token=$('token').value;
+    const response=await fetch(`${base}/api/v1/lidars/${device}/status`,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw Error(`HTTP ${response.status}: ${await response.text()}`);drawStatus(await response.json());
+    const ws=base.replace(/^https:/,'wss:').replace(/^http:/,'ws:')+'/ws?streams=points,scan,status&points_fps=5&scan_fps=10';
+    socket=new WebSocket(ws,['en-lidar-v1',`bearer.${token}`]);socket.binaryType='arraybuffer';
+    socket.onopen=()=>status('WebSocket connected; waiting for frames');socket.onclose=e=>status(`Connection closed (${e.code})`);socket.onerror=()=>status('WebSocket connection error');
+    socket.onmessage=e=>{if(typeof e.data==='string'){try{const m=JSON.parse(e.data);if(m.type==='status')drawStatus(m);else metadata=m;}catch{}return;}if(!metadata)return;const m=metadata;metadata=null;if(m.channel==='points')drawCloud(m,e.data);else if(m.channel==='scan')drawScan(m,e.data);};
+  }catch(e){status(String(e));}};
+  $('disconnect').onclick=()=>{if(socket)socket.close(1000,'user disconnect');socket=null;};
+  $('points').addEventListener('mousemove',e=>{if(e.buttons)yaw+=e.movementX*.006;});
+  setInterval(()=>{if(lastCloudAt&&Date.now()-lastCloudAt>1500&&socket?.readyState===WebSocket.OPEN)status('Point cloud data is stale');},500);
+})();
+</script>
+</body>
+</html>

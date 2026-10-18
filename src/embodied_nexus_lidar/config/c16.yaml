@@ -1,0 +1,57 @@
+device_id: lidar_main
+model: lslidar_c16
+backend: c16
+interface_mode: both
+source:
+  pointcloud_topic: _driver/points
+  output_topic: points
+  scan_output_topic: scan
+driver:
+  device_ip: 192.168.1.200
+  msop_port: 2368
+  difop_port: 2369
+  command_port: 2368
+  pcl_type: false
+  add_multicast: false
+  group_ip: 224.1.1.2
+  use_time_service: false
+  min_range_m: 0.15
+  max_range_m: 200.0
+  angle_disable_min: 0
+  angle_disable_max: 0
+  distance_unit: 0.4
+  horizontal_angle_resolution_deg: 0.18
+  frame_id: lidar_link
+  coordinate_opt: false
+filter:
+  min_range_m: 0.15
+  max_range_m: 200.0
+  min_height_m: -10.0
+  max_height_m: 10.0
+scan:
+  min_height_m: -0.35
+  max_height_m: 0.35
+  angle_min_rad: -3.141592653589793
+  angle_max_rad: 3.141592653589793
+  angle_increment_rad: 0.017453292519943295
+  range_min_m: 0.15
+  range_max_m: 18.0
+  use_inf: true
+streams:
+  stale_sec: 1.0
+  web_points_fps: 5.0
+  web_scan_fps: 10.0
+  max_clients: 8
+control:
+  difop_stale_sec: 2.0
+  lease_ttl_sec: 2.0
+  lease_renew_interval_sec: 0.5
+  max_lease_ttl_sec: 30.0
+mock:
+  disconnect: false
+  fail_stop: false
+  fail_command: false
+web:
+  bind_host: 0.0.0.0
+  port: 8777
+  auth_token_env: EMBODIED_NEXUS_LIDAR_TOKEN

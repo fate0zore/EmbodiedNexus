@@ -29,3 +29,7 @@
 ## MS42DC 夹爪适配
 
 [MS42DC 夹爪接入与验证指南](docs/ms42dc-gripper.md)记录 ROS 2、HTTP、Python SDK、配置和 Yahboom 实机验收结果。真实后端启动时仍默认禁用运动；本次确认的反馈语义仅适用于已验证的 Yahboom/MS42DC 组合。
+
+## C16 雷达适配
+
+[C16 雷达接入指南](docs/lidar-c16.md)记录真实/mock/已有 ROS 2 话题后端、点云与 LaserScan、租约控制、HTTP/WebSocket、Python SDK 和浏览器预览。驱动来源及许可证见 [lidar-source.md](docs/lidar-source.md)。

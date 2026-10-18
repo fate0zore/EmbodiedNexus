@@ -1,0 +1,5 @@
+bool capturing
+---
+bool success
+bool capturing
+string error

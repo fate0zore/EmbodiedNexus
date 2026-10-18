@@ -1,0 +1,8 @@
+string lease_id
+bool enabled
+---
+bool success
+bool command_sent
+bool hardware_state_confirmed
+string motor_state
+string error

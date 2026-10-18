@@ -141,5 +141,3 @@ class GripperOperationHandle:
             if deadline is not None and time.monotonic() >= deadline:
                 raise TimeoutError(f"gripper operation {self.operation_id} did not finish before timeout")
             time.sleep(max(float(poll_interval), 0.01))
-
-\n

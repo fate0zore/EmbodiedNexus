@@ -1,0 +1,10 @@
+string lease_id
+int32 speed_hz
+---
+bool success
+bool command_sent
+bool hardware_state_confirmed
+int32 requested_speed_hz
+bool actual_speed_known
+int32 actual_speed_hz
+string error
