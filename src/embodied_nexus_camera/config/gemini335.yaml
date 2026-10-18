@@ -1,0 +1,69 @@
+camera_id: camera_front
+interface_mode: both
+source:
+  backend: gemini_v4l2
+  color_device: /dev/v4l/by-id/usb-Orbbec_R__Orbbec_Gemini_335_CP0E853000EY-video-index0
+  depth_device: /dev/video0
+  color_topic: /camera/color/image_raw
+  depth_topic: /camera/depth/image_raw
+  color_info_topic: /camera/color/camera_info
+  depth_info_topic: /camera/depth/camera_info
+capture:
+  color_width: 640
+  color_height: 480
+  color_fps: 30.0
+  color_fourcc: YUYV
+  depth_width: 640
+  depth_height: 480
+  depth_fps: 5.0
+  depth_fourcc: "Z16 "
+  capture_timeout_sec: 4.0
+  reconnect_backoff_sec: 1.0
+  color_controls: {}
+  depth_controls: {}
+  color_frame_id: camera_color_optical_frame
+  depth_frame_id: camera_depth_optical_frame
+streams:
+  publish_color: true
+  publish_depth: true
+  publish_depth_color: false
+  publish_points: true
+  color_output_fps: 30.0
+  depth_output_fps: 5.0
+  web_color_fps: 15.0
+  web_depth_fps: 5.0
+  jpeg_quality: 85
+  frame_stale_sec: 1.0
+  max_clients: 8
+pointcloud:
+  source: depth
+  input_topic: /camera/points
+  target_frame: ""
+  min_depth_m: 0.05
+  max_depth_m: 5.0
+  stride: 4
+  max_points: 50000
+  max_pair_delta_ms: 50.0
+  output_fps: 5.0
+  # Depth-image pixels [x, y, width, height]; empty means the full image.
+  roi: []
+calibration:
+  factory_file: gemini335_factory_calibration.json
+  custom_file: ""
+  history_file: config/gemini335_intrinsics/intrinsics_history.json
+  depth_scale_m: 0.001
+  depth_to_color_translation_unit: mm
+  require_color_calibration_for_cloud: true
+  allow_resolution_scaling: false
+calibration_session:
+  root: recordings/camera_calibration
+  board_image_path: ""
+  board_width_m: 0.210
+  board_height_m: 0.297
+  min_usable_frames: 10
+  max_rms_px: 0.5
+  max_outlier_px: 2.0
+web:
+  bind_host: 0.0.0.0
+  port: 8765
+  auth_token_env: EMBODIED_NEXUS_CAMERA_TOKEN

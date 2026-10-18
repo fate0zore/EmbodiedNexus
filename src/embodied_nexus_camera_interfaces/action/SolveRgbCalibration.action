@@ -1,0 +1,13 @@
+string session_id
+---
+bool success
+string calibration_id
+float64 rms_px
+uint32 used_frames
+bool accepted
+string message
+---
+string state
+uint32 processed_frames
+uint32 total_frames
+float32 progress

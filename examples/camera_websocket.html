@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>EmbodiedNexus Camera Preview</title>
+<label>Camera service <input id="url" value="ws://192.168.1.102:8765/ws"></label>
+<label>Token <input id="token" type="password"></label>
+<button id="connect">Connect</button>
+<!-- <pre id="status">Disconnected</pre> -->
+<img id="frame" alt="RGB camera preview" style="max-width: 100%; image-rendering: auto">
+<script>
+const status = document.querySelector('#status');
+document.querySelector('#connect').onclick = () => {
+  const base = document.querySelector('#url').value;
+  const token = document.querySelector('#token').value;
+  const ws = new WebSocket(base + '?streams=color,status&color_codec=jpeg', ['en-camera-v1', `bearer.${token}`]);
+  ws.binaryType = 'blob';
+  let pending = null;
+  ws.onmessage = event => {
+    if (typeof event.data === 'string') {
+      const meta = JSON.parse(event.data);
+      if (meta.type === 'status') { status.textContent = JSON.stringify(meta, null, 2); return; }
+      pending = meta;
+    } else if (pending?.channel === 'color') {
+      const img = document.querySelector('#frame');
+      if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+      img.dataset.url = URL.createObjectURL(event.data);
+      img.src = img.dataset.url;
+      status.textContent = JSON.stringify(pending, null, 2);
+      pending = null;
+    }
+  };
+  ws.onerror = () => { status.textContent = 'Connection error'; };
+  ws.onclose = () => { status.textContent += '\nDisconnected'; };
+};
+</script>
