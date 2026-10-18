@@ -1,4 +1,4 @@
-from embodied_nexus_camera_client import LidarClient
+from embodied_nexus_client import LidarClient
 
 
 def main() -> None:

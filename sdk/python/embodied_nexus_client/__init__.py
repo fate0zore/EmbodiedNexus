@@ -1,4 +1,4 @@
-from .client import CameraClient, CameraFrame
+from .camera import CameraClient, CameraFrame
 from .gripper import GripperClient, GripperLease, GripperOperationHandle
 from .lidar import LidarClient, LidarFrame, LidarLease
 

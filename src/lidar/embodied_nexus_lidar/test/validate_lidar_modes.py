@@ -1,6 +1,7 @@
 """Humble acceptance smoke for mock/topics backends and ROS/Web modes.
 
-Run after sourcing the workspace: python3 src/embodied_nexus_lidar/test/validate_lidar_modes.py
+Install the SDK with pip install -e sdk/python, then source the workspace and run:
+python3 src/lidar/embodied_nexus_lidar/test/validate_lidar_modes.py
 This script never launches the real C16 backend or sends hardware commands.
 """
 
@@ -13,7 +14,6 @@ import signal
 import socket
 import struct
 import subprocess
-import sys
 import time
 import urllib.error
 import urllib.request
@@ -21,15 +21,13 @@ from pathlib import Path
 
 
 PACKAGE = Path(__file__).resolve().parents[1]
-ROOT = PACKAGE.parents[1]
-sys.path.insert(0, str(ROOT / "sdk" / "python"))
 
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import PointCloud2, PointField
 
-from embodied_nexus_camera_client import LidarClient
+from embodied_nexus_client import LidarClient
 
 
 PREFIX = "/embodied_nexus/lidars/lidar_main"

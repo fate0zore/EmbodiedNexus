@@ -1,7 +1,7 @@
 """Short C16 hardware acceptance; explicit flag required before any motor command.
 
 Run on the Humble device after sourcing the workspace:
-  python3 src/embodied_nexus_lidar/test/validate_c16_hardware.py --enable-motor-test
+  python3 src/lidar/embodied_nexus_lidar/test/validate_c16_hardware.py --enable-motor-test
 
 The script records the DIFOP speed before any start command. If stopped-state
 DIFOP omits the speed, a previously observed value may be supplied explicitly;

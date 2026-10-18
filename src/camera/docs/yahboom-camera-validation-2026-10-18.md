@@ -68,5 +68,5 @@ Web 接口使用 bearer token。未认证 HTTP 请求返回 `401`。从局域网
 ## 尚未现场完成的项目
 
 - 本次机器人上没有可用的 AprilTag 标定板参考图或实体标定板，因此没有现场采集样本、运行 RGB 内参求解或应用新标定。RGB 标定的 API、求解 action、候选结果与历史管理已实现，但现场求解精度和标定板检测成功率仍待补测。当前点云使用已存在的工厂标定参数。
-- 用户在本机浏览器通过 `examples/camera_websocket.html` 连接机器人 WebSocket，采样预览正常，确认通过。局域网 Python SDK 的 WebSocket 和图像解码也已实测通过。
+- 用户在本机浏览器通过 `src/camera/examples/camera_websocket.html` 连接机器人 WebSocket，采样预览正常，确认通过。局域网 Python SDK 的 WebSocket 和图像解码也已实测通过。
 - 本次没有对长期运行、持续数小时温升、拥塞网络下的带宽和多客户端压力作验收。

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 
-from embodied_nexus_camera_client import GripperClient
+from embodied_nexus_client import GripperClient
 
 
 def main() -> None:

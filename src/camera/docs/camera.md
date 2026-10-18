@@ -4,14 +4,16 @@ The first camera adapter targets the Gemini335 on the Yahboom robot. It provides
 
 ## Build and start on the robot
 
+Run repository-relative commands from the EmbodiedNexus root.
+
 ```bash
 cd ~/EmbodiedNexus
 source /opt/ros/humble/setup.bash
-colcon build --packages-up-to embodied_nexus_camera
+colcon build --base-paths src --packages-up-to embodied_nexus_camera
 source install/setup.bash
 export EMBODIED_NEXUS_CAMERA_TOKEN='replace-with-a-local-token'
 ros2 launch embodied_nexus_camera camera.launch.py \
-  config_file:=$(pwd)/src/embodied_nexus_camera/config/gemini335.yaml
+  config_file:=$(pwd)/src/camera/embodied_nexus_camera/config/gemini335.yaml
 ```
 
 Use `interface_mode:=ros2`, `web`, or `both`. The Web API listens on the configured port (default 8765). The node always uses ROS 2 internally. It never starts or stops another camera process; the V4L2 device must be free before selecting the `gemini_v4l2` backend.
@@ -59,10 +61,10 @@ Each WebSocket frame consists of a UTF-8 JSON metadata message followed by one b
 
 ## Python client
 
-Install `sdk/python` on the Windows/Linux algorithm host with `pip install .`. The client uses HTTP from the standard library and `websockets` for live frames; it does not require ROS 2.
+From the repository root on the Windows/Linux algorithm host, run `pip install -e sdk/python`. The distribution is `embodied-nexus-client`, with imports under `embodied_nexus_client`. The client uses HTTP from the standard library and `websockets` for live frames; it does not require ROS 2.
 
 ```python
-from embodied_nexus_camera_client import CameraClient
+from embodied_nexus_client import CameraClient
 
 camera = CameraClient("http://192.168.1.102:8765", token="...", camera_id="camera_front")
 print(camera.status())
@@ -70,7 +72,7 @@ for frame in camera.subscribe(("color", "depth"), color_fps=10, depth_fps=5):
     print(frame.metadata["channel"], frame.metadata["stamp_sec"], len(frame.data))
 ```
 
-Open `examples/camera_websocket.html` from a local HTTP server for a minimal browser preview. Enter the WebSocket URL and token in the page.
+Open `src/camera/examples/camera_websocket.html` from a local HTTP server for a minimal browser preview. Enter the WebSocket URL and token in the page.
 
 ## Calibration and point-cloud configuration
 

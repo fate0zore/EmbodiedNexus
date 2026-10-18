@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 import unittest
 
-from embodied_nexus_camera_client.gripper import GripperClient
+from embodied_nexus_client.gripper import GripperClient
 
 
 class FakeGripperClient(GripperClient):

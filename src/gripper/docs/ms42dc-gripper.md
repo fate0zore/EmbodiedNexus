@@ -10,18 +10,18 @@
 
 ## 构建与运行
 
-在已 source ROS 2 Humble 的 Ubuntu 22.04 工作区中安装 Python 依赖并构建：
+以下相对路径均以仓库根目录为起点。在已 source ROS 2 Humble 的 Ubuntu 22.04 工作区中安装 Python 依赖并构建：
 
 ```bash
 sudo apt install python3-serial python3-yaml python3-starlette python3-uvicorn
-colcon build --packages-up-to embodied_nexus_gripper
+colcon build --base-paths src --packages-up-to embodied_nexus_gripper
 source install/setup.bash
 ```
 
 先用 mock 启动并检查配置：
 
 ```bash
-gripper_check --config src/embodied_nexus_gripper/config/ms42dc_mock.yaml --show-config
+gripper_check --config src/gripper/embodied_nexus_gripper/config/ms42dc_mock.yaml --show-config
 ros2 launch embodied_nexus_gripper gripper.launch.py \
   config_file:="$(ros2 pkg prefix embodied_nexus_gripper)/share/embodied_nexus_gripper/config/ms42dc_mock.yaml"
 ```
@@ -54,14 +54,14 @@ HTTP 对应接口：
 
 ## Python SDK
 
-SDK 保留原相机包名和 `CameraClient`，新增 `GripperClient`：
+统一 SDK 的安装包名为 `embodied-nexus-client`，导入名为 `embodied_nexus_client`，同时提供相机、夹爪与雷达客户端：
 
-```python
+```bash
 pip install -e sdk/python
 ```
 
 ```python
-from embodied_nexus_camera_client import GripperClient
+from embodied_nexus_client import GripperClient
 
 gripper = GripperClient("http://robot-host:8776", token="local-secret")
 with gripper.acquire_control("pick-demo") as lease:
@@ -93,8 +93,8 @@ mock 中可通过应用配置注入故障，例如持有租约且设备空闲时
 协议及控制器测试：
 
 ```bash
-PYTHONPATH=src/embodied_nexus_gripper python -m unittest discover \
-  -s src/embodied_nexus_gripper/test -v
+PYTHONPATH=src/gripper/embodied_nexus_gripper python -m unittest discover \
+  -s src/gripper/embodied_nexus_gripper/test -v
 ```
 
 自动化覆盖协议帧、校验、32 位反馈、运动使能、租约冲突/过期、完成反馈、取消、超时和停止失败。ROS 2 节点与网关构建需在 Humble 工作区验证。

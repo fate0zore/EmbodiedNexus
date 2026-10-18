@@ -18,7 +18,7 @@ The inspection process then requested stop and logged `shutdown lidar stop comma
 Real acquisition was observed at startup, but a sustained frequency/bandwidth sample and the motor start/stop plus 5/10/20 Hz readback sequence remain unverified. Repeat only after the C16 provides a readable speed after the baseline restore command. The script enforces that readback before motor start:
 
 ```bash
-python3 src/embodied_nexus_lidar/test/validate_c16_hardware.py \
+python3 src/lidar/embodied_nexus_lidar/test/validate_c16_hardware.py \
   --enable-motor-test --recorded-original-speed-hz 10
 ```
 

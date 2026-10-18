@@ -4,14 +4,15 @@
 
 ## 构建与启动
 
-机器人端使用 Ubuntu 22.04、ROS 2 Humble：
+以下相对路径均以仓库根目录为起点。机器人端使用 Ubuntu 22.04、ROS 2 Humble：
 
 ```bash
 sudo apt install ros-humble-pcl-ros ros-humble-pcl-conversions ros-humble-angles libpcap-dev
 cd ~/EmbodiedNexus
-colcon build --symlink-install --packages-up-to embodied_nexus_lidar
+colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_lidar
 source install/setup.bash
-python3 src/embodied_nexus_lidar/test/validate_lidar_modes.py
+python3 -m pip install -e sdk/python
+python3 src/lidar/embodied_nexus_lidar/test/validate_lidar_modes.py
 ```
 
 该验收脚本只启动 mock 与已有话题后端，覆盖 `ros2/web/both`、HTTP/WebSocket 与 Python SDK；真实 C16 电机命令需使用下面的硬件步骤单独验证。
@@ -19,7 +20,7 @@ python3 src/embodied_nexus_lidar/test/validate_lidar_modes.py
 先检查 mock 配置，然后启动：
 
 ```bash
-ros2 run embodied_nexus_lidar lidar_check --config src/embodied_nexus_lidar/config/c16_mock.yaml --show-config
+ros2 run embodied_nexus_lidar lidar_check --config src/lidar/embodied_nexus_lidar/config/c16_mock.yaml --show-config
 ros2 launch embodied_nexus_lidar lidar.launch.py \
   config_file:=$(ros2 pkg prefix embodied_nexus_lidar)/share/embodied_nexus_lidar/config/c16_mock.yaml
 ```
@@ -27,7 +28,7 @@ ros2 launch embodied_nexus_lidar lidar.launch.py \
 真实 C16 使用随包配置。启动前会检查已知驱动进程及 UDP 端口占用；冲突时退出，不终止其他进程。驱动收到数据后才报告在线：
 
 ```bash
-ros2 run embodied_nexus_lidar lidar_check --config src/embodied_nexus_lidar/config/c16.yaml --check-hardware
+ros2 run embodied_nexus_lidar lidar_check --config src/lidar/embodied_nexus_lidar/config/c16.yaml --check-hardware
 ros2 launch embodied_nexus_lidar lidar.launch.py
 ```
 
@@ -68,14 +69,14 @@ ros2 launch embodied_nexus_lidar lidar.launch.py interface_mode:=both
 
 ## HTTP、WebSocket 和 Python SDK
 
-HTTP 前缀为 `/api/v1/lidars/lidar_main`，所有 HTTP 和 WebSocket 连接都需要同一令牌。SDK 保留原有包名：
+HTTP 前缀为 `/api/v1/lidars/lidar_main`，所有 HTTP 和 WebSocket 连接都需要同一令牌。统一 SDK 使用安装包名 `embodied-nexus-client` 和导入名 `embodied_nexus_client`：
 
 ```bash
 pip install -e sdk/python
 ```
 
 ```python
-from embodied_nexus_camera_client import LidarClient
+from embodied_nexus_client import LidarClient
 
 lidar = LidarClient("http://robot-host:8777", token="local-secret")
 print(lidar.status())
@@ -91,13 +92,13 @@ with lidar.acquire_control("inspection") as lease:
 
 WebSocket `/ws` 使用 `en-lidar-v1` 及 `bearer.<token>` 子协议。每帧先发送 JSON 元数据，再发送原始二进制数据。点云二进制保持 `PointCloud2` 字段布局；扫描载荷为 little-endian float32 ranges，随后是 float32 intensities。每个客户端只保留最新帧；较慢的订阅者会跳过旧数据，并在状态中看到累计丢帧数。
 
-`examples/lidar_websocket.html` 可在浏览器内连接 WebSocket，预览三维点云、二维扫描和实时状态。示例在本机处理令牌，仅通过 WebSocket 子协议发送。
+`src/lidar/examples/lidar_websocket.html` 可在浏览器内连接 WebSocket，预览三维点云、二维扫描和实时状态。示例在本机处理令牌，仅通过 WebSocket 子协议发送。
 
 ## 配置与来源
 
 `c16.yaml` 保存 C16 网络地址 `192.168.1.200`、接收端口 `2368/2369`、命令端口 `2368` 和 `lidar_link`。接收端口、网络地址、厂商解析方式和后端启动参数需要重启；扫描滤波、LaserScan 投影、超时和远程订阅频率支持运行时整批校验后应用。通过 `ros2 run embodied_nexus_lidar lidar_check` 执行配置检查、`--show-config`、`--diff-from` 和只读 `--check-hardware`。
 
-随包厂商驱动来源和许可见 [lidar-source.md](lidar-source.md)。它在 `src/third_party/lslidar_c16_ros2` 中独立构建；设备服务关闭厂商未加控制权保护的原始控制服务，只保留点云与 DIFOP 接收路径。
+随包厂商驱动来源和许可见 [lidar-source.md](lidar-source.md)。它在 `src/lidar/third_party/lslidar_c16_ros2` 中独立构建；设备服务关闭厂商未加控制权保护的原始控制服务，只保留点云与 DIFOP 接收路径。
 
 ## 验收
 
@@ -106,7 +107,7 @@ WebSocket `/ws` 使用 `en-lidar-v1` 及 `bearer.<token>` 子协议。每帧先�
 Humble 机器人端的短时真机电机验收命令：
 
 ```bash
-python3 src/embodied_nexus_lidar/test/validate_c16_hardware.py --enable-motor-test
+python3 src/lidar/embodied_nexus_lidar/test/validate_c16_hardware.py --enable-motor-test
 ```
 
 该脚本先读取并记录 DIFOP 原转速，再执行停转、启转及 5/10/20Hz 读回；结束时恢复原值、释放租约并请求停转，同时输出点云频率、数据年龄、带宽和丢帧。若设备停转后 DIFOP 不再报告可识别转速，可在本次验收已可靠记录先前读回值后，通过 `--recorded-original-speed-hz 10` 提供该恢复值；脚本会先写回并等待 DIFOP 确认，再允许启转。没有有效 DIFOP、已记录恢复值或转速读回时，会跳过启转/调速并报告待验收项。
