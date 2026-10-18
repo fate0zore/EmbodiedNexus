@@ -1,0 +1,6 @@
+string reason
+---
+bool success
+bool stop_sent
+bool hardware_stop_confirmed
+string error

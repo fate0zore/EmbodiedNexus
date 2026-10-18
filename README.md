@@ -14,7 +14,7 @@
 
 ## 当前状态
 
-第一期 Gemini335 相机适配已实现，并已在 Yahboom 机器人上验证 ROS 2、Web、点云、配置接口和 ROS 2 话题接入；RGB 标定求解尚待标定板条件具备后实测。其他设备适配仍按总体规划分阶段推进。
+第一期 Gemini335 相机适配已实现，并已在 Yahboom 机器人上验证 ROS 2、Web、点云、配置接口和 ROS 2 话题接入；RGB 标定求解尚待标定板条件具备后实测。MS42DC 夹爪已增加独立驱动、mock、ROS 2、HTTP 和 Python SDK 适配，并于 2026-10-18 在 Yahboom 上完成闭合/打开实机验证。
 
 ## 工作基线
 
@@ -25,3 +25,7 @@
 [RGB-D 相机适配与 Yahboom 实机验证指南](docs/camera.md)记录 ROS 2 Humble 节点、WebSocket/Python 接口、点云、标定和机器人部署方式。
 
 [Yahboom 实机验证记录（2026-10-18）](docs/yahboom-camera-validation-2026-10-18.md)记录设备枚举、三种接口模式、ROS 2 话题输入、实测吞吐和未完成的现场验证项。
+
+## MS42DC 夹爪适配
+
+[MS42DC 夹爪接入与验证指南](docs/ms42dc-gripper.md)记录 ROS 2、HTTP、Python SDK、配置和 Yahboom 实机验收结果。真实后端启动时仍默认禁用运动；本次确认的反馈语义仅适用于已验证的 Yahboom/MS42DC 组合。

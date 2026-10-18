@@ -1,0 +1,5 @@
+device_id: gripper_main
+backend: mock
+interface_mode: both
+feedback:
+  confirmed: true
