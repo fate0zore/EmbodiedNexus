@@ -258,5 +258,3 @@ class GripperRosGateway(Node):
         with self._operation_lock:
             self._operations[operation_id]["state"] = "cancelling"
         return {"cancel_requested": True, "state": "cancelling"}
-
-\n

@@ -281,5 +281,3 @@ def main(argv=None) -> None:
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
-
-\n

@@ -180,5 +180,3 @@ def create_backend(config: dict) -> Backend:
     if config["backend"] == "mock":
         return MockBackend(config)
     return MS42DCSerialBackend(config)
-
-\n

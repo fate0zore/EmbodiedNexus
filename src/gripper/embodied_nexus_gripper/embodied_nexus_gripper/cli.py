@@ -38,5 +38,3 @@ def main(argv=None) -> int:
     except Exception as exc:
         parser.error(str(exc))
         return 2
-
-\n

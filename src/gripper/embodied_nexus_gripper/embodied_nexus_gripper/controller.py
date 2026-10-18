@@ -497,5 +497,3 @@ class GripperController:
                     self._connected = False
                     self._motion_enabled = False
                     self._clear_lease_locked()
-
-\n

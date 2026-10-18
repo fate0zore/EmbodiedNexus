@@ -39,4 +39,11 @@ EmbodiedNexus 是机器人设备读取与操作中间层。机器人端使用 Ub
 - 根据变更运行相关检查，区分本地 Python、Humble 构建与 mock 验证、实机验证。报告实际通过、跳过、失败与未执行项；既有问题与本次回归分别说明。
 - 实机动作验证遵循总体规划：用户明确确认机器人就绪后进行。目录或文档维护使用本地检查与 mock 验证。
 
+## Jetson Git 同步
+
+- 本机 `main` 是源码修改主工作区，Jetson 的 `~/EmbodiedNexus` 是 Git 管理的构建与运行工作区；不在 Jetson 上直接修改或提交源码。
+- 本机提交变更后显式执行 `git push yahboom main` 同步。该命令只推送已提交内容；不要自动暂存或提交用户修改，也不要改变 `origin` 或 `main` 的上游设置。
+- Jetson 通过 `receive.denyCurrentBranch=updateInstead` 接收推送并更新当前工作树。若远端有已跟踪文件修改，推送会被拒绝；先检查并保留、协调这些改动，不用强制推送覆盖。
+- Jetson 构建仍使用 Humble 和 `colcon --base-paths src`；工作区操作命令见 [架构说明](docs/architecture.md#jetson-远端工作流)。
+
 当前目录迁移的测试基线与已知夹爪语法问题见[架构说明中的验证记录](docs/architecture.md#迁移验证基线)。

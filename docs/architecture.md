@@ -122,6 +122,26 @@ python3 src/lidar/embodied_nexus_lidar/test/validate_lidar_modes.py
 
 应发现 8 个 ROS 包：三类设备各一个功能包和接口包，以及 `lslidar_driver`、`lslidar_msgs`。雷达验收脚本只运行 mock 与已有 ROS 话题后端，覆盖 `ros2/web/both` 和 SDK 数据流；实机验收另按设备指南及[总体规划](../todo/设备中间层总体规划.md)执行。
 
+## Jetson 远端工作流
+
+本机 `main` 是源码修改主工作区；Jetson 通过 SSH 别名 `yahboom` 管理 `/home/jetson/EmbodiedNexus`，用于构建和运行。Jetson 仓库启用 `receive.denyCurrentBranch=updateInstead`，本机推送会直接更新它检出的 `main` 工作树。GitHub `origin` 保持不变，Jetson 不需要访问 GitHub。
+
+源码修改在本机完成并提交后，显式同步到 Jetson：
+
+```bash
+git push yahboom main
+```
+
+该命令只发送已提交的 `main`，不会改动 `origin` 上游或同步本机未提交文件。Jetson 不直接修改源码；若推送因远端已跟踪文件修改而被拒绝，先检查远端工作区并保留、协调改动后再推送，不使用强制覆盖。`build/`、`install/` 和 `log/` 由 `.gitignore` 排除，不参与同步。
+
+推送后在 Jetson 检查版本并构建：
+
+```bash
+ssh yahboom "cd ~/EmbodiedNexus && git status --short && git rev-parse --short HEAD"
+ssh yahboom "cd ~/EmbodiedNexus && source /opt/ros/humble/setup.bash && colcon list --base-paths src"
+ssh yahboom "cd ~/EmbodiedNexus && source /opt/ros/humble/setup.bash && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_camera && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_gripper && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_lidar"
+```
+
 ## 迁移验证基线
 
 2026-10-18 在迁移前的 Windows / Python 3.12 环境检查：相机 17 项、雷达核心 15 项、SDK 1 项通过；夹爪和雷达各 2 项 Web 测试因依赖缺失跳过。这些结果不替代 Humble 构建或实机验证，历史设备记录也不代表本次迁移后已重新验收。

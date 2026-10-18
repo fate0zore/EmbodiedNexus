@@ -154,5 +154,3 @@ def create_app(gateway, token: str) -> Starlette:
         Route(prefix + "/operations/{operation_id:str}", cancel_operation, methods=["DELETE"]),
     ]
     return Starlette(routes=routes, middleware=[Middleware(BearerAuthMiddleware, token=token)])
-
-\n
