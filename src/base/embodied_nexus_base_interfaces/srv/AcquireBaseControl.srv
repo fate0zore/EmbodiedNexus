@@ -1,0 +1,7 @@
+string owner
+float64 ttl_sec
+---
+bool success
+string lease_id
+float64 expires_in_sec
+string error

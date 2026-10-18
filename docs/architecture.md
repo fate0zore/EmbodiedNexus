@@ -17,9 +17,16 @@ EmbodiedNexus/
 │   │   ├── __init__.py
 │   │   ├── camera.py
 │   │   ├── gripper.py
+│   │   ├── base.py
 │   │   └── lidar.py
 │   └── tests/
 └── src/
+    ├── base/
+    │   ├── embodied_nexus_base/
+    │   ├── embodied_nexus_base_interfaces/
+    │   ├── third_party/licenses/
+    │   ├── docs/
+    │   └── examples/
     ├── camera/
     │   ├── embodied_nexus_camera/
     │   ├── embodied_nexus_camera_interfaces/
@@ -60,7 +67,7 @@ EmbodiedNexus/
 
 设备模块通过公开接口协作，不互相导入内部实现。SDK 依赖远程协议，不依赖 ROS 或机器人端源码。普通 Python、系统和 ROS 依赖继续通过包清单声明；只有需要随项目分发的专用依赖才存入模块的 `third_party/`。
 
-设备入口：[相机](../src/camera/docs/camera.md)、[夹爪](../src/gripper/docs/ms42dc-gripper.md)、[雷达](../src/lidar/docs/lidar-c16.md)。开发约定统一维护在根目录 [AGENTS.md](../AGENTS.md)。
+设备入口：[底盘](../src/base/docs/scout-base.md)、[相机](../src/camera/docs/camera.md)、[夹爪](../src/gripper/docs/ms42dc-gripper.md)、[雷达](../src/lidar/docs/lidar-c16.md)。开发约定统一维护在根目录 [AGENTS.md](../AGENTS.md)。
 
 ## 迁移说明
 
@@ -96,6 +103,7 @@ Linux/macOS shell 的核心测试命令，每个包独立运行：
 PYTHONPATH=src/camera/embodied_nexus_camera python -m unittest discover -s src/camera/embodied_nexus_camera/test -v
 PYTHONPATH=src/gripper/embodied_nexus_gripper python -m unittest discover -s src/gripper/embodied_nexus_gripper/test -v
 PYTHONPATH=src/lidar/embodied_nexus_lidar python -m unittest discover -s src/lidar/embodied_nexus_lidar/test -v
+PYTHONPATH=src/base/embodied_nexus_base python -m unittest discover -s src/base/embodied_nexus_base/test -v
 ```
 
 PowerShell 对应写法如下；切换设备时同步替换 `PYTHONPATH` 和测试目录：
@@ -103,6 +111,8 @@ PowerShell 对应写法如下；切换设备时同步替换 `PYTHONPATH` 和测�
 ```powershell
 $env:PYTHONPATH = "$PWD/src/camera/embodied_nexus_camera"
 python -m unittest discover -s src/camera/embodied_nexus_camera/test -v
+$env:PYTHONPATH = "$PWD/src/base/embodied_nexus_base"
+python -m unittest discover -s src/base/embodied_nexus_base/test -v
 ```
 
 核心测试依赖见各包的 `setup.py` / `package.xml`；Web 测试还需要 `starlette`、`httpx`。SDK 数据流使用 `websockets`。
@@ -115,12 +125,13 @@ colcon list --base-paths src
 colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_camera
 colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_gripper
 colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_lidar
+colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_base
 source install/setup.bash
 python3 -m pip install -e sdk/python
 python3 src/lidar/embodied_nexus_lidar/test/validate_lidar_modes.py
 ```
 
-应发现 8 个 ROS 包：三类设备各一个功能包和接口包，以及 `lslidar_driver`、`lslidar_msgs`。雷达验收脚本只运行 mock 与已有 ROS 话题后端，覆盖 `ros2/web/both` 和 SDK 数据流；实机验收另按设备指南及[总体规划](../todo/设备中间层总体规划.md)执行。
+应发现 10 个 ROS 包：底盘、相机、夹爪和雷达各一个功能包与接口包，以及 `lslidar_driver`、`lslidar_msgs`。Scout 底盘预设 mock，真配置启动前需要确认设备就绪；此次只做本地 mock/假串口验证，实机验收另按底盘指南及[总体规划](../todo/设备中间层总体规划.md)执行。
 
 ## Jetson 远端工作流
 
@@ -139,7 +150,7 @@ git push yahboom main
 ```bash
 ssh yahboom "cd ~/EmbodiedNexus && git status --short && git rev-parse --short HEAD"
 ssh yahboom "cd ~/EmbodiedNexus && source /opt/ros/humble/setup.bash && colcon list --base-paths src"
-ssh yahboom "cd ~/EmbodiedNexus && source /opt/ros/humble/setup.bash && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_camera && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_gripper && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_lidar"
+ssh yahboom "cd ~/EmbodiedNexus && source /opt/ros/humble/setup.bash && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_camera && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_gripper && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_lidar && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_base"
 ```
 
 ## 迁移验证基线

@@ -1,0 +1,12 @@
+string lease_id
+float64 angle_rad
+float64 speed_rps
+---
+bool success
+string message
+float64 progress_rad
+bool stop_requested
+bool zero_velocity_written
+---
+float64 progress_rad
+float64 remaining_rad

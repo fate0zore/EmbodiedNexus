@@ -8,7 +8,7 @@ EmbodiedNexus 是机器人设备读取与操作中间层。机器人端使用 Ub
 
 ## 目录归属
 
-- `src/` 只按设备能力聚合模块，目前为 `camera/`、`gripper/`、`lidar/`；具体厂商和型号属于模块内部的后端、驱动或配置。
+- `src/` 只按设备能力聚合模块，目前为 `base/`、`camera/`、`gripper/`、`lidar/`；具体厂商和型号属于模块内部的后端、驱动或配置。
 - 模块目录收拢功能包、接口包、专用第三方源码、文档和示例。模块根目录不放 `package.xml` 或 `setup.py`；内部 ROS 包仍独立构建、安装和启动。
 - `config/`、`launch/`、`resource/`、`test/` 留在所属 ROS 包内，保留安装后的包资源查找方式。
 - 设备指南、来源说明和验收记录放在模块的 `docs/`，设备专用示例放在模块的 `examples/`。
@@ -26,7 +26,7 @@ EmbodiedNexus 是机器人设备读取与操作中间层。机器人端使用 Ub
 ## Python SDK
 
 - 安装包名为 `embodied-nexus-client`，导入名为 `embodied_nexus_client`；不新增旧相机包名兼容入口。
-- 客户端按设备能力放入 `camera.py`、`gripper.py`、`lidar.py` 等模块，并在顶层导出公开类型；SDK 测试放在 `sdk/python/tests/`。
+- 客户端按设备能力放入 `base.py`、`camera.py`、`gripper.py`、`lidar.py` 等模块，并在顶层导出公开类型；SDK 测试放在 `sdk/python/tests/`。
 - SDK 不依赖 ROS，不直接打开机器人硬件。示例和验收脚本使用已安装 SDK，不依赖它在仓库中的相对位置。
 - 在仓库根目录执行 `python -m pip install -e sdk/python` 安装开发版。
 

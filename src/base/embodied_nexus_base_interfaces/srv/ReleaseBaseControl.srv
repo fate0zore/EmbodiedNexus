@@ -1,0 +1,6 @@
+string lease_id
+---
+bool success
+bool stop_sent
+bool zero_velocity_written
+string error

@@ -1,0 +1,9 @@
+string lease_id
+bool enabled
+---
+bool success
+bool enabled
+bool control_mode_confirmed
+bool stop_requested
+bool zero_velocity_written
+string error

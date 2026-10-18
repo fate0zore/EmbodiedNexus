@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>embodied_nexus_base</name>
+  <version>0.1.0</version>
+  <description>Configurable Scout 2.0 base adapter with ROS 2 and Web interfaces.</description>
+  <maintainer email="maintainer@example.com">EmbodiedNexus</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>python3-serial</exec_depend>
+  <exec_depend>python3-starlette</exec_depend>
+  <exec_depend>python3-uvicorn</exec_depend>
+  <exec_depend>embodied_nexus_base_interfaces</exec_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>

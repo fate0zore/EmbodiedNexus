@@ -1,0 +1,8 @@
+string reason
+---
+bool success
+bool stop_requested
+bool zero_velocity_written
+bool stationary_confirmed
+bool hardware_estop
+string error

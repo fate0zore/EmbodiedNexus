@@ -1,0 +1,12 @@
+string lease_id
+float64 distance_m
+float64 speed_mps
+---
+bool success
+string message
+float64 progress_m
+bool stop_requested
+bool zero_velocity_written
+---
+float64 progress_m
+float64 remaining_m

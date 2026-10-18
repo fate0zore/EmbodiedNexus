@@ -1,0 +1,42 @@
+device_id: base_main
+model: scout_2
+backend: mock
+interface_mode: ros2
+serial:
+  port: /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0
+  usb_baudrate: 2000000
+  can_bitrate: 500000
+  frame_type: standard
+  adapter_mode: normal
+frames:
+  odom: odom
+  base: base_link
+  publish_tf: false
+motion:
+  max_linear_mps: 1.5
+  max_angular_rps: 1.5
+  default_linear_mps: 0.16
+  default_angular_rps: 0.6
+  position_tolerance_m: 0.02
+  yaw_tolerance_deg: 0.5
+  send_rate_hz: 50.0
+  command_timeout_sec: 0.5
+  operation_timeout_sec: 30.0
+feedback:
+  stale_sec: 1.0
+  control_mode_timeout_sec: 1.0
+control:
+  lease_ttl_sec: 2.0
+  max_lease_ttl_sec: 30.0
+mock:
+  disconnect: false
+  fail_command: false
+  fail_stop: false
+  vehicle_state: 0
+  control_mode: 1
+  battery_voltage: 24.0
+  error_code: 0
+web:
+  bind_host: 0.0.0.0
+  port: 8778
+  auth_token_env: EMBODIED_NEXUS_BASE_TOKEN

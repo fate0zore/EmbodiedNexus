@@ -1,0 +1,4 @@
+---
+bool success
+string descriptor_json
+string error
