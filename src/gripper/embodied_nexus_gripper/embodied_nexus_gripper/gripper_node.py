@@ -38,7 +38,14 @@ class GripperNode(Node):
         overrides = [Parameter("config_file", value=config_path)] if config_path else None
         super().__init__("embodied_nexus_gripper", parameter_overrides=overrides)
         self.declare_parameter("config_file", _default_config_path())
+        self.declare_parameter("interface_mode", "")
+        self.declare_parameter("web.bind_host", "")
+        self.declare_parameter("web.port", 0)
+        self.declare_parameter("web.auth_token_env", "")
         config = load_config(str(self.get_parameter("config_file").value))
+        mode = str(self.get_parameter("interface_mode").value).strip()
+        if mode:
+            config["interface_mode"] = mode
         self.controller = GripperController(config)
         if not self.controller.state()["connected"]:
             self.get_logger().warning(f"gripper backend is not connected: {self.controller.state()['last_error']}")

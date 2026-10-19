@@ -38,9 +38,20 @@ class GripperRosGateway(Node):
         overrides = [Parameter("config_file", value=config_path)] if config_path else None
         super().__init__("embodied_nexus_gripper_web", parameter_overrides=overrides)
         self.declare_parameter("config_file", _default_config_path())
+        self.declare_parameter("interface_mode", "")
+        self.declare_parameter("web.bind_host", "")
+        self.declare_parameter("web.port", 0)
+        self.declare_parameter("web.auth_token_env", "")
         self.config = load_config(str(self.get_parameter("config_file").value))
+        mode = str(self.get_parameter("interface_mode").value).strip()
+        if mode:
+            self.config["interface_mode"] = mode
+        for key in ("bind_host", "port", "auth_token_env"):
+            value = self.get_parameter(f"web.{key}").value
+            if value:
+                self.config["web"][key] = value
         self.device_id = device_id or self.config["device_id"]
-        self.prefix = f"/embodied_nexus/grippers/{device_id}"
+        self.prefix = f"/embodied_nexus/grippers/{self.device_id}"
         self._services = {
             "info": (GetGripperInfo, f"{self.prefix}/info"),
             "state": (GetGripperState, f"{self.prefix}/get_state"),

@@ -1,0 +1,6 @@
+string device_id
+string action
+---
+bool success
+string result_json
+string error

@@ -5,7 +5,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Iterator
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 
 @dataclass
@@ -17,16 +17,18 @@ class CameraFrame:
 class CameraClient:
     """HTTP/WebSocket client; does not import or require ROS 2."""
 
-    def __init__(self, base_url: str, token: str, camera_id: str = "camera_front", timeout: float = 5.0):
+    def __init__(self, base_url: str, token: str, camera_id: str = "camera_front", timeout: float = 5.0,
+                 *, websocket_path: str = "/ws"):
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.camera_id = camera_id
         self.timeout = float(timeout)
+        self.websocket_path = websocket_path
 
     def _request(self, method: str, suffix: str, body: dict[str, Any] | None = None) -> Any:
         data = json.dumps(body).encode("utf-8") if body is not None else None
         request = urllib.request.Request(
-            f"{self.base_url}/api/v1/cameras/{self.camera_id}/{suffix.lstrip('/')}",
+            f"{self.base_url}/api/v1/cameras/{quote(self.camera_id, safe='')}/{suffix.lstrip('/')}",
             data=data,
             method=method,
             headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
@@ -64,7 +66,7 @@ class CameraClient:
 
     def delete_calibration_sample(self, session_id: str, filename: str) -> dict[str, Any]:
         request = urllib.request.Request(
-            f"{self.base_url}/api/v1/cameras/{self.camera_id}/calibration/sessions/{session_id}/samples/{filename}",
+            f"{self.base_url}/api/v1/cameras/{quote(self.camera_id, safe='')}/calibration/sessions/{quote(session_id, safe='')}/samples/{quote(filename, safe='')}",
             method="DELETE", headers={"Authorization": f"Bearer {self.token}"},
         )
         try:
@@ -107,7 +109,7 @@ class CameraClient:
             "depth_fps": depth_fps, "points_fps": points_fps,
             "color_codec": color_codec,
         })
-        url = self.base_url.replace("https://", "wss://", 1).replace("http://", "ws://", 1) + f"/ws?{query}"
+        url = self.base_url.replace("https://", "wss://", 1).replace("http://", "ws://", 1) + f"{self.websocket_path}?{query}"
         with connect(
             url,
             subprotocols=["en-camera-v1", f"bearer.{self.token}"],

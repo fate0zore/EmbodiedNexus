@@ -5,6 +5,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import quote
 from dataclasses import dataclass
 from typing import Any, Iterator
 
@@ -12,11 +13,13 @@ from typing import Any, Iterator
 class ArmClient:
     """Authenticated HTTP/WebSocket client for an EmbodiedNexus arm service."""
 
-    def __init__(self, base_url: str, token: str, device_id: str = "arm_main", timeout: float = 60.0):
+    def __init__(self, base_url: str, token: str, device_id: str = "arm_main", timeout: float = 60.0,
+                 *, websocket_path: str = "/ws"):
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.device_id = device_id
         self.timeout = float(timeout)
+        self.websocket_path = websocket_path
         self._prefix = f"/api/v1/arms/{device_id}"
 
     def _request(self, method: str, suffix: str = "", body: dict[str, Any] | None = None) -> Any:
@@ -69,7 +72,7 @@ class ArmClient:
             from websockets.sync.client import connect
         except ImportError as exc:
             raise RuntimeError("status subscription requires websockets>=12") from exc
-        url = self.base_url.replace("https://", "wss://").replace("http://", "ws://") + "/ws"
+        url = self.base_url.replace("https://", "wss://").replace("http://", "ws://") + self.websocket_path
         with connect(url, subprotocols=["en-arm-v1", f"bearer.{self.token}"],
                      open_timeout=self.timeout) as websocket:
             while True:

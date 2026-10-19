@@ -39,7 +39,11 @@ class BaseNode(Node):
     def __init__(self, config_path: str | None = None) -> None:
         super().__init__("embodied_nexus_base")
         self.declare_parameter("config_file", config_path or default_config_path())
+        self.declare_parameter("interface_mode", "")
         self.config = load_config(str(self.get_parameter("config_file").value))
+        mode = str(self.get_parameter("interface_mode").value).strip()
+        if mode:
+            self.config["interface_mode"] = mode
         self.controller = BaseController(self.config)
         self.device_id = self.config["device_id"]
         self.prefix = f"/embodied_nexus/bases/{self.device_id}"

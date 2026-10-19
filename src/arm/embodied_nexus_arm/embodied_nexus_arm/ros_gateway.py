@@ -33,7 +33,14 @@ class ArmRosGateway(Node):
     def __init__(self, config_path: str | None = None) -> None:
         super().__init__("embodied_nexus_arm_web_gateway")
         self.declare_parameter("config_file", config_path or str(Path(__file__).resolve().parents[1] / "config" / "aubo_i5_mock.yaml"))
+        self.declare_parameter("web.bind_host", "")
+        self.declare_parameter("web.port", 0)
+        self.declare_parameter("web.auth_token_env", "")
         self.config = load_config(str(self.get_parameter("config_file").value))
+        for key in ("bind_host", "port", "auth_token_env"):
+            value = self.get_parameter(f"web.{key}").value
+            if value:
+                self.config["web"][key] = value
         self.device_id = self.config["device_id"]
         self.prefix = f"/embodied_nexus/arms/{self.device_id}"
         self._operations: dict[str, dict[str, Any]] = {}

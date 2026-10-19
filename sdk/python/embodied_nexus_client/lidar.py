@@ -65,11 +65,13 @@ class LidarFrame:
 class LidarClient:
     """Authenticated remote client for an EmbodiedNexus lidar device."""
 
-    def __init__(self, base_url: str, token: str, device_id: str = "lidar_main", timeout: float = 5.0):
+    def __init__(self, base_url: str, token: str, device_id: str = "lidar_main", timeout: float = 5.0,
+                 *, websocket_path: str = "/ws"):
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.device_id = device_id
         self.timeout = float(timeout)
+        self.websocket_path = websocket_path
         self._prefix = f"/api/v1/lidars/{quote(device_id, safe='')}"
 
     def _request(self, method: str, suffix: str, body: dict[str, Any] | None = None) -> Any:
@@ -131,7 +133,7 @@ class LidarClient:
             raise RuntimeError("install the client extra with: pip install websockets>=12") from exc
         query = urlencode({"streams": ",".join(streams), "points_fps": points_fps,
                            "scan_fps": scan_fps, "point_stride": max(1, int(point_stride))})
-        url = self.base_url.replace("https://", "wss://", 1).replace("http://", "ws://", 1) + f"/ws?{query}"
+        url = self.base_url.replace("https://", "wss://", 1).replace("http://", "ws://", 1) + f"{self.websocket_path}?{query}"
         with connect(url, subprotocols=["en-lidar-v1", f"bearer.{self.token}"],
                      open_timeout=self.timeout, close_timeout=2.0, max_size=None, compression=None) as ws:
             while True:

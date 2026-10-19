@@ -31,6 +31,7 @@ src/arm/       机械臂实现、ROS 接口、来源许可、文档和示例
 src/gripper/   夹爪实现、ROS 接口、来源许可、文档和示例
 src/lidar/     雷达实现、ROS 接口、厂商驱动、文档和示例
 sdk/python/    不依赖 ROS 的统一 Python SDK
+src/core/      五类设备的统一 ROS 管理节点与 HTTP/WebSocket 入口
 docs/          总体架构与跨模块说明
 todo/          规划与工作基线
 ```
@@ -62,3 +63,21 @@ SDK 在仓库根目录执行 `pip install -e sdk/python` 安装，使用 `from e
 [机械臂接入指南](src/arm/docs/aubo-i5.md)记录 mock/真实配置、关节状态和控制接口、控制租约、运动与生命周期检查、HTTP/WebSocket 和 SDK 用法。真实配置需显式指定 `aubo_i5_real.yaml`；真实后端启动不自动上电或使能。
 
 [机械臂验证记录](src/arm/docs/validation-2026-10-19.md)列出 Windows 本地测试、Jetson Humble mock 联调和 Aubo 实机只读检查结果；实机动作验收尚未执行。
+
+## 统一 Core 管理节点
+
+`nexus_core` 从平台 YAML 加载底盘、机械臂、夹爪、相机和雷达清单，默认使用 `platform_mock.yaml`。core 启动后设备保持关闭，可通过 ROS 管理服务或 Python SDK 按 ID 启动、关闭和查询，也可使用批量管理；单设备故障不影响其他设备。执行设备关闭前，core 会检查停止反馈，无法确认停稳时保留设备进程和管理入口。
+
+在 Ubuntu 22.04 / ROS 2 Humble 上构建：
+
+```bash
+source /opt/ros/humble/setup.bash
+python3 -m pip install --user "starlette>=1.3.1" "uvicorn>=0.15" "websockets>=10.4"
+colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_core
+source install/setup.bash
+python3 -m pip install -e sdk/python
+export EMBODIED_NEXUS_CORE_TOKEN='replace-with-a-private-url-safe-token'
+nexus_core --config src/core/embodied_nexus_core/config/platform_mock.yaml
+```
+
+远程 Python 客户端连接 core 的同一地址，例如 `CoreClient("http://robot-host:8780", token)`；可运行 [Core SDK 示例](sdk/python/examples/core_client.py) 查询状态、管理实例或读取相机信息。平台实机模板 `platform_real.yaml` 明确引用现有真实设备配置，启动真实设备前按设备指南确认硬件就绪。平台字段、管理接口和更多 SDK 用法见[架构说明](docs/architecture.md#统一-core-管理节点)。

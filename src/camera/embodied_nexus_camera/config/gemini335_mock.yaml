@@ -1,0 +1,10 @@
+camera_id: camera_front
+interface_mode: both
+source:
+  backend: mock
+calibration:
+  factory_file: gemini335_factory_calibration.json
+web:
+  bind_host: 0.0.0.0
+  port: 8765
+  auth_token_env: EMBODIED_NEXUS_CAMERA_TOKEN

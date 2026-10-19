@@ -1,0 +1,14 @@
+core:
+  bind_host: 0.0.0.0
+  port: 8780
+  auth_token_env: EMBODIED_NEXUS_CORE_TOKEN
+  start_timeout_sec: 30.0
+  shutdown_timeout_sec: 5.0
+  poll_interval_sec: 1.0
+  gateway_unavailable_sec: 3.0
+devices:
+  - {id: base_main, type: base, config: "package://embodied_nexus_base/config/scout_waveshare.yaml", enabled: true}
+  - {id: arm_main, type: arm, config: "package://embodied_nexus_arm/config/aubo_i5_real.yaml", enabled: true}
+  - {id: gripper_main, type: gripper, config: "package://embodied_nexus_gripper/config/ms42dc.yaml", enabled: true}
+  - {id: camera_front, type: camera, config: "package://embodied_nexus_camera/config/gemini335.yaml", enabled: true}
+  - {id: lidar_main, type: lidar, config: "package://embodied_nexus_lidar/config/c16.yaml", enabled: true}

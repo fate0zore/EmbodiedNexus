@@ -35,6 +35,8 @@ class LidarRosGateway(Node):
         self.declare_parameter("config_file", config_path or _default_config_path())
         self.declare_parameter("web_port", int(web_port))
         self.declare_parameter("interface_mode", "")
+        self.declare_parameter("web_bind_host", "")
+        self.declare_parameter("web_auth_token_env", "")
         self.config = load_config(str(self.get_parameter("config_file").value))
         mode = str(self.get_parameter("interface_mode").value).strip()
         if mode:
@@ -43,6 +45,12 @@ class LidarRosGateway(Node):
         override_port = int(self.get_parameter("web_port").value)
         if override_port > 0:
             self.config["web"]["port"] = override_port
+        bind_host = str(self.get_parameter("web_bind_host").value).strip()
+        if bind_host:
+            self.config["web"]["bind_host"] = bind_host
+        token_env = str(self.get_parameter("web_auth_token_env").value).strip()
+        if token_env:
+            self.config["web"]["auth_token_env"] = token_env
         self.device_id = self.config["device_id"]
         self.prefix = f"/embodied_nexus/lidars/{self.device_id}"
         stream_base = self.prefix if self.config["interface_mode"] in {"ros2", "both"} else f"{self.prefix}/_internal"

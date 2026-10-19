@@ -47,6 +47,8 @@ class LidarNode(Node):
         self.declare_parameter("config_file", _default_config_path())
         self.declare_parameter("interface_mode", "")
         self.declare_parameter("web_port", 0)
+        self.declare_parameter("web_bind_host", "")
+        self.declare_parameter("web_auth_token_env", "")
         self.config = load_config(str(self.get_parameter("config_file").value))
         mode = str(self.get_parameter("interface_mode").value).strip()
         if mode:
@@ -54,6 +56,12 @@ class LidarNode(Node):
         port = int(self.get_parameter("web_port").value)
         if port > 0:
             self.config["web"]["port"] = port
+        bind_host = str(self.get_parameter("web_bind_host").value).strip()
+        if bind_host:
+            self.config["web"]["bind_host"] = bind_host
+        token_env = str(self.get_parameter("web_auth_token_env").value).strip()
+        if token_env:
+            self.config["web"]["auth_token_env"] = token_env
         validate_config(self.config)
         self.runtime = LidarRuntime(self.config)
         self.device_id = self.config["device_id"]

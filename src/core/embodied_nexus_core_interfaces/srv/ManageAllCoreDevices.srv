@@ -1,0 +1,5 @@
+string action
+---
+bool success
+string results_json
+string error

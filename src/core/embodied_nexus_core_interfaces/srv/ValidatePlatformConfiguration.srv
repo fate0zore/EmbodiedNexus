@@ -1,0 +1,5 @@
+string config_file
+---
+bool valid
+string diagnostics_json
+string error

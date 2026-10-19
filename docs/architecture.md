@@ -22,6 +22,9 @@ EmbodiedNexus/
 │   │   └── lidar.py
 │   └── tests/
 └── src/
+    ├── core/
+    │   ├── embodied_nexus_core/
+    │   └── embodied_nexus_core_interfaces/
     ├── base/
     │   ├── embodied_nexus_base/
     │   ├── embodied_nexus_base_interfaces/
@@ -61,16 +64,17 @@ EmbodiedNexus/
 
 ## 资料与依赖归属
 
-| 内容 | 归属 |
-| --- | --- |
-| 设备实现、配置、launch、包测试 | `src/<设备能力>/embodied_nexus_<设备能力>/` |
-| 自定义 ROS 消息、服务、action | 同模块的 `embodied_nexus_<设备能力>_interfaces/` |
-| 设备指南、来源、实机记录 | `src/<设备能力>/docs/` |
-| 设备专用示例 | `src/<设备能力>/examples/` |
-| 随仓库保存的专用第三方代码与许可 | `src/<设备能力>/third_party/` |
-| 通用远程 Python 客户端与测试 | `sdk/python/` |
-| 总体架构与跨模块说明 | 根目录 `docs/` |
-| 已确认规划 | 根目录 `todo/` |
+| 内容                             | 归属                                               |
+| -------------------------------- | -------------------------------------------------- |
+| 设备实现、配置、launch、包测试   | `src/<设备能力>/embodied_nexus_<设备能力>/`      |
+| 自定义 ROS 消息、服务、action    | 同模块的 `embodied_nexus_<设备能力>_interfaces/` |
+| 设备指南、来源、实机记录         | `src/<设备能力>/docs/`                           |
+| 设备专用示例                     | `src/<设备能力>/examples/`                       |
+| 随仓库保存的专用第三方代码与许可 | `src/<设备能力>/third_party/`                    |
+| 通用远程 Python 客户端与测试     | `sdk/python/`                                    |
+| 总体架构与跨模块说明             | 根目录 `docs/`                                   |
+| 设备进程管理与统一网关           | `src/core/`                                      |
+| 已确认规划                       | 根目录 `todo/`                                   |
 
 设备模块通过公开接口协作，不互相导入内部实现。SDK 依赖远程协议，不依赖 ROS 或机器人端源码。普通 Python、系统和 ROS 依赖继续通过包清单声明；只有需要随项目分发的专用依赖才存入模块的 `third_party/`。
 
@@ -78,16 +82,16 @@ EmbodiedNexus/
 
 ## 迁移说明
 
-| 原位置或名称 | 新位置或名称 |
-| --- | --- |
-| `src/embodied_nexus_<设备能力>*` | `src/<设备能力>/embodied_nexus_<设备能力>*` |
-| `src/third_party/lslidar_c16_ros2/` | `src/lidar/third_party/lslidar_c16_ros2/` |
-| `third_party/licenses/` | `src/gripper/third_party/licenses/` |
-| 根目录 `docs/`、`examples/` 中的设备专用资料 | 所属模块的 `docs/`、`examples/` |
-| SDK 安装包 `embodied-nexus-camera-client` | `embodied-nexus-client` |
-| SDK 导入 `embodied_nexus_camera_client` | `embodied_nexus_client` |
-| SDK 相机子模块 `client.py` | `camera.py` |
-| `sdk/python/test_gripper_sdk.py` | `sdk/python/tests/test_gripper_sdk.py` |
+| 原位置或名称                                     | 新位置或名称                                  |
+| ------------------------------------------------ | --------------------------------------------- |
+| `src/embodied_nexus_<设备能力>*`               | `src/<设备能力>/embodied_nexus_<设备能力>*` |
+| `src/third_party/lslidar_c16_ros2/`            | `src/lidar/third_party/lslidar_c16_ros2/`   |
+| `third_party/licenses/`                        | `src/gripper/third_party/licenses/`         |
+| 根目录 `docs/`、`examples/` 中的设备专用资料 | 所属模块的 `docs/`、`examples/`           |
+| SDK 安装包 `embodied-nexus-camera-client`      | `embodied-nexus-client`                     |
+| SDK 导入 `embodied_nexus_camera_client`        | `embodied_nexus_client`                     |
+| SDK 相机子模块 `client.py`                     | `camera.py`                                 |
+| `sdk/python/test_gripper_sdk.py`               | `sdk/python/tests/test_gripper_sdk.py`      |
 
 SDK 直接改名，不提供旧名称兼容入口。更新外部程序的安装依赖和导入；如果原环境装过旧分发包，先执行 `python -m pip uninstall embodied-nexus-camera-client`，再安装新包，避免环境中残留旧版本。公开客户端、帧、租约与操作句柄的类名和方法签名不变。ROS 包名、launch 入口、设备命名空间及 HTTP/WebSocket 协议不变。
 
@@ -107,10 +111,12 @@ python -m unittest discover -s sdk/python/tests -v
 Linux/macOS shell 的核心测试命令，每个包独立运行：
 
 ```bash
+PYTHONPATH=src/core/embodied_nexus_core python -m unittest discover -s src/core/embodied_nexus_core/test -v
 PYTHONPATH=src/camera/embodied_nexus_camera python -m unittest discover -s src/camera/embodied_nexus_camera/test -v
 PYTHONPATH=src/gripper/embodied_nexus_gripper python -m unittest discover -s src/gripper/embodied_nexus_gripper/test -v
 PYTHONPATH=src/lidar/embodied_nexus_lidar python -m unittest discover -s src/lidar/embodied_nexus_lidar/test -v
 PYTHONPATH=src/base/embodied_nexus_base python -m unittest discover -s src/base/embodied_nexus_base/test -v
+PYTHONPATH=src/arm/embodied_nexus_arm python -m unittest discover -s src/arm/embodied_nexus_arm/test -v
 ```
 
 PowerShell 对应写法如下；切换设备时同步替换 `PYTHONPATH` 和测试目录：
@@ -120,9 +126,11 @@ $env:PYTHONPATH = "$PWD/src/camera/embodied_nexus_camera"
 python -m unittest discover -s src/camera/embodied_nexus_camera/test -v
 $env:PYTHONPATH = "$PWD/src/base/embodied_nexus_base"
 python -m unittest discover -s src/base/embodied_nexus_base/test -v
+$env:PYTHONPATH = "$PWD/src/core/embodied_nexus_core"
+python -m unittest discover -s src/core/embodied_nexus_core/test -v
 ```
 
-核心测试依赖见各包的 `setup.py` / `package.xml`；Web 测试还需要 `starlette`、`httpx`。SDK 数据流使用 `websockets`。
+核心测试依赖见各包的 `setup.py` / `package.xml`；Web 测试还需要 `starlette`、`httpx`，core 网关回环测试需要 `uvicorn` 和 `websockets>=12`。SDK 数据流使用 `websockets>=12`。
 
 Humble 环境中发现包并分别构建设备：
 
@@ -139,7 +147,43 @@ python3 -m pip install -e sdk/python
 python3 src/lidar/embodied_nexus_lidar/test/validate_lidar_modes.py
 ```
 
-应发现 12 个 EmbodiedNexus ROS 包：底盘、机械臂、相机、夹爪和雷达各一个功能包与接口包，以及 `lslidar_driver`、`lslidar_msgs`。底盘与机械臂预设 mock，真实配置启动前需确认设备就绪；设备实机验收另按对应指南及[总体规划](../todo/设备中间层总体规划.md)执行。
+应发现 14 个 EmbodiedNexus ROS 包：core、底盘、机械臂、相机、夹爪和雷达各一个功能包与接口包，以及 `lslidar_driver`、`lslidar_msgs`。底盘与机械臂预设 mock，真实配置启动前需确认设备就绪；设备实机验收另按对应指南及[总体规划](../todo/设备中间层总体规划.md)执行。
+
+## 统一 Core 管理节点
+
+`src/core/` 是跨设备协调模块，只调用各设备现有的 launch、ROS 接口和 HTTP/WebSocket 入口，不导入设备内部实现。`embodied_nexus_core` 提供进程管理和状态汇总；`embodied_nexus_core_interfaces` 提供 ROS 管理服务。设备仍各自在独立进程中运行，core 启动后不会自动启动设备。
+
+平台配置位于 `src/core/embodied_nexus_core/config/`。`platform_mock.yaml` 默认列出五类 mock 设备，`platform_real.yaml` 引用各设备模块已有实机配置。`config` 支持相对平台文件的普通路径和 `package://<ros-package>/<share-relative-path>`；设备列表的 ID 必须和该设备配置中的 `device_id` 或 `camera_id` 相同。每个 ID 全局唯一，同类设备可配置多个实例。平台校验检查文件引用和设备 ID；每个设备包在启动时继续校验自身参数。core 提供的 30 秒启动等待、5 秒停止反馈等待、1 秒轮询和 3 秒网关失联判定可在 `core` 段调整。
+
+在 Humble 环境构建全部 core 依赖并启动：
+
+```bash
+source /opt/ros/humble/setup.bash
+python3 -m pip install --user "starlette>=1.3.1" "uvicorn>=0.15" "websockets>=10.4"
+colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_core
+source install/setup.bash
+export EMBODIED_NEXUS_CORE_TOKEN='replace-with-a-private-url-safe-token'
+nexus_core --config src/core/embodied_nexus_core/config/platform_mock.yaml
+```
+
+core 默认监听 `0.0.0.0:8780`。core token 通过配置指定的环境变量提供；设备网关只监听本机回环地址，使用各自的内部令牌。外部客户端通过 core 地址访问原有 `/api/v1/bases/<id>/...`、`/arms/`、`/grippers/`、`/cameras/` 和 `/lidars/` 接口；状态与数据 WebSocket 位于相应设备路径的 `/ws`。设备 API、租约和操作结果沿用所属设备模块定义。
+
+ROS 管理服务位于 `/embodied_nexus/core/`，状态汇总发布在 `/embodied_nexus/core/status`。HTTP 管理路径为 `/api/v1/core/status`、`/devices`、`/devices/<id>`、`/devices/manage_all`、`/config`、`/config/validate` 和 `/shutdown`。设备管理 POST 的 action 可选 `start`、`shutdown`、`restart`；批量 action 可选 `start_all`、`shutdown_all`、`stop_all`。`stop_all` 只请求执行设备停止，不关闭它们或停止传感器采集；`/shutdown` 关闭受管设备后请求退出 core。
+
+```python
+from embodied_nexus_client import CoreClient
+
+core = CoreClient("http://robot-host:8780", token="your-core-token")
+print(core.devices())
+core.start("camera_front")
+with core.base("base_main").acquire_control() as lease:
+    lease.enable_motion()
+    for status in core.base("base_main").subscribe_status():
+        print(status)
+        break
+```
+
+关闭底盘、机械臂或夹爪前，core 要求设备返回停稳确认；底盘或机械臂会继续读取状态等待确认，夹爪使用硬件 `hardware_stop_confirmed`。反馈未确认时操作失败并保留该进程。core 的正常退出同样会暂停，HTTP 管理入口继续可用；传感器和已确认停止的设备可正常关闭。Aubo 只请求停止，不自动断电。
 
 ## Jetson 远端工作流
 

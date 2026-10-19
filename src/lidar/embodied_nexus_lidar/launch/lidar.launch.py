@@ -26,6 +26,12 @@ def _setup(context, *args, **kwargs):
     web_port = int(LaunchConfiguration("web_port").perform(context))
     if web_port > 0:
         config["web"]["port"] = web_port
+    bind_host = LaunchConfiguration("web_bind_host").perform(context).strip()
+    if bind_host:
+        config["web"]["bind_host"] = bind_host
+    token_env = LaunchConfiguration("web_auth_token_env").perform(context).strip()
+    if token_env:
+        config["web"]["auth_token_env"] = token_env
     validate_config(config)
     device_id = str(config["device_id"])
     namespace = f"/embodied_nexus/lidars/{device_id}"
@@ -44,8 +50,10 @@ def _setup(context, *args, **kwargs):
     nodes = [
         Node(
             package="embodied_nexus_lidar", executable="lidar_node",
-            name="embodied_nexus_lidar", output="screen",
-            parameters=[{"config_file": str(config_file), "interface_mode": mode}],
+            name=LaunchConfiguration("node_name"), output="screen",
+            parameters=[{"config_file": str(config_file), "interface_mode": mode,
+                         "web_bind_host": bind_host, "web_port": web_port,
+                         "web_auth_token_env": token_env}],
         )
     ]
     if config["backend"] == "c16":
@@ -78,9 +86,10 @@ def _setup(context, *args, **kwargs):
     if mode in {"both", "web"}:
         nodes.append(Node(
             package="embodied_nexus_lidar", executable="lidar_web",
-            name="embodied_nexus_lidar_web", output="screen",
+            name=LaunchConfiguration("node_name_web"), output="screen",
             parameters=[{"config_file": str(config_file), "web_port": web_port,
-                         "interface_mode": mode}],
+                         "interface_mode": mode, "web_bind_host": bind_host,
+                         "web_auth_token_env": token_env}],
         ))
     return nodes
 
@@ -95,5 +104,9 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("interface_mode", default_value=""),
         DeclareLaunchArgument("web_port", default_value="0"),
+        DeclareLaunchArgument("web_bind_host", default_value=""),
+        DeclareLaunchArgument("web_auth_token_env", default_value=""),
+        DeclareLaunchArgument("node_name", default_value="embodied_nexus_lidar"),
+        DeclareLaunchArgument("node_name_web", default_value="embodied_nexus_lidar_web"),
         OpaqueFunction(function=_setup),
     ])

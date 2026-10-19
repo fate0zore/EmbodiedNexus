@@ -132,6 +132,7 @@ class CameraNode(Node):
         self.declare_parameter("interface_mode", "")
         self.declare_parameter("web.bind_host", "")
         self.declare_parameter("web.port", 0)
+        self.declare_parameter("web.auth_token_env", "")
         path = str(self.get_parameter("config_file").value)
         self.config = load_config(path)
         override_mode = str(self.get_parameter("interface_mode").value)
@@ -143,6 +144,9 @@ class CameraNode(Node):
         override_port = int(self.get_parameter("web.port").value)
         if override_port:
             self.config["web"]["port"] = override_port
+        override_token_env = str(self.get_parameter("web.auth_token_env").value).strip()
+        if override_token_env:
+            self.config["web"]["auth_token_env"] = override_token_env
         if overrides:
             for key, value in overrides.items():
                 group, leaf = key.split(".", 1)

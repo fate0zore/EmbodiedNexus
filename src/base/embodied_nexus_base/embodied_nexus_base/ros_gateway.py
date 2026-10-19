@@ -35,7 +35,14 @@ class BaseRosGateway(Node):
     def __init__(self, config_path: str | None = None) -> None:
         super().__init__("embodied_nexus_base_web")
         self.declare_parameter("config_file", config_path or default_config_path())
+        self.declare_parameter("web.bind_host", "")
+        self.declare_parameter("web.port", 0)
+        self.declare_parameter("web.auth_token_env", "")
         self.config = load_config(str(self.get_parameter("config_file").value))
+        for key in ("bind_host", "port", "auth_token_env"):
+            value = self.get_parameter(f"web.{key}").value
+            if value:
+                self.config["web"][key] = value
         self.device_id = self.config["device_id"]
         self.prefix = f"/embodied_nexus/bases/{self.device_id}"
         self._service_types = {
