@@ -51,8 +51,8 @@ class BaseRosGateway(Node):
             "velocity": (SetBaseVelocity, f"{self.prefix}/velocity"),
             "stop": (StopBase, f"{self.prefix}/stop"),
         }
-        self.clients = {key: self.create_client(kind, name)
-                        for key, (kind, name) in self._service_types.items()}
+        self._service_clients = {key: self.create_client(kind, name)
+                                 for key, (kind, name) in self._service_types.items()}
         self.actions = {
             "distance": ActionClient(self, MoveBaseDistance, f"{self.prefix}/move_relative"),
             "turn": ActionClient(self, TurnBaseRelative, f"{self.prefix}/turn_relative"),
@@ -71,7 +71,7 @@ class BaseRosGateway(Node):
         self.get_logger().info(f"base Web API listening on {web['bind_host']}:{web['port']}")
 
     def _call(self, name: str, request: Any, timeout: float = 5.0):
-        client = self.clients[name]
+        client = self._service_clients[name]
         service_name = self._service_types[name][1]
         if not client.wait_for_service(timeout_sec=timeout):
             raise TimeoutError(f"ROS service {service_name} is unavailable")
