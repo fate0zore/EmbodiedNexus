@@ -1,0 +1,6 @@
+string lease_id
+string patch_json
+---
+bool success
+string error
+string config_json

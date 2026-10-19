@@ -1,0 +1,5 @@
+string patch_json
+---
+bool valid
+string error
+string config_json

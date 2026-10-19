@@ -1,0 +1,6 @@
+string lease_id
+string command
+---
+bool success
+string error
+string operation_state

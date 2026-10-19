@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "embodied-nexus-client"
 version = "0.1.0"
-description = "HTTP and WebSocket clients for EmbodiedNexus camera, base, gripper and lidar services"
+description = "HTTP and WebSocket clients for EmbodiedNexus camera, base, arm, gripper and lidar services"
 requires-python = ">=3.10"
 dependencies = ["websockets>=12"]
 

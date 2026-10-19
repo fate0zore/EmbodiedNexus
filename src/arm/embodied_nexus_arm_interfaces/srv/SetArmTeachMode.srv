@@ -1,0 +1,6 @@
+string lease_id
+bool enabled
+---
+bool success
+string error
+string teach_state

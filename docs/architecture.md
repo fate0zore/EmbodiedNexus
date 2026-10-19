@@ -18,12 +18,19 @@ EmbodiedNexus/
 │   │   ├── camera.py
 │   │   ├── gripper.py
 │   │   ├── base.py
+│   │   ├── arm.py
 │   │   └── lidar.py
 │   └── tests/
 └── src/
     ├── base/
     │   ├── embodied_nexus_base/
     │   ├── embodied_nexus_base_interfaces/
+    │   ├── third_party/licenses/
+    │   ├── docs/
+    │   └── examples/
+    ├── arm/
+    │   ├── embodied_nexus_arm/
+    │   ├── embodied_nexus_arm_interfaces/
     │   ├── third_party/licenses/
     │   ├── docs/
     │   └── examples/
@@ -67,7 +74,7 @@ EmbodiedNexus/
 
 设备模块通过公开接口协作，不互相导入内部实现。SDK 依赖远程协议，不依赖 ROS 或机器人端源码。普通 Python、系统和 ROS 依赖继续通过包清单声明；只有需要随项目分发的专用依赖才存入模块的 `third_party/`。
 
-设备入口：[底盘](../src/base/docs/scout-base.md)、[相机](../src/camera/docs/camera.md)、[夹爪](../src/gripper/docs/ms42dc-gripper.md)、[雷达](../src/lidar/docs/lidar-c16.md)。开发约定统一维护在根目录 [AGENTS.md](../AGENTS.md)。
+设备入口：[底盘](../src/base/docs/scout-base.md)、[机械臂](../src/arm/docs/aubo-i5.md)、[相机](../src/camera/docs/camera.md)、[夹爪](../src/gripper/docs/ms42dc-gripper.md)、[雷达](../src/lidar/docs/lidar-c16.md)。开发约定统一维护在根目录 [AGENTS.md](../AGENTS.md)。
 
 ## 迁移说明
 
@@ -126,12 +133,13 @@ colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_
 colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_gripper
 colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_lidar
 colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_base
+colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_arm
 source install/setup.bash
 python3 -m pip install -e sdk/python
 python3 src/lidar/embodied_nexus_lidar/test/validate_lidar_modes.py
 ```
 
-应发现 10 个 ROS 包：底盘、相机、夹爪和雷达各一个功能包与接口包，以及 `lslidar_driver`、`lslidar_msgs`。Scout 底盘预设 mock，真配置启动前需要确认设备就绪；此次只做本地 mock/假串口验证，实机验收另按底盘指南及[总体规划](../todo/设备中间层总体规划.md)执行。
+应发现 12 个 EmbodiedNexus ROS 包：底盘、机械臂、相机、夹爪和雷达各一个功能包与接口包，以及 `lslidar_driver`、`lslidar_msgs`。底盘与机械臂预设 mock，真实配置启动前需确认设备就绪；设备实机验收另按对应指南及[总体规划](../todo/设备中间层总体规划.md)执行。
 
 ## Jetson 远端工作流
 
@@ -150,7 +158,7 @@ git push yahboom main
 ```bash
 ssh yahboom "cd ~/EmbodiedNexus && git status --short && git rev-parse --short HEAD"
 ssh yahboom "cd ~/EmbodiedNexus && source /opt/ros/humble/setup.bash && colcon list --base-paths src"
-ssh yahboom "cd ~/EmbodiedNexus && source /opt/ros/humble/setup.bash && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_camera && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_gripper && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_lidar && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_base"
+ssh yahboom "cd ~/EmbodiedNexus && source /opt/ros/humble/setup.bash && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_camera && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_gripper && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_lidar && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_base && colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_arm"
 ```
 
 ## 迁移验证基线

@@ -1,0 +1,6 @@
+string lease_id
+float64[6] velocity_rad_sec
+---
+bool success
+string error
+bool controller_accepted

@@ -1,0 +1,7 @@
+string lease_id
+---
+bool success
+string error
+bool stop_requested
+bool controller_accepted
+bool stationary_confirmed

@@ -1,0 +1,41 @@
+device_id: arm_main
+model: aubo_i5
+backend: mock
+interface_mode: ros2
+rpc:
+  host: 192.168.127.128
+  port: 30004
+  timeout_sec: 0.6
+  reconnect_sec: 1.0
+joints:
+  names: [aubo_shoulder_joint, aubo_upperArm_joint, aubo_foreArm_joint, aubo_wrist1_joint, aubo_wrist2_joint, aubo_wrist3_joint]
+  min_rad: [-6.28318530718, -6.28318530718, -6.28318530718, -6.28318530718, -6.28318530718, -6.28318530718]
+  max_rad: [6.28318530718, 6.28318530718, 6.28318530718, 6.28318530718, 6.28318530718, 6.28318530718]
+motion:
+  max_speed_rad_sec: 0.25
+  max_acceleration_rad_sec2: 0.45
+  speed_joint_acceleration_rad_sec2: 2.0
+  stop_acceleration_rad_sec2: 8.0
+  speed_joint_duration_sec: 100.0
+  watchdog_sec: 0.75
+  operation_timeout_sec: 30.0
+  goal_tolerance_rad: 0.04
+  stable_sec: 0.25
+feedback:
+  rate_hz: 10.0
+  stale_sec: 1.0
+control:
+  lease_ttl_sec: 2.0
+  max_lease_ttl_sec: 30.0
+teach:
+  method: freedrive
+mock:
+  disconnect: false
+  fail_command: false
+  fail_stop: false
+  mode: Running
+  safety: Normal
+web:
+  bind_host: 0.0.0.0
+  port: 8779
+  auth_token_env: EMBODIED_NEXUS_ARM_TOKEN
