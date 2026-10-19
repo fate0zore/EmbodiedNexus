@@ -39,3 +39,5 @@ python3 -m pip install -e sdk/python
 控制策略依据 Jetson `/home/jetson/zhaoyang/Arachne` 的基线提交 `41caa564204eb5f6a39200ce2600ed052ab517b0`：`src/arachne_hardware/arachne_hardware/aubo_tcp_driver.py`、`src/arachne_hardware/arachne_hardware/aubo_sdk/`、`src/arachne_hardware/arachne_hardware/aubo_move_joint_action_server.py` 和 `src/arachne_hardware/launch/real_bringup.launch.py`。本模块重新组织 RPC、状态、生命周期、关节运动和速度控制，不依赖 Arachne 运行目录、面板或 ros2_control。Arachne MIT 许可副本见 [arachne-MIT-LICENSE.txt](../third_party/licenses/arachne-MIT-LICENSE.txt)。
 
 JSON-RPC 的方法与返回值以现有 Arachne 驱动和 Aubo 控制器为准；关节速度查询方法见 [Aubo RobotState API](https://docs.aubo-robotics.cn/arcs_api/zh/group__RobotState.html)。机器人固件响应、真实负载/TCP 字段和实机运动效果尚需在设备现场确认。
+
+实机关节动作及验收记录见[机械臂验证记录](validation-2026-10-19.md)。
