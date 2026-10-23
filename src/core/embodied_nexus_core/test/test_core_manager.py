@@ -110,6 +110,38 @@ class CoreManagerTests(unittest.TestCase):
                 self.assertEqual({item["type"] for item in loaded["devices"]},
                                  {"base", "arm", "camera", "gripper", "lidar"})
 
+    def test_package_config_reference_supports_symlink_install_resources(self):
+        source_config = self.root / "source" / "config.yaml"
+        source_config.parent.mkdir()
+        source_config.write_text(yaml.safe_dump({"device_id": "base_one"}), encoding="utf-8")
+        package_share = self.root / "install" / "share" / "embodied_nexus_base"
+        installed_config = package_share / "config" / "base_one.yaml"
+        installed_config.parent.mkdir(parents=True)
+        try:
+            installed_config.symlink_to(source_config)
+        except (NotImplementedError, OSError) as exc:
+            self.skipTest(f"symlinks are unavailable: {exc}")
+
+        platform_path = self.root / "platform.yaml"
+        platform_path.write_text(yaml.safe_dump({"core": {}, "devices": [{
+            "id": "base_one", "type": "base",
+            "config": "package://embodied_nexus_base/config/base_one.yaml",
+        }]}), encoding="utf-8")
+        ament_index = types.ModuleType("ament_index_python")
+        package_index = types.ModuleType("ament_index_python.packages")
+        package_index.get_package_share_directory = lambda _name: str(package_share)
+        ament_index.packages = package_index
+        with patch.dict(sys.modules, {
+            "ament_index_python": ament_index,
+            "ament_index_python.packages": package_index,
+        }):
+            loaded = load_platform(platform_path, check_packages=False)
+
+        loaded_config = Path(loaded["devices"][0]["config"])
+        self.assertTrue(loaded_config.is_symlink())
+        self.assertEqual(loaded_config.parent.resolve(), installed_config.parent.resolve())
+        self.assertTrue(loaded_config.is_file())
+
     def test_camera_launch_uses_its_single_node_without_web_node_override(self):
         config_path = self.root / "camera.yaml"
         config_path.write_text(yaml.safe_dump({"camera_id": "camera_one"}), encoding="utf-8")

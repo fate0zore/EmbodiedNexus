@@ -4,6 +4,7 @@ import copy
 import math
 import re
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import unquote
 
@@ -49,9 +50,11 @@ def resolve_config_reference(reference: str, platform_path: Path) -> Path:
             root = Path(get_package_share_directory(package)).resolve()
         except Exception as exc:
             raise ValueError(f"ROS package is not installed: {package}") from exc
-        candidate = (root / unquote(relative)).resolve()
-        if not candidate.is_relative_to(root):
+        decoded = unquote(relative)
+        package_path = PurePosixPath(decoded)
+        if package_path.is_absolute() or "\\" in decoded or ".." in package_path.parts:
             raise ValueError(f"package config path escapes package share: {value}")
+        candidate = root.joinpath(*package_path.parts)
         return candidate
     path = Path(value).expanduser()
     return (path if path.is_absolute() else platform_path.parent / path).resolve()
