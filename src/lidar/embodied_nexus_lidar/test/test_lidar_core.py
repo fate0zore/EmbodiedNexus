@@ -92,6 +92,11 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(started[41], 0)
         self.assertEqual(stopped[41], 1)
         self.assertEqual(build_speed_packet(source, 20)[8:10], b"\x04\xB0")
+        unknown_speed = difop((0x00, 0x00))
+        started_with_speed = build_motor_packet(unknown_speed, enabled=True, speed_hz=10)
+        self.assertEqual(started_with_speed[8:10], b"\x02\x58")
+        with self.assertRaises(ValueError):
+            build_motor_packet(unknown_speed, enabled=True, speed_hz=7)
         with self.assertRaises(ValueError):
             build_speed_packet(source, 7)
         with self.assertRaises(ValueError):
@@ -226,6 +231,26 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             runtime.set_motor_speed(lease, 10)
         self.assertEqual(len(sent), 1)
+
+    def test_c16_motor_start_preserves_requested_speed_when_difop_is_unknown(self):
+        runtime = LidarRuntime(load_config(PACKAGE / "config" / "c16.yaml"))
+        sent = []
+        runtime._send_packet_locked = lambda packet: sent.append(packet)
+        lease, _ = runtime.acquire("test")
+        runtime.ingest_difop(difop((0x00, 0x00)))
+
+        speed = runtime.set_motor_speed(lease, 10)
+        self.assertTrue(speed["command_sent"])
+        self.assertFalse(speed["actual_speed_known"])
+        start = runtime.set_motor(lease, True)
+
+        self.assertTrue(start["command_sent"])
+        self.assertEqual(sent[0][8:10], b"\x02\x58")
+        self.assertEqual(sent[1][8:10], b"\x02\x58")
+        self.assertEqual(sent[1][41], 0)
+        state = runtime.state()
+        self.assertFalse(state["motor_speed_known"])
+        self.assertFalse(state["data_fresh"])
 
     def test_release_failure_is_reported_and_shutdown_attempts_stop(self):
         runtime = LidarRuntime(load_config(PACKAGE / "config" / "c16_mock.yaml"))

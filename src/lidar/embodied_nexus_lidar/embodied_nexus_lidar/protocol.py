@@ -29,12 +29,18 @@ def inspect_difop(packet: bytes | bytearray | list[int]) -> DifopStatus:
     return DifopStatus(version, speed, speed is not None)
 
 
-def build_motor_packet(packet: bytes | bytearray | list[int], *, enabled: bool) -> bytes:
+def build_motor_packet(
+    packet: bytes | bytearray | list[int], *, enabled: bool, speed_hz: int | None = None,
+) -> bytes:
     status = inspect_difop(packet)
     command = bytearray(bytes(packet[:1206]))
     command[:8] = b"\xAA\x00\xFF\x11\x22\x22\xAA\xAA"
     if enabled:
-        if status.model_version == 3:
+        if speed_hz is not None:
+            if isinstance(speed_hz, bool) or speed_hz not in _SPEED_BYTES:
+                raise ValueError("speed_hz must be one of 5, 10, or 20")
+            command[8], command[9] = _SPEED_BYTES[speed_hz]
+        elif status.model_version == 3:
             command[8], command[9] = _SPEED_BYTES[10]
         command[41] = 0
     else:

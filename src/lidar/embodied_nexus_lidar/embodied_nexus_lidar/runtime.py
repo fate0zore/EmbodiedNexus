@@ -81,6 +81,7 @@ class LidarRuntime:
         self._motor_command_sent = False
         self._motor_state = "unknown"
         self._motor_speed_hz = 10
+        self._requested_motor_speed_hz = 10
         self._last_error = ""
         self._mock_started = time.monotonic()
         self._shutdown = False
@@ -219,7 +220,11 @@ class LidarRuntime:
             if enabled:
                 self._require_lease_locked(lease_id)
             packet_source = self._mock_difop() if self.config["backend"] == "mock" else self._fresh_difop_locked()
-            packet = build_motor_packet(packet_source, enabled=bool(enabled))
+            packet = build_motor_packet(
+                packet_source,
+                enabled=bool(enabled),
+                speed_hz=self._requested_motor_speed_hz if enabled else None,
+            )
             self._send_packet_locked(packet)
             self._motor_command_sent = True
             self._motor_state = ("running" if enabled else "stopped") if self.config["backend"] == "mock" else "unknown"
@@ -236,6 +241,7 @@ class LidarRuntime:
             packet = build_speed_packet(packet_source, speed_hz)
             self._send_packet_locked(packet)
             self._motor_command_sent = True
+            self._requested_motor_speed_hz = int(speed_hz)
             if self.config["backend"] == "mock":
                 self._motor_speed_hz = int(speed_hz)
             actual = self.actual_motor_speed()
