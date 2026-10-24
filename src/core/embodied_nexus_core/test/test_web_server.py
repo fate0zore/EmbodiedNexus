@@ -8,6 +8,7 @@ import time
 import urllib.error
 import urllib.request
 import unittest
+from pathlib import Path
 
 import uvicorn
 import websockets.sync.client
@@ -162,6 +163,69 @@ class CoreGatewayTests(unittest.TestCase):
         self.assertEqual(self.upstream_observed["http_query"], "mode=raw&name=a%2Fb")
         self.assertEqual(self.upstream_observed["http_authorization"], "Bearer internal-secret")
         self.assertEqual(self.upstream_observed["http_custom_header"], "request-42")
+
+    def test_core_web_dashboard_and_assets_are_public(self):
+        for path, content_type in (("/", "text/html"),
+                                   ("/app.css", "text/css"),
+                                   ("/app.js", "javascript"),
+                                   ("/commands.json", "application/json")):
+            response = self._request(path, token="")
+            self.assertEqual(response.status, 200, path)
+            self.assertIn(content_type, response.headers.get_content_type(), path)
+            body = response.read()
+            self.assertTrue(body, path)
+            if path == "/":
+                self.assertIn("Core 运维面板".encode("utf-8"), body)
+            elif path == "/app.js":
+                self.assertIn(b"localStorage", body)
+                self.assertIn(b"clipboard", body)
+            elif path == "/commands.json":
+                catalog = json.loads(body)
+                self.assertEqual({item["type"] for item in catalog["devices"]},
+                                 {"base", "arm", "gripper", "camera", "lidar"})
+                self.assertNotIn(b"core-secret", body)
+                self.assertNotIn(b"internal-secret", body)
+
+    def test_command_catalog_matches_mock_and_sim_launch_assets(self):
+        assets = Path(__file__).resolve().parents[1] / "web"
+        catalog = json.loads((assets / "commands.json").read_text(encoding="utf-8"))
+        repo_root = Path(__file__).resolve().parents[4]
+        packages = {
+            "embodied_nexus_base": "src/base/embodied_nexus_base",
+            "embodied_nexus_arm": "src/arm/embodied_nexus_arm",
+            "embodied_nexus_gripper": "src/gripper/embodied_nexus_gripper",
+            "embodied_nexus_camera": "src/camera/embodied_nexus_camera",
+            "embodied_nexus_lidar": "src/lidar/embodied_nexus_lidar",
+        }
+        for device in catalog["devices"]:
+            package_root = repo_root / packages[device["package"]]
+            self.assertTrue((package_root / "launch" / device["launch"]).is_file())
+            self.assertEqual({profile["id"] for profile in device["profiles"]}, {"mock", "simulation"})
+            for profile in device["profiles"]:
+                self.assertTrue((repo_root / profile["config"]).is_file(), profile["config"])
+                self.assertTrue(profile["config"].endswith(("_mock.yaml", "_sim.yaml")))
+
+        operation_ids = {item["id"] for item in catalog["core"]["operations"]}
+        self.assertEqual(operation_ids, {
+            "status", "device_start", "device_restart", "device_shutdown",
+            "start_all", "stop_all", "shutdown_all", "shutdown_core",
+        })
+        core_node = (repo_root / "src/core/embodied_nexus_core/embodied_nexus_core/core_node.py").read_text(
+            encoding="utf-8"
+        )
+        operation_commands = {item["id"]: item["command"] for item in catalog["core"]["operations"]}
+        self.assertIn("/embodied_nexus/core/get_status", core_node)
+        self.assertIn("/embodied_nexus/core/manage_device", core_node)
+        self.assertIn("/embodied_nexus/core/manage_all", core_node)
+        self.assertIn("embodied_nexus_core_interfaces/srv/GetCoreStatus", operation_commands["status"])
+        for operation_id in ("device_start", "device_restart", "device_shutdown"):
+            self.assertIn("embodied_nexus_core_interfaces/srv/ManageCoreDevice", operation_commands[operation_id])
+        for operation_id in ("start_all", "stop_all", "shutdown_all", "shutdown_core"):
+            self.assertIn("embodied_nexus_core_interfaces/srv/ManageAllCoreDevices", operation_commands[operation_id])
+
+    def test_core_management_api_remains_authenticated_with_web_ui(self):
+        denied = self._request("/api/v1/core/status", token="")
+        self.assertEqual(denied.code, 401)
 
     def test_conflicting_management_action_returns_http_409(self):
         def busy(_device_id):

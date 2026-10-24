@@ -79,7 +79,11 @@ colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_
 source install/setup.bash
 python3 -m pip install -e sdk/python
 export EMBODIED_NEXUS_CORE_TOKEN='replace-with-a-private-url-safe-token'
-nexus_core --config src/core/embodied_nexus_core/config/platform_mock.yaml
+ros2 run embodied_nexus_core nexus_core --config src/core/embodied_nexus_core/config/platform_mock.yaml
 ```
 
 远程 Python 客户端连接 core 的同一地址，例如 `CoreClient("http://robot-host:8780", token)`；可运行 [Core SDK 示例](sdk/python/examples/core_client.py) 查询状态、管理实例或读取相机信息。平台实机模板 `platform_real.yaml` 明确引用现有真实设备配置，启动真实设备前按设备指南确认硬件就绪。平台字段、管理接口和更多 SDK 用法见[架构说明](docs/architecture.md#统一-core-管理节点)。
+
+浏览器访问 Core 同源根路径可打开运维面板；首次访问需输入 Core token，面板可查看设备状态、管理设备生命周期及读取平台配置。token 仅保存在当前浏览器本地，不写入平台配置或服务端页面资源。
+
+Core 和设备节点的 Mock/仿真启动、停止命令，以及 PowerShell/WSL 与 Bash 用法见[跨平台节点命令参考](docs/node-command-reference.md)。

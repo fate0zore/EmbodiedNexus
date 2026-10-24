@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Core 运维面板 · EmbodiedNexus</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+
+    <main id="auth-view" class="auth-shell" hidden>
+      <section class="auth-card" aria-labelledby="auth-title">
+        <div class="brand-mark" aria-hidden="true">EN</div>
+        <p class="eyebrow">EMBODIEDNEXUS · CORE</p>
+        <h1 id="auth-title">连接设备平台</h1>
+        <p class="muted">输入当前 Core 的访问令牌，查看平台状态并管理设备服务。</p>
+        <form id="token-form" class="token-form">
+          <label for="token-input">Core token</label>
+          <input id="token-input" name="token" type="password" autocomplete="current-password"
+                 placeholder="粘贴 Core token" required />
+          <p id="auth-error" class="form-error" role="alert" hidden></p>
+          <button class="button button-primary button-full" type="submit">连接 Core</button>
+        </form>
+        <p class="privacy-note">令牌仅保存在此浏览器的本地存储，可随时清除。</p>
+      </section>
+    </main>
+
+    <div id="dashboard" class="app-shell" hidden>
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="EmbodiedNexus Core 首页">
+          <span class="brand-mark">EN</span>
+          <span class="brand-copy"><strong>EmbodiedNexus</strong><small>CORE CONSOLE</small></span>
+        </a>
+        <div class="topbar-actions">
+          <span id="connection-pill" class="connection-pill is-offline">
+            <span class="connection-dot"></span><span id="connection-label">连接中</span>
+          </span>
+          <button id="refresh-button" class="button button-quiet" type="button">刷新状态</button>
+          <button id="logout-button" class="button button-quiet" type="button">清除 token</button>
+        </div>
+      </header>
+
+      <div class="page-wrap">
+        <section class="page-intro">
+          <div>
+            <p class="eyebrow">设备平台 / 运行管理</p>
+            <h1>运行总览</h1>
+            <p class="muted">查看 Core 与设备服务状态，按需启动或安全关闭设备。</p>
+          </div>
+          <div class="refresh-meta">最近刷新 <time id="last-refresh">尚无数据</time></div>
+        </section>
+
+        <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+        <section class="summary-grid" aria-label="平台摘要">
+          <article class="summary-card summary-core">
+            <div class="summary-label">Core 服务</div>
+            <div class="summary-value"><span id="core-state" class="state-dot"></span><span id="core-state-label">等待连接</span></div>
+            <div id="core-config-path" class="summary-foot">平台配置尚未读取</div>
+          </article>
+          <article class="summary-card">
+            <div class="summary-label">已配置设备</div>
+            <div id="device-count" class="summary-value numeric">—</div>
+            <div class="summary-foot">来自当前平台配置</div>
+          </article>
+          <article class="summary-card">
+            <div class="summary-label">运行中</div>
+            <div id="running-count" class="summary-value numeric">—</div>
+            <div class="summary-foot">包含启动中或停止受阻的进程</div>
+          </article>
+        </section>
+
+        <section class="actions-panel" aria-label="批量设备操作">
+          <div class="actions-copy">
+            <strong>批量操作</strong>
+            <span>停止只发送安全停止请求，设备服务保持运行。</span>
+          </div>
+          <div class="actions-buttons">
+            <button id="stop-all-button" class="button button-secondary" type="button">全部停止</button>
+            <button id="shutdown-all-button" class="button button-danger" type="button">关闭所有设备</button>
+            <button id="config-button" class="button button-quiet" type="button">平台配置</button>
+            <button id="commands-button" class="button button-quiet" type="button">命令参考</button>
+          </div>
+        </section>
+
+        <section class="devices-section" aria-labelledby="devices-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">实例清单</p>
+              <h2 id="devices-title">设备服务</h2>
+            </div>
+            <span id="device-summary" class="section-meta">等待 Core 状态</span>
+          </div>
+          <div id="device-grid" class="device-grid" aria-live="polite"></div>
+        </section>
+
+        <footer class="page-footer">
+          <span>EmbodiedNexus Core</span>
+          <span>设备保持独立管理 · 生命周期操作经现有 Core API 执行</span>
+        </footer>
+      </div>
+    </div>
+
+    <dialog id="config-dialog" class="config-dialog" aria-labelledby="config-title">
+      <div class="dialog-heading">
+        <div><p class="eyebrow">只读视图</p><h2 id="config-title">平台配置</h2></div>
+        <button id="close-config-button" class="icon-button" type="button" aria-label="关闭配置窗口">×</button>
+      </div>
+      <p class="muted">此处展示 Core 当前加载的平台清单；编辑配置需在服务器上完成并重启 Core。</p>
+      <pre id="config-output" class="config-output">正在读取配置…</pre>
+    </dialog>
+
+    <dialog id="command-dialog" class="config-dialog command-dialog" aria-labelledby="command-title">
+      <div class="dialog-heading">
+        <div><p class="eyebrow">仅展示与复制</p><h2 id="command-title">节点命令参考</h2></div>
+        <button id="close-command-button" class="icon-button" type="button" aria-label="关闭命令参考">×</button>
+      </div>
+      <p class="muted">从仓库根目录复制到对应终端后手动运行。独立 launch 与 Core 托管的相同设备不能同时启动。</p>
+      <div class="command-selectors">
+        <label>目标<select id="command-target"></select></label>
+        <label id="command-profile-field" hidden>配置<select id="command-profile"></select></label>
+        <label id="command-operation-field" hidden>Core 操作<select id="command-operation"></select></label>
+        <label id="command-device-field" hidden>设备 ID<select id="command-device"></select></label>
+      </div>
+      <p id="command-note" class="command-note"></p>
+      <div class="command-tabs" role="tablist" aria-label="命令终端">
+        <button class="command-tab is-active" type="button" data-command-shell="bash" aria-pressed="true">Bash / WSL</button>
+        <button class="command-tab" type="button" data-command-shell="powershell" aria-pressed="false">PowerShell → WSL</button>
+      </div>
+      <pre id="command-output" class="command-output" tabindex="0"></pre>
+      <div class="command-footer"><span id="command-copy-status">命令只会复制到剪贴板，不会执行。</span><button id="copy-command-button" class="button button-primary" type="button">复制命令</button></div>
+    </dialog>
+  </body>
+</html>

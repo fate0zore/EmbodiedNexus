@@ -4,6 +4,7 @@ import asyncio
 import hmac
 import json
 import threading
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -13,7 +14,8 @@ import websockets
 from starlette.applications import Starlette
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import JSONResponse, Response
-from starlette.routing import Route, WebSocketRoute
+from starlette.routing import Mount, Route, WebSocketRoute
+from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from .config import DEVICE_TYPES, public_platform
@@ -210,10 +212,27 @@ def create_app(manager: Any, token: str) -> Starlette:
         WebSocketRoute("/api/v1/{category:str}/{device_id:str}/ws", proxy_websocket),
         Route("/api/v1/{category:str}/{device_id:str}/{path:path}", proxy_http,
               methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]),
+        Mount("/", app=StaticFiles(directory=str(_web_assets_dir()), html=True), name="core-web"),
     ]
     app = Starlette(routes=routes)
     app.state.shutdown_requested = threading_event()
     return app
+
+
+def _web_assets_dir() -> Path:
+    source_roots = (Path(__file__).resolve().parents[1] / "web",
+                    Path(__file__).resolve().parent / "web")
+    for candidate in source_roots:
+        if (candidate / "index.html").is_file():
+            return candidate
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        installed = Path(get_package_share_directory("embodied_nexus_core")) / "web"
+    except Exception as exc:
+        raise FileNotFoundError("Core web assets are not installed") from exc
+    if not (installed / "index.html").is_file():
+        raise FileNotFoundError(f"Core web assets are missing from {installed}")
+    return installed
 
 
 def threading_event():

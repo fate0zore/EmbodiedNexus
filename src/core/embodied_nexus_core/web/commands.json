@@ -1,0 +1,131 @@
+{
+  "core": {
+    "mock": {
+      "label": "启动 Core（Mock 配置）",
+      "commands": [
+        "export EMBODIED_NEXUS_CORE_TOKEN=replace-with-a-local-url-safe-token",
+        "ros2 run embodied_nexus_core nexus_core --config src/core/embodied_nexus_core/config/platform_mock.yaml"
+      ],
+      "notes": "Core 启动后，五类设备服务保持停止。用管理命令或 Core Web 页面按需启动。退出前台 Core 按 Ctrl+C。"
+    },
+    "operations": [
+      {
+        "id": "status",
+        "label": "查询 Core 状态",
+        "command": "ros2 service call /embodied_nexus/core/get_status embodied_nexus_core_interfaces/srv/GetCoreStatus {}"
+      },
+      {
+        "id": "device_start",
+        "label": "启动单个设备",
+        "needs_device": true,
+        "command": "ros2 service call /embodied_nexus/core/manage_device embodied_nexus_core_interfaces/srv/ManageCoreDevice \"{device_id: '{{device_id}}', action: start}\""
+      },
+      {
+        "id": "device_restart",
+        "label": "重启单个设备",
+        "needs_device": true,
+        "command": "ros2 service call /embodied_nexus/core/manage_device embodied_nexus_core_interfaces/srv/ManageCoreDevice \"{device_id: '{{device_id}}', action: restart}\""
+      },
+      {
+        "id": "device_shutdown",
+        "label": "关闭单个设备",
+        "needs_device": true,
+        "command": "ros2 service call /embodied_nexus/core/manage_device embodied_nexus_core_interfaces/srv/ManageCoreDevice \"{device_id: '{{device_id}}', action: shutdown}\""
+      },
+      {
+        "id": "start_all",
+        "label": "启动所有已配置设备",
+        "command": "ros2 service call /embodied_nexus/core/manage_all embodied_nexus_core_interfaces/srv/ManageAllCoreDevices \"{action: start_all}\""
+      },
+      {
+        "id": "stop_all",
+        "label": "停止所有设备动作",
+        "command": "ros2 service call /embodied_nexus/core/manage_all embodied_nexus_core_interfaces/srv/ManageAllCoreDevices \"{action: stop_all}\""
+      },
+      {
+        "id": "shutdown_all",
+        "label": "关闭所有设备服务",
+        "command": "ros2 service call /embodied_nexus/core/manage_all embodied_nexus_core_interfaces/srv/ManageAllCoreDevices \"{action: shutdown_all}\""
+      },
+      {
+        "id": "shutdown_core",
+        "label": "安全退出 Core",
+        "command": "ros2 service call /embodied_nexus/core/manage_all embodied_nexus_core_interfaces/srv/ManageAllCoreDevices \"{action: shutdown_core}\""
+      }
+    ],
+    "operations_note": "管理命令作用于 Core 当前加载的平台配置。启动操作前先检查配置路径；shutdown_core 会关闭受管设备并退出 Core。"
+  },
+  "gazebo": {
+    "label": "WSL2 Gazebo Fortress 仿真 + Core",
+    "commands": [
+      "export ROS_LOCALHOST_ONLY=1",
+      "export IGN_IP=REPLACE_WITH_WSL_IPV4_REACHABLE_FROM_WINDOWS",
+      "export EMBODIED_NEXUS_CORE_TOKEN=replace-with-a-local-url-safe-token",
+      "export DISPLAY=:0",
+      "export XDG_RUNTIME_DIR=/tmp/embodied-nexus-gui-runtime",
+      "mkdir -p /tmp/embodied-nexus-gui-runtime",
+      "chmod 700 /tmp/embodied-nexus-gui-runtime",
+      "export QT_QPA_PLATFORM=xcb",
+      "unset WAYLAND_DISPLAY",
+      "ros2 launch embodied_nexus_sim_gazebo sim.launch.py gui:=true core_token:=$EMBODIED_NEXUS_CORE_TOKEN"
+    ],
+    "notes": "将 IGN_IP 替换为 Windows 可访问的 WSL IPv4。此 launch 会启动 Gazebo、控制器和 Core；设备服务仍由 Core 按需启动。退出仿真请在前台终端按 Ctrl+C。"
+  },
+  "devices": [
+    {
+      "type": "base",
+      "label": "底盘",
+      "package": "embodied_nexus_base",
+      "launch": "base.launch.py",
+      "profiles": [
+        {"id": "mock", "label": "Mock", "config": "src/base/embodied_nexus_base/config/scout_mock.yaml", "use_sim_time": false},
+        {"id": "simulation", "label": "Gazebo 仿真", "config": "src/base/embodied_nexus_base/config/scout_sim.yaml", "use_sim_time": true}
+      ]
+    },
+    {
+      "type": "arm",
+      "label": "机械臂",
+      "package": "embodied_nexus_arm",
+      "launch": "arm.launch.py",
+      "profiles": [
+        {"id": "mock", "label": "Mock", "config": "src/arm/embodied_nexus_arm/config/aubo_i5_mock.yaml", "use_sim_time": false},
+        {"id": "simulation", "label": "Gazebo 仿真", "config": "src/arm/embodied_nexus_arm/config/aubo_i5_sim.yaml", "use_sim_time": true}
+      ]
+    },
+    {
+      "type": "gripper",
+      "label": "夹爪",
+      "package": "embodied_nexus_gripper",
+      "launch": "gripper.launch.py",
+      "profiles": [
+        {"id": "mock", "label": "Mock", "config": "src/gripper/embodied_nexus_gripper/config/ms42dc_mock.yaml", "use_sim_time": false},
+        {"id": "simulation", "label": "Gazebo 仿真", "config": "src/gripper/embodied_nexus_gripper/config/ms42dc_sim.yaml", "use_sim_time": true}
+      ]
+    },
+    {
+      "type": "camera",
+      "label": "相机",
+      "package": "embodied_nexus_camera",
+      "launch": "camera.launch.py",
+      "profiles": [
+        {"id": "mock", "label": "Mock", "config": "src/camera/embodied_nexus_camera/config/gemini335_mock.yaml", "use_sim_time": false},
+        {"id": "simulation", "label": "Gazebo 仿真话题", "config": "src/camera/embodied_nexus_camera/config/gemini335_sim.yaml", "use_sim_time": true}
+      ]
+    },
+    {
+      "type": "lidar",
+      "label": "雷达",
+      "package": "embodied_nexus_lidar",
+      "launch": "lidar.launch.py",
+      "profiles": [
+        {"id": "mock", "label": "Mock", "config": "src/lidar/embodied_nexus_lidar/config/c16_mock.yaml", "use_sim_time": false},
+        {"id": "simulation", "label": "Gazebo 仿真话题", "config": "src/lidar/embodied_nexus_lidar/config/c16_sim.yaml", "use_sim_time": true}
+      ]
+    }
+  ],
+  "device_notes": {
+    "mock": "独立 launch 只启动 ROS 接口，不启动设备 Web 网关。前台运行时按 Ctrl+C 正常关闭。",
+    "simulation": "需要先启动 Gazebo 仿真 launch；仿真话题后端只连接已存在的仿真 ROS 话题。",
+    "ownership": "独立 launch 与 Core 托管的相同 device_id 不可同时运行，以免重复进程或端口冲突。"
+  }
+}

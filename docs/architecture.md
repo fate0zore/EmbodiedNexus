@@ -23,32 +23,50 @@ EmbodiedNexus/
 │   └── tests/
 └── src/
     ├── core/
+    │   ├── scripts/
+    │   │   ├── core.sh
+    │   │   └── core.ps1
     │   ├── embodied_nexus_core/
     │   └── embodied_nexus_core_interfaces/
     ├── base/
+    │   ├── scripts/
+    │   │   ├── base.sh
+    │   │   └── base.ps1
     │   ├── embodied_nexus_base/
     │   ├── embodied_nexus_base_interfaces/
     │   ├── third_party/licenses/
     │   ├── docs/
     │   └── examples/
     ├── arm/
+    │   ├── scripts/
+    │   │   ├── arm.sh
+    │   │   └── arm.ps1
     │   ├── embodied_nexus_arm/
     │   ├── embodied_nexus_arm_interfaces/
     │   ├── third_party/licenses/
     │   ├── docs/
     │   └── examples/
     ├── camera/
+    │   ├── scripts/
+    │   │   ├── camera.sh
+    │   │   └── camera.ps1
     │   ├── embodied_nexus_camera/
     │   ├── embodied_nexus_camera_interfaces/
     │   ├── docs/
     │   └── examples/
     ├── gripper/
+    │   ├── scripts/
+    │   │   ├── gripper.sh
+    │   │   └── gripper.ps1
     │   ├── embodied_nexus_gripper/
     │   ├── embodied_nexus_gripper_interfaces/
     │   ├── third_party/licenses/
     │   ├── docs/
     │   └── examples/
     └── lidar/
+        ├── scripts/
+        │   ├── lidar.sh
+        │   └── lidar.ps1
         ├── embodied_nexus_lidar/
         ├── embodied_nexus_lidar_interfaces/
         ├── third_party/lslidar_c16_ros2/
@@ -65,6 +83,9 @@ EmbodiedNexus/
         │   └── third_party/
         │       └── embodied_nexus_sim_description/
         └── gazebo/
+            ├── scripts/
+            │   ├── gazebo.sh
+            │   └── gazebo.ps1
             └── embodied_nexus_sim_gazebo/
 ```
 
@@ -80,6 +101,7 @@ EmbodiedNexus/
 | 自定义 ROS 消息、服务、action    | 同模块的 `embodied_nexus_<设备能力>_interfaces/` |
 | 设备指南、来源、实机记录         | `src/<设备能力>/docs/`                           |
 | 设备专用示例                     | `src/<设备能力>/examples/`                       |
+| Core 与设备的 Bash/PowerShell 操作脚本 | `src/<模块>/scripts/`                       |
 | 随仓库保存的专用第三方代码与许可 | `src/<设备能力>/third_party/`                    |
 | 通用远程 Python 客户端与测试     | `sdk/python/`                                    |
 | 总体架构与跨模块说明             | 根目录 `docs/`                                   |
@@ -175,12 +197,14 @@ python3 -m pip install --user "starlette>=1.3.1" "uvicorn>=0.15" "websockets>=10
 colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_core
 source install/setup.bash
 export EMBODIED_NEXUS_CORE_TOKEN='replace-with-a-private-url-safe-token'
-nexus_core --config src/core/embodied_nexus_core/config/platform_mock.yaml
+ros2 run embodied_nexus_core nexus_core --config src/core/embodied_nexus_core/config/platform_mock.yaml
 ```
 
 core 默认监听 `0.0.0.0:8780`。core token 通过配置指定的环境变量提供；设备网关只监听本机回环地址，使用各自的内部令牌。外部客户端通过 core 地址访问原有 `/api/v1/bases/<id>/...`、`/arms/`、`/grippers/`、`/cameras/` 和 `/lidars/` 接口；状态与数据 WebSocket 位于相应设备路径的 `/ws`。设备 API、租约和操作结果沿用所属设备模块定义。
 
 ROS 管理服务位于 `/embodied_nexus/core/`，状态汇总发布在 `/embodied_nexus/core/status`。HTTP 管理路径为 `/api/v1/core/status`、`/devices`、`/devices/<id>`、`/devices/manage_all`、`/config`、`/config/validate` 和 `/shutdown`。设备管理 POST 的 action 可选 `start`、`shutdown`、`restart`；批量 action 可选 `start_all`、`shutdown_all`、`stop_all`。`stop_all` 只请求执行设备停止，不关闭它们或停止传感器采集；`/shutdown` 关闭受管设备后请求退出 core。
+
+同源根路径提供 Core Web 运维面板，使用上述认证 API 展示状态、管理设备生命周期及查看只读平台配置。面板只在浏览器 `localStorage` 保存用户输入的 Core token；静态页面和资源不含 token。设备实时视频、配置编辑和直接运动控制不属于首版页面。
 
 ```python
 from embodied_nexus_client import CoreClient

@@ -2,7 +2,7 @@
 <package format="3">
   <name>embodied_nexus_core</name>
   <version>0.1.0</version>
-  <description>Unified process, status and Web gateway for EmbodiedNexus devices.</description>
+  <description>Unified process manager, authenticated API gateway and Web console for EmbodiedNexus devices.</description>
   <maintainer email="maintainer@example.com">EmbodiedNexus</maintainer>
   <license>MIT</license>
   <buildtool_depend>ament_python</buildtool_depend>

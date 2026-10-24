@@ -12,12 +12,15 @@ setup(
         ("share/" + package_name + "/config", [
             "config/platform_mock.yaml", "config/platform_real.yaml",
         ]),
+        ("share/" + package_name + "/web", [
+            "web/index.html", "web/app.css", "web/app.js", "web/commands.json",
+        ]),
     ],
     install_requires=["setuptools", "PyYAML", "starlette>=1.3.1", "uvicorn>=0.15", "websockets>=10.4"],
     zip_safe=True,
     maintainer="EmbodiedNexus",
     maintainer_email="maintainer@example.com",
-    description="Unified EmbodiedNexus device process manager and authenticated gateway",
+    description="EmbodiedNexus device manager, authenticated API gateway and Web console",
     license="MIT",
     entry_points={"console_scripts": ["nexus_core = embodied_nexus_core.core_node:main"]},
 )
