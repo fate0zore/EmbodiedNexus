@@ -6,6 +6,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 from embodied_nexus_lidar.cli import check_driver_available
@@ -30,6 +31,7 @@ def _setup(context, *args, **kwargs):
     if bind_host:
         config["web"]["bind_host"] = bind_host
     token_env = LaunchConfiguration("web_auth_token_env").perform(context).strip()
+    use_sim_time = LaunchConfiguration("use_sim_time").perform(context).strip().lower() in {"true", "1", "yes"}
     if token_env:
         config["web"]["auth_token_env"] = token_env
     validate_config(config)
@@ -53,7 +55,7 @@ def _setup(context, *args, **kwargs):
             name=LaunchConfiguration("node_name"), output="screen",
             parameters=[{"config_file": str(config_file), "interface_mode": mode,
                          "web_bind_host": bind_host, "web_port": web_port,
-                         "web_auth_token_env": token_env}],
+                         "web_auth_token_env": token_env, "use_sim_time": use_sim_time}],
         )
     ]
     if config["backend"] == "c16":
@@ -103,6 +105,7 @@ def generate_launch_description():
             ]),
         ),
         DeclareLaunchArgument("interface_mode", default_value=""),
+        DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("web_port", default_value="0"),
         DeclareLaunchArgument("web_bind_host", default_value=""),
         DeclareLaunchArgument("web_auth_token_env", default_value=""),

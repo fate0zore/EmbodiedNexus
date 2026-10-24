@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>embodied_nexus_sim</name>
+  <version>0.1.0</version>
+  <description>Simulator-independent ROS 2 device backends for EmbodiedNexus.</description>
+  <maintainer email="maintainer@example.com">EmbodiedNexus</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>trajectory_msgs</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
+  <exec_depend>embodied_nexus_base</exec_depend>
+  <exec_depend>embodied_nexus_arm</exec_depend>
+  <exec_depend>embodied_nexus_gripper</exec_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>

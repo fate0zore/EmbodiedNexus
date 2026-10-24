@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import rclpy
+from rclpy.clock import Clock, ClockType
 from rclpy.parameter import Parameter
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -71,7 +72,8 @@ class GripperNode(Node):
             callback_group=self.callback_group,
         )
         self.timer = self.create_timer(float(config["feedback"]["poll_interval_sec"]), self._publish_state,
-                                       callback_group=self.callback_group)
+                                       callback_group=self.callback_group,
+                                       clock=Clock(clock_type=ClockType.STEADY_TIME))
         self.get_logger().info(
             f"MS42DC gripper {config['device_id']} backend={config['backend']} state_topic={self.prefix}/state"
         )

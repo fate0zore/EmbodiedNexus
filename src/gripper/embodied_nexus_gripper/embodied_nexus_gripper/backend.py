@@ -179,4 +179,14 @@ class MockBackend:
 def create_backend(config: dict) -> Backend:
     if config["backend"] == "mock":
         return MockBackend(config)
-    return MS42DCSerialBackend(config)
+    if config["backend"] == "serial":
+        return MS42DCSerialBackend(config)
+    if config["backend"] == "ros2_sim":
+        from importlib.metadata import entry_points
+
+        providers = entry_points().select(group="embodied_nexus_gripper.backends", name="ros2_sim")
+        provider = next(iter(providers), None)
+        if provider is None:
+            raise RuntimeError("backend=ros2_sim requires the embodied_nexus_sim ROS package")
+        return provider.load()(config)
+    raise ValueError(f"unsupported gripper backend {config['backend']!r}")

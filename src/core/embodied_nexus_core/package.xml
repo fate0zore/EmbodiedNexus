@@ -13,6 +13,7 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>ros2launch</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>python3-starlette</exec_depend>
   <exec_depend>python3-uvicorn</exec_depend>
   <exec_depend>python3-websockets</exec_depend>
   <exec_depend>embodied_nexus_core_interfaces</exec_depend>

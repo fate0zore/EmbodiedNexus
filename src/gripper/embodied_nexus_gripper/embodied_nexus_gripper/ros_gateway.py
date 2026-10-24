@@ -42,17 +42,17 @@ class GripperRosGateway(Node):
         self.declare_parameter("web.bind_host", "")
         self.declare_parameter("web.port", 0)
         self.declare_parameter("web.auth_token_env", "")
-        self.config = load_config(str(self.get_parameter("config_file").value))
+        self._config_data = load_config(str(self.get_parameter("config_file").value))
         mode = str(self.get_parameter("interface_mode").value).strip()
         if mode:
-            self.config["interface_mode"] = mode
+            self._config_data["interface_mode"] = mode
         for key in ("bind_host", "port", "auth_token_env"):
             value = self.get_parameter(f"web.{key}").value
             if value:
-                self.config["web"][key] = value
-        self.device_id = device_id or self.config["device_id"]
+                self._config_data["web"][key] = value
+        self.device_id = device_id or self._config_data["device_id"]
         self.prefix = f"/embodied_nexus/grippers/{self.device_id}"
-        self._services = {
+        self._service_specs = {
             "info": (GetGripperInfo, f"{self.prefix}/info"),
             "state": (GetGripperState, f"{self.prefix}/get_state"),
             "config": (GetGripperConfiguration, f"{self.prefix}/config"),
@@ -64,21 +64,23 @@ class GripperRosGateway(Node):
             "enable": (SetGripperMotionEnabled, f"{self.prefix}/motion/enable"),
             "stop": (StopGripper, f"{self.prefix}/stop"),
         }
-        self.clients = {key: self.create_client(kind, name) for key, (kind, name) in self._services.items()}
+        self._service_clients = {
+            key: self.create_client(kind, name) for key, (kind, name) in self._service_specs.items()
+        }
         self.action_client = ActionClient(self, MoveGripper, f"{self.prefix}/move")
         self._operations: dict[str, dict[str, Any]] = {}
         self._goal_handles: dict[str, Any] = {}
         self._operation_lock = threading.RLock()
 
     def _call(self, name: str, request: Any, timeout: float = 5.0):
-        client = self.clients[name]
+        client = self._service_clients[name]
         if not client.wait_for_service(timeout_sec=timeout):
-            raise TimeoutError(f"ROS service {self._services[name][1]} is unavailable")
+            raise TimeoutError(f"ROS service {self._service_specs[name][1]} is unavailable")
         event = threading.Event()
         future = client.call_async(request)
         future.add_done_callback(lambda _future: event.set())
         if not event.wait(timeout):
-            raise TimeoutError(f"ROS service {self._services[name][1]} timed out")
+            raise TimeoutError(f"ROS service {self._service_specs[name][1]} timed out")
         response = future.result()
         if response is None:
             raise RuntimeError(f"ROS service {client.srv_name} returned no response")
@@ -99,6 +101,12 @@ class GripperRosGateway(Node):
         response = self._call("state", GetGripperState.Request())
         message = response.state
         stamp = message.header.stamp
+        reached = self._config_data["feedback"]["reached_value"]
+        simulated_stop_feedback = (
+            self._config_data["backend"] == "ros2_sim" and not message.motion_enabled and
+            message.feedback_valid and message.feedback_speed_raw == 0 and
+            reached is not None and message.feedback_reached == int(reached)
+        )
         return {
             "device_id": message.device_id, "backend": message.backend,
             "lifecycle_state": message.lifecycle_state, "connected": message.connected,
@@ -112,6 +120,7 @@ class GripperRosGateway(Node):
             "feedback_speed_raw": message.feedback_speed_raw, "feedback_angle_raw": message.feedback_angle_raw,
             "feedback_age_sec": message.feedback_age_sec if message.feedback_age_sec >= 0 else None,
             "stop_sent": message.stop_sent, "hardware_stop_confirmed": message.hardware_stop_confirmed,
+            "stop_feedback_confirmed": bool(message.hardware_stop_confirmed or simulated_stop_feedback),
             "stamp": {"sec": stamp.sec, "nanosec": stamp.nanosec},
         }
 

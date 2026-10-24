@@ -178,6 +178,7 @@ class DeviceManager:
                 "ros2", "launch", package, launch_file,
                 f"config_file:={item['config']}", "interface_mode:=both",
                 "web_bind_host:=127.0.0.1", f"web_port:={item['port']}",
+                f"use_sim_time:={'true' if item['use_sim_time'] else 'false'}",
                 "web_auth_token_env:=EMBODIED_NEXUS_DEVICE_TOKEN",
                 f"node_name:=en_{item['type']}_{node_suffix}",
             ]
@@ -239,8 +240,6 @@ class DeviceManager:
             return True, response
         if response.get(sent_key) is not True:
             return False, response
-        if item["type"] == "gripper":
-            return False, response
         feedback_error = ""
         while time.monotonic() < deadline:
             try:
@@ -252,7 +251,10 @@ class DeviceManager:
                     feedback_error = f"status request returned HTTP {code}"
                     break
                 state = json.loads(payload.decode("utf-8"))
-                if time.monotonic() <= deadline and state.get("stationary_confirmed") is True:
+                state_confirmed_key = "stop_feedback_confirmed" if item["type"] == "gripper" else "stationary_confirmed"
+                if (time.monotonic() <= deadline and
+                        (state.get(state_confirmed_key) is True or
+                         (item["type"] == "gripper" and state.get("hardware_stop_confirmed") is True))):
                     return True, {**response, "feedback": state}
             except Exception as exc:
                 feedback_error = f"status feedback unavailable: {exc}"

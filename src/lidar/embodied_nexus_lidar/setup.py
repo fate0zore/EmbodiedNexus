@@ -9,7 +9,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/config", ["config/c16.yaml", "config/c16_topics.yaml", "config/c16_mock.yaml"]),
+        ("share/" + package_name + "/config", ["config/c16.yaml", "config/c16_topics.yaml", "config/c16_mock.yaml", "config/c16_sim.yaml"]),
         ("share/" + package_name + "/launch", ["launch/lidar.launch.py"]),
     ],
     install_requires=["setuptools", "PyYAML", "starlette", "uvicorn"],

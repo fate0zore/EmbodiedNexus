@@ -84,7 +84,7 @@ def load_platform(path: str | Path | None = None, *, check_packages: bool = True
     seen: set[str] = set()
     devices = []
     for index, item in enumerate(raw["devices"]):
-        if not isinstance(item, dict) or set(item) - {"id", "type", "config", "enabled"}:
+        if not isinstance(item, dict) or set(item) - {"id", "type", "config", "enabled", "use_sim_time"}:
             raise ValueError(f"devices[{index}] has an invalid shape")
         device_id, kind = item.get("id"), item.get("type")
         if not isinstance(device_id, str) or not _ID.fullmatch(device_id):
@@ -97,6 +97,9 @@ def load_platform(path: str | Path | None = None, *, check_packages: bool = True
         enabled = item.get("enabled", True)
         if not isinstance(enabled, bool):
             raise ValueError(f"devices[{index}].enabled must be boolean")
+        use_sim_time = item.get("use_sim_time", False)
+        if not isinstance(use_sim_time, bool):
+            raise ValueError(f"devices[{index}].use_sim_time must be boolean")
         config_path = resolve_config_reference(item.get("config"), platform_path)
         if not config_path.is_file():
             raise ValueError(f"device config does not exist: {config_path}")
@@ -107,7 +110,7 @@ def load_platform(path: str | Path | None = None, *, check_packages: bool = True
         if check_packages:
             _validate_ros_package(kind)
         devices.append({"id": device_id, "type": kind, "config": str(config_path),
-                        "enabled": enabled})
+                        "enabled": enabled, "use_sim_time": use_sim_time})
     return {"config_file": str(platform_path), "core": core, "devices": devices}
 
 

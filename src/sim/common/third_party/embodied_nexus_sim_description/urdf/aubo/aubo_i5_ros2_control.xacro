@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="arachne_aubo_i5_ros2_control" params="prefix:='aubo_'">
+    <ros2_control name="${prefix}arm_system" type="system">
+      <hardware>
+        <plugin>$(arg ros2_control_hardware_plugin)</plugin>
+      </hardware>
+      <joint name="${prefix}shoulder_joint">
+        <command_interface name="position"/>
+        <state_interface name="position"><param name="initial_value">-1.57079632679</param></state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="${prefix}upperArm_joint">
+        <command_interface name="position"/>
+        <state_interface name="position"><param name="initial_value">0.20157042826</param></state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="${prefix}foreArm_joint">
+        <command_interface name="position"/>
+        <state_interface name="position"><param name="initial_value">1.65970467002</param></state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="${prefix}wrist1_joint">
+        <command_interface name="position"/>
+        <state_interface name="position"><param name="initial_value">0.48517804139</param></state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="${prefix}wrist2_joint">
+        <command_interface name="position"/>
+        <state_interface name="position"><param name="initial_value">1.67675136677</param></state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="${prefix}wrist3_joint">
+        <command_interface name="position"/>
+        <state_interface name="position"><param name="initial_value">0.76432946885</param></state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+    </ros2_control>
+  </xacro:macro>
+</robot>

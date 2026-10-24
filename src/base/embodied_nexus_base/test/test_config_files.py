@@ -11,10 +11,13 @@ class BaseConfigTests(unittest.TestCase):
         config_dir = Path(__file__).resolve().parents[1] / "config"
         mock = load_config(config_dir / "scout_mock.yaml")
         scout = load_config(config_dir / "scout_waveshare.yaml")
+        sim = load_config(config_dir / "scout_sim.yaml")
         self.assertEqual(mock["backend"], "mock")
         self.assertEqual(scout["backend"], "scout_waveshare_serial")
         self.assertEqual(scout["serial"]["usb_baudrate"], 2_000_000)
         self.assertEqual(scout["serial"]["can_bitrate"], 500_000)
+        self.assertEqual(sim["backend"], "ros2_sim")
+        self.assertEqual(sim["backend_options"]["odom_topic"], "/sim/arachne/base_controller/odom")
 
 
 if __name__ == "__main__":

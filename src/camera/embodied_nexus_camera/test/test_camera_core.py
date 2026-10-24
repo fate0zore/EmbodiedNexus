@@ -19,6 +19,14 @@ class CameraConfigTest(unittest.TestCase):
     def test_default_configuration_is_valid(self):
         validate_config(DEFAULT_CONFIG)
 
+    def test_simulator_rgbd_topics_use_calibrated_frame_names(self):
+        profile = Path(__file__).resolve().parents[1] / "config" / "gemini335_sim.yaml"
+        from embodied_nexus_camera.config import load_config
+        config = load_config(profile)
+        self.assertEqual(config["source"]["backend"], "ros2_topics")
+        self.assertEqual(config["capture"]["color_frame_id"], "camera_color_optical_frame")
+        self.assertEqual(config["capture"]["depth_frame_id"], "camera_depth_optical_frame")
+
     def test_ros_topic_source_cannot_loop_to_own_output(self):
         config = json.loads(json.dumps(DEFAULT_CONFIG))
         config["source"]["backend"] = "ros2_topics"

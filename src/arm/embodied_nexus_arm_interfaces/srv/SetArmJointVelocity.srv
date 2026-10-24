@@ -4,3 +4,6 @@ float64[6] velocity_rad_sec
 bool success
 string error
 bool controller_accepted
+bool retry_next_cycle
+float64[6] commanded_positions_rad
+bool stationary_confirmed

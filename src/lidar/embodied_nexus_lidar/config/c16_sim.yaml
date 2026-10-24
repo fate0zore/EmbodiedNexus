@@ -1,0 +1,41 @@
+device_id: lidar_main
+model: lslidar_c16
+backend: ros2_topics
+interface_mode: both
+source:
+  pointcloud_topic: /sim/arachne/lidar/points
+  output_topic: points
+  scan_output_topic: scan
+driver:
+  frame_id: lidar_link
+  min_range_m: 0.15
+  max_range_m: 18.0
+filter:
+  # Ignore the robot's own mesh returns from the roof-mounted simulated sensor.
+  min_range_m: 1.0
+  max_range_m: 18.0
+  min_height_m: -1.2
+  max_height_m: 2.0
+scan:
+  min_height_m: -1.2
+  max_height_m: 1.2
+  angle_min_rad: -3.141592653589793
+  angle_max_rad: 3.141592653589793
+  angle_increment_rad: 0.017453292519943295
+  range_min_m: 0.15
+  range_max_m: 18.0
+  use_inf: true
+streams:
+  stale_sec: 1.0
+  web_points_fps: 5.0
+  web_scan_fps: 10.0
+  max_clients: 8
+control:
+  difop_stale_sec: 2.0
+  lease_ttl_sec: 2.0
+  lease_renew_interval_sec: 0.5
+  max_lease_ttl_sec: 30.0
+web:
+  bind_host: 127.0.0.1
+  port: 8777
+  auth_token_env: EMBODIED_NEXUS_DEVICE_TOKEN

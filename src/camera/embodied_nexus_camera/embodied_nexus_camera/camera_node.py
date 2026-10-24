@@ -14,6 +14,7 @@ from typing import Any
 import cv2
 import numpy as np
 import rclpy
+from rclpy.clock import Clock, ClockType
 import yaml
 from geometry_msgs.msg import TransformStamped
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
@@ -214,7 +215,8 @@ class CameraNode(Node):
         if self.config["pointcloud"]["source"] == "depth":
             self._spawn(self._cloud_worker, "camera-pointcloud-worker")
         self._start_backend()
-        self.create_timer(1.0, self._publish_status)
+        self.create_timer(1.0, self._publish_status,
+                          clock=Clock(clock_type=ClockType.STEADY_TIME))
 
     def _log_line(self, level: str, message: str) -> None:
         logger = self.get_logger()

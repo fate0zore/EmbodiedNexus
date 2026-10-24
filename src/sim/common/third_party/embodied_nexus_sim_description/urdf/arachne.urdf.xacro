@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<robot name="arachne" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:arg name="arm_mount_xyz" default="0.22 0.0 0.105"/>
+  <xacro:arg name="arm_mount_rpy" default="0.0 0.0 1.57079632679"/>
+  <xacro:arg name="ee_support_xyz" default="0.0 0.0 0.0"/>
+  <xacro:arg name="ee_support_rpy" default="0.0 0.0 2.35619449019"/>
+  <xacro:arg name="tool_adapter_xyz" default="-0.049334103 0.049874070 0.021816675"/>
+  <xacro:arg name="tool_adapter_rpy" default="1.570796327 0.0 0.0"/>
+  <xacro:arg name="with_lidar" default="true"/>
+  <xacro:arg name="with_ee_camera" default="true"/>
+  <xacro:arg name="with_rear_rack" default="true"/>
+  <xacro:arg name="with_front_basket" default="true"/>
+  <xacro:arg name="front_basket_xyz" default="0.4655 0.0 -0.0715"/>
+  <xacro:arg name="front_basket_rpy" default="0.0 0.0 0.0"/>
+  <xacro:arg name="rear_rack_xyz" default="-0.16 0.0 0.105"/>
+  <xacro:arg name="rear_rack_rpy" default="0.0 0.0 1.57079632679"/>
+  <xacro:arg name="lidar_xyz" default="0.0 0.035 0.6223"/>
+  <xacro:arg name="lidar_rpy" default="0.0 0.0 3.14159265359"/>
+  <xacro:arg name="lidar_parent" default="rear_rack_link"/>
+  <xacro:arg name="ee_camera_xyz" default="0.0 -0.0741 0.005"/>
+  <xacro:arg name="ee_camera_rpy" default="0.0 0.0 1.57079632679"/>
+  <xacro:arg name="with_ros2_control" default="false"/>
+  <xacro:arg name="ros2_control_hardware_plugin" default="mock_components/GenericSystem"/>
+  <xacro:arg name="with_mimic_joints" default="true"/>
+  <xacro:arg name="gazebo_drive_wheels" default="false"/>
+
+  <xacro:include filename="materials.xacro"/>
+  <xacro:include filename="common_inertials.xacro"/>
+  <xacro:include filename="scout/scout_2_vendor.xacro"/>
+  <xacro:include filename="scout/scout_2_ros2_control.xacro"/>
+  <xacro:include filename="aubo/aubo_i5_vendor.xacro"/>
+  <xacro:include filename="aubo/aubo_i5_ros2_control.xacro"/>
+  <xacro:include filename="gripper/ms42dc.urdf.xacro"/>
+  <xacro:include filename="gripper/ms42dc_ros2_control.xacro"/>
+  <xacro:include filename="sensors/rear_rack.xacro"/>
+  <xacro:include filename="sensors/lidar.xacro"/>
+  <xacro:include filename="sensors/ee_camera.xacro"/>
+  <xacro:include filename="accessories/front_basket.xacro"/>
+
+  <xacro:arachne_scout_2_vendor gazebo_drive_wheels="$(arg gazebo_drive_wheels)"/>
+  <xacro:if value="$(arg with_front_basket)">
+    <xacro:arachne_front_basket parent="base_link" xyz="$(arg front_basket_xyz)" rpy="$(arg front_basket_rpy)"/>
+  </xacro:if>
+  <xacro:arachne_aubo_i5_vendor parent="base_link" xyz="$(arg arm_mount_xyz)" rpy="$(arg arm_mount_rpy)"/>
+  <xacro:arachne_ee_camera_support parent="aubo_wrist3_Link" xyz="$(arg ee_support_xyz)" rpy="$(arg ee_support_rpy)"/>
+  <xacro:arachne_ms42dc parent="ee_camera_support_link" xyz="$(arg tool_adapter_xyz)" rpy="$(arg tool_adapter_rpy)" mimic_right="$(arg with_mimic_joints)"/>
+
+  <xacro:if value="$(arg with_rear_rack)">
+    <xacro:arachne_rear_sensor_rack parent="base_link" xyz="$(arg rear_rack_xyz)" rpy="$(arg rear_rack_rpy)"/>
+  </xacro:if>
+
+  <xacro:if value="$(arg with_lidar)">
+    <xacro:arachne_lidar parent="$(arg lidar_parent)" xyz="$(arg lidar_xyz)" rpy="$(arg lidar_rpy)"/>
+  </xacro:if>
+
+  <xacro:if value="$(arg with_ee_camera)">
+    <xacro:arachne_ee_camera_sensor parent="ee_camera_support_link" camera_xyz="$(arg ee_camera_xyz)" camera_rpy="$(arg ee_camera_rpy)"/>
+  </xacro:if>
+
+  <xacro:if value="$(arg with_ros2_control)">
+    <xacro:arachne_scout_2_ros2_control/>
+    <xacro:arachne_aubo_i5_ros2_control prefix="aubo_"/>
+    <xacro:arachne_ms42dc_ros2_control prefix="ms42dc_"/>
+  </xacro:if>
+
+</robot>

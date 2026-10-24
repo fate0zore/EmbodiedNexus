@@ -21,6 +21,12 @@ motion:
   operation_timeout_sec: 30.0
   goal_tolerance_rad: 0.04
   stable_sec: 0.25
+  servo_joint_command_period_sec: 0.20
+  servo_joint_velocity_rad_sec: 0.2
+  servo_joint_acceleration_rad_sec2: 0.2
+  servo_joint_period_sec: 0.008
+  servo_joint_lookahead_sec: 0.12
+  servo_joint_gain: 150
 feedback:
   rate_hz: 10.0
   stale_sec: 1.0

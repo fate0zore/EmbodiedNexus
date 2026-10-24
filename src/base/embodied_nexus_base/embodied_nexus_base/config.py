@@ -12,6 +12,7 @@ import yaml
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "device_id": "base_main", "model": "scout_2", "backend": "mock",
+    "backend_options": None,
     "interface_mode": "both",
     "serial": {"port": "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0",
                "usb_baudrate": 2000000, "can_bitrate": 500000,
@@ -66,8 +67,13 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("device_id must contain only letters, digits, '_' or '-'")
     if config.get("model") != "scout_2":
         raise ValueError("model must be scout_2")
-    if config.get("backend") not in {"mock", "scout_waveshare_serial"}:
-        raise ValueError("backend must be mock or scout_waveshare_serial")
+    if config.get("backend") not in {"mock", "scout_waveshare_serial", "ros2_sim"}:
+        raise ValueError("backend must be mock, scout_waveshare_serial, or ros2_sim")
+    if config["backend"] == "ros2_sim":
+        if not isinstance(config.get("backend_options"), dict):
+            raise ValueError("ros2_sim requires a backend_options mapping")
+    elif config.get("backend_options"):
+        raise ValueError("backend_options are only supported by backend=ros2_sim")
     if config.get("interface_mode") not in {"ros2", "web", "both"}:
         raise ValueError("interface_mode must be ros2, web or both")
     serial = config["serial"]

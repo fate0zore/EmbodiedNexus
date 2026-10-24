@@ -47,6 +47,12 @@ class MS42DCProtocolTests(unittest.TestCase):
 
 
 class GripperControllerTests(unittest.TestCase):
+    def test_simulator_profile_keeps_motor_feedback_explicitly_simulated(self):
+        config = load_config(Path(__file__).resolve().parents[1] / "config" / "ms42dc_sim.yaml")
+        self.assertEqual(config["backend"], "ros2_sim")
+        self.assertEqual(config["backend_options"]["finger_travel_rad"], 0.6)
+        self.assertTrue(config["feedback"]["confirmed"])
+
     def make_controller(self, duration=0.06, timeout=1.0):
         config = load_config(CONFIG)
         config["mock"]["move_duration_sec"] = duration

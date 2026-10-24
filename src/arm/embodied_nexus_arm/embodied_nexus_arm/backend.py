@@ -9,7 +9,20 @@ import threading
 import time
 from json import JSONDecoder
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
+
+
+class ArmBackend(Protocol):
+    """Public Aubo operation and feedback contract for pluggable backends."""
+
+    connected: bool
+
+    def open(self) -> None: ...
+    def close(self) -> None: ...
+    def poll(self) -> dict[str, Any]: ...
+    def execute(self, method: str, params: list[Any] | None = None) -> Any: ...
+    def read_optional(self, suffix: str) -> Any: ...
+    def stop(self) -> bool: ...
 
 
 class AuboJsonRpc:
@@ -101,6 +114,8 @@ class MockBackend:
         self.last_update = time.monotonic()
         self.controller_accepted = False
         self._teach_enabled = False
+        self._servo_mode_enabled = False
+        self.command_log: list[tuple[str, list[Any]]] = []
 
     def open(self) -> None:
         return
@@ -134,9 +149,10 @@ class MockBackend:
                 "payload": None, "tcp_offset": None, "hardware_estop": self.safety.lower() in {"protectivestop", "emergency"}}
 
     def execute(self, method: str, params: list[Any] | None = None) -> Any:
+        params = params or []
+        self.command_log.append((method, list(params)))
         if self.config["mock"]["fail_command"] and method not in {"MotionControl.stopJoint"}:
             raise OSError("mock Aubo command failed")
-        params = params or []
         if method == "MotionControl.moveJoint":
             self.target = list(params[0])
             self.controller_accepted = True
@@ -144,6 +160,21 @@ class MockBackend:
         if method == "MotionControl.speedJoint":
             self.velocities = list(params[0])
             self.target = None
+            self.controller_accepted = True
+            return 0
+        if method == "MotionControl.setServoMode":
+            self._servo_mode_enabled = bool(params[0])
+            if not self._servo_mode_enabled:
+                self.velocities = [0.0] * 6
+                self.target = None
+            return 0
+        if method == "MotionControl.isServoModeEnabled":
+            return self._servo_mode_enabled
+        if method == "MotionControl.servoJoint":
+            if not self._servo_mode_enabled:
+                raise RuntimeError("mock servo mode is not enabled")
+            self.target = list(params[0])
+            self.velocities = [0.0] * 6
             self.controller_accepted = True
             return 0
         if method == "MotionControl.stopJoint":
@@ -184,7 +215,6 @@ class MockBackend:
             return True
         except Exception:
             return False
-
 
 class AuboBackend:
     KNOWN_PROCESSES = ("arachne_hardware", "teach_panel", "grasp_task_server",
@@ -301,4 +331,12 @@ def create_backend(config: dict[str, Any]):
         return MockBackend(config)
     if config["backend"] == "aubo_jsonrpc":
         return AuboBackend(config)
+    if config["backend"] == "ros2_sim":
+        from importlib.metadata import entry_points
+
+        providers = entry_points().select(group="embodied_nexus_arm.backends", name="ros2_sim")
+        provider = next(iter(providers), None)
+        if provider is None:
+            raise RuntimeError("backend=ros2_sim requires the embodied_nexus_sim ROS package")
+        return provider.load()(config)
     raise ValueError(f"unsupported arm backend {config['backend']!r}")

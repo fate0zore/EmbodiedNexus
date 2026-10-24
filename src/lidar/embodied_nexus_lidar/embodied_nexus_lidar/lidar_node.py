@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import rclpy
+from rclpy.clock import Clock, ClockType
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
@@ -102,7 +103,9 @@ class LidarNode(Node):
         self._install_services()
         self._mock_timer = (self.create_timer(0.1, self._mock_tick, callback_group=self._sensor_group)
                             if self.config["backend"] == "mock" else None)
-        self._status_timer = self.create_timer(0.2, self._publish_state, callback_group=self._timer_group)
+        self._status_timer = self.create_timer(0.2, self._publish_state,
+                                               callback_group=self._timer_group,
+                                               clock=Clock(clock_type=ClockType.STEADY_TIME))
         self._last_published_seq = 0
         self.get_logger().info(
             f"lidar {self.device_id} backend={self.config['backend']} mode={self.config['interface_mode']} "

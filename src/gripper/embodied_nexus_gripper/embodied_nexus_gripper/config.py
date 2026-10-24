@@ -14,6 +14,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "device_id": "gripper_main",
     "model": "ms42dc",
     "backend": "serial",
+    "backend_options": None,
     "interface_mode": "both",
     "serial": {"port": "/dev/motor_serial", "baudrate": 115200,
                "timeout_sec": 0.25, "reconnect_backoff_sec": 1.0},
@@ -70,6 +71,8 @@ def validate_config(config: dict[str, Any]) -> None:
             if key not in schema:
                 raise ValueError(f"unknown configuration field: {path}")
             if isinstance(item, dict):
+                if key == "backend_options" and config.get("backend") == "ros2_sim":
+                    continue
                 if not isinstance(schema[key], dict):
                     raise ValueError(f"configuration field {path} must not be a mapping")
                 reject_unknown(item, schema[key], path)
@@ -81,8 +84,10 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("device_id may contain only letters, digits, underscore, and hyphen")
     if config.get("model") != "ms42dc":
         raise ValueError("model must be ms42dc; other gripper models use separate adapters")
-    if config.get("backend") not in {"serial", "mock"}:
-        raise ValueError("backend must be serial or mock")
+    if config.get("backend") not in {"serial", "mock", "ros2_sim"}:
+        raise ValueError("backend must be serial, mock, or ros2_sim")
+    if config["backend"] == "ros2_sim" and not isinstance(config.get("backend_options"), dict):
+        raise ValueError("ros2_sim requires backend_options")
     if config.get("interface_mode") not in {"ros2", "web", "both"}:
         raise ValueError("interface_mode must be ros2, web, or both")
     serial_cfg, protocol, motion = config["serial"], config["protocol"], config["motion"]

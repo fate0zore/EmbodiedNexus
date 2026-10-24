@@ -58,9 +58,19 @@ EmbodiedNexus/
         │   └── lslidar_msgs/
         ├── docs/
         └── examples/
+    └── sim/
+        ├── common/
+        │   ├── embodied_nexus_sim/
+        │   ├── docs/
+        │   └── third_party/
+        │       └── embodied_nexus_sim_description/
+        └── gazebo/
+            └── embodied_nexus_sim_gazebo/
 ```
 
 功能包使用 `ament_python`，自定义接口包使用 `ament_cmake` / `rosidl`，因此继续保留独立构建边界。厂商雷达包保持原包名和来源材料。colcon 的递归发现允许设备目录作为中间分组层，构建时用 `--base-paths src` 限定范围，详见 [colcon 官方发现参数](https://colcon.readthedocs.io/en/released/reference/discovery-arguments.html)。
+
+`src/sim/common/` 保存仿真器无关的后端契约和共享模型，具体仿真器使用 `src/sim/<仿真器名>/` 独立接入。Gazebo Fortress 首期的五类设备本机验收状态及运行边界见[仿真实施记录](../src/sim/README.md)和[验收报告](../src/sim/gazebo/embodied_nexus_sim_gazebo/docs/acceptance-20261024.md)。
 
 ## 资料与依赖归属
 
@@ -74,6 +84,8 @@ EmbodiedNexus/
 | 通用远程 Python 客户端与测试     | `sdk/python/`                                    |
 | 总体架构与跨模块说明             | 根目录 `docs/`                                   |
 | 设备进程管理与统一网关           | `src/core/`                                      |
+| 通用仿真后端与机器人模型         | `src/sim/common/`                                |
+| 按仿真器拆分的场景、桥接和启动配置 | `src/sim/<仿真器名>/`                             |
 | 已确认规划                       | 根目录 `todo/`                                   |
 
 设备模块通过公开接口协作，不互相导入内部实现。SDK 依赖远程协议，不依赖 ROS 或机器人端源码。普通 Python、系统和 ROS 依赖继续通过包清单声明；只有需要随项目分发的专用依赖才存入模块的 `third_party/`。

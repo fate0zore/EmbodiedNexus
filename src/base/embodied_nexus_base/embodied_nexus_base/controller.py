@@ -48,6 +48,9 @@ class BaseController:
         self.last_tick = now
         self.x = self.y = self.yaw = 0.0
         self.pose_valid = False
+        self.odometry_source = "integrated_velocity_estimate"
+        self.odometry_time = 0.0
+        self.odometry_stamp_sec = 0.0
         self.stop_requested = False
         self.zero_velocity_written = False
         self.stationary_confirmed = False
@@ -57,7 +60,7 @@ class BaseController:
                 "model": self.config["model"], "backend": self.config["backend"],
                 "interface_version": "1.0", "capabilities": ["state", "odometry", "set_velocity",
                 "move_relative", "turn_relative", "stop"],
-                "odometry_source": "integrated_velocity_estimate"}
+                "odometry_source": self.odometry_source}
 
     def state(self) -> dict:
         with self.lock:
@@ -71,11 +74,14 @@ class BaseController:
             measured_angular = float(self.motion["angular_rps"]) if motion_valid else None
             vehicle_state = int(self.system["vehicle_state"]) if self.system else None
             control_mode = int(self.system["control_mode"]) if self.system else None
-            battery = float(self.system["battery_voltage"]) if self.system else None
+            battery_value = self.system.get("battery_voltage") if self.system else None
+            battery = float(battery_value) if battery_value is not None else None
             error_code = int(self.system["error_code"]) if self.system else None
             stationary = bool(motion_valid and abs(measured_linear) < 0.01 and abs(measured_angular) < 0.01)
             self.stationary_confirmed = stationary
-            return {"stamp_sec": time.time(), "timestamp_source": "gateway_snapshot",
+            timestamp = self.odometry_stamp_sec if self.odometry_source == "simulator_odometry" and self.odometry_stamp_sec else time.time()
+            return {"stamp_sec": timestamp,
+                    "timestamp_source": "simulation_clock" if self.odometry_source == "simulator_odometry" else "gateway_snapshot",
                     "device_id": self.config["device_id"], "model": self.config["model"],
                     "backend": self.config["backend"], "lifecycle_state": self.lifecycle_state,
                     "connected": bool(self.connected), "motion_enabled": self.motion_enabled,
@@ -89,7 +95,7 @@ class BaseController:
                     "pose_estimate_valid": self.pose_valid and motion_valid,
                     "x_m": self.x if self.pose_valid else None, "y_m": self.y if self.pose_valid else None,
                     "yaw_rad": self.yaw if self.pose_valid else None,
-                    "odometry_source": "integrated_velocity_estimate",
+                    "odometry_source": self.odometry_source,
                     "target_linear_mps": self.target_linear if self.motion_enabled else 0.0,
                     "target_angular_rps": self.target_angular if self.motion_enabled else 0.0,
                     "stop_requested": self.stop_requested,
@@ -316,6 +322,7 @@ class BaseController:
 
     def poll_once(self) -> None:
         system, motion, connected, error = self.backend.poll()
+        odometry = self.backend.read_odometry() if hasattr(self.backend, "read_odometry") else None
         now = time.monotonic()
         with self.lock:
             self.connected = connected
@@ -334,6 +341,12 @@ class BaseController:
                 self.y += linear * math.sin(self.yaw) * dt
                 self.yaw = math.atan2(math.sin(self.yaw + angular * dt), math.cos(self.yaw + angular * dt))
                 self.pose_valid = True
+            if odometry is not None:
+                self.x, self.y, self.yaw = (float(odometry[key]) for key in ("x_m", "y_m", "yaw_rad"))
+                self.pose_valid = True
+                self.odometry_time = now
+                self.odometry_stamp_sec = float(odometry.get("stamp_sec", 0.0))
+                self.odometry_source = "simulator_odometry"
 
     def shutdown(self) -> None:
         try:

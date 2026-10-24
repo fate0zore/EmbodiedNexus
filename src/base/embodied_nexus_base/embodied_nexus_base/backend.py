@@ -5,11 +5,24 @@ import math
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from .protocol import (SCOUT_CONTROL_MODE_ID, SCOUT_MOTION_COMMAND_ID, ScoutFeedback,
                        decode_scout_frames, decode_variable_frames, encode_config,
                        encode_variable_frame, int16_to_bytes)
+
+
+class BaseBackend(Protocol):
+    """Public backend contract implemented by native and simulator adapters."""
+
+    connected: bool
+
+    def open(self) -> None: ...
+    def close(self) -> None: ...
+    def request_control_mode(self) -> None: ...
+    def set_velocity(self, linear: float, angular: float) -> None: ...
+    def stop(self) -> None: ...
+    def poll(self) -> tuple[dict | None, dict | None, bool, str]: ...
 
 
 class MockBackend:
@@ -180,4 +193,12 @@ def create_backend(config: dict[str, Any], serial_factory=None):
         return MockBackend(config)
     if config["backend"] == "scout_waveshare_serial":
         return ScoutWaveshareSerialBackend(config, serial_factory=serial_factory)
+    if config["backend"] == "ros2_sim":
+        from importlib.metadata import entry_points
+
+        providers = entry_points().select(group="embodied_nexus_base.backends", name="ros2_sim")
+        provider = next(iter(providers), None)
+        if provider is None:
+            raise RuntimeError("backend=ros2_sim requires the embodied_nexus_sim ROS package")
+        return provider.load()(config)
     raise ValueError(f"unsupported base backend {config['backend']!r}")

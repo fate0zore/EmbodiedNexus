@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import os
 import re
@@ -36,10 +37,17 @@ class CoreNode(Node):
         if not token or not re.fullmatch(r"[A-Za-z0-9._~-]+", token):
             raise RuntimeError(f"set {core['auth_token_env']} before starting the core")
         self.app = create_app(self.manager, token)
-        self.web_server = uvicorn.Server(uvicorn.Config(
-            self.app, host=str(core["bind_host"]), port=int(core["port"]),
-            log_level="info", access_log=True, ws_max_queue=2,
-        ))
+        web_options = {
+            "host": str(core["bind_host"]),
+            "port": int(core["port"]),
+            "log_level": "info",
+            "access_log": True,
+        }
+        # Ubuntu 22.04's Uvicorn 0.15 predates ws_max_queue. Keep the bounded
+        # queue where supported while allowing the system package on Humble.
+        if "ws_max_queue" in inspect.signature(uvicorn.Config).parameters:
+            web_options["ws_max_queue"] = 2
+        self.web_server = uvicorn.Server(uvicorn.Config(self.app, **web_options))
         self.web_thread = threading.Thread(target=self.web_server.run, name="embodied-nexus-core-web", daemon=True)
         self.web_thread.start()
         deadline = time.monotonic() + 5.0

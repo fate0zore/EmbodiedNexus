@@ -9,7 +9,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/config", ["config/scout_mock.yaml", "config/scout_waveshare.yaml"]),
+        ("share/" + package_name + "/config", ["config/scout_mock.yaml", "config/scout_waveshare.yaml", "config/scout_sim.yaml"]),
         ("share/" + package_name + "/launch", ["launch/base.launch.py"]),
     ],
     install_requires=["setuptools", "PyYAML", "pyserial", "starlette", "uvicorn"],

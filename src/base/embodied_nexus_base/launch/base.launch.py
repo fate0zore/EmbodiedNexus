@@ -21,7 +21,8 @@ def _setup(context, *args, **kwargs):
         raise RuntimeError("interface_mode must be ros2, web or both")
     actions = [Node(package="embodied_nexus_base", executable="base_node",
                     name=LaunchConfiguration("node_name"), output="screen",
-                    parameters=[{"config_file": str(config_path)}])]
+                    parameters=[{"config_file": str(config_path),
+                                 "use_sim_time": LaunchConfiguration("use_sim_time")}])]
     if interface_mode in {"both", "web"}:
         web = config["web"]
         bind_host = LaunchConfiguration("web_bind_host").perform(context).strip() or str(web["bind_host"])
@@ -33,7 +34,8 @@ def _setup(context, *args, **kwargs):
         actions.append(Node(package="embodied_nexus_base", executable="base_web",
                             name=LaunchConfiguration("node_name_web"), output="screen",
                             parameters=[{"config_file": str(config_path), "web.bind_host": bind_host,
-                                         "web.port": web_port, "web.auth_token_env": token_env}]))
+                                         "web.port": web_port, "web.auth_token_env": token_env,
+                                         "use_sim_time": LaunchConfiguration("use_sim_time")}]))
     return actions
 
 
@@ -42,6 +44,7 @@ def generate_launch_description():
         DeclareLaunchArgument("config_file", default_value=PathJoinSubstitution([
             FindPackageShare("embodied_nexus_base"), "config", "scout_mock.yaml"])),
         DeclareLaunchArgument("interface_mode", default_value=""),
+        DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("web_bind_host", default_value=""),
         DeclareLaunchArgument("web_port", default_value="0"),
         DeclareLaunchArgument("web_auth_token_env", default_value=""),

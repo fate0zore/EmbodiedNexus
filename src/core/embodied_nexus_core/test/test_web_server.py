@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import socket
 import threading
 import time
@@ -28,10 +29,13 @@ def _port() -> int:
 class _Server:
     def __init__(self, app):
         self.port = _port()
-        self.server = uvicorn.Server(uvicorn.Config(
-            app, host="127.0.0.1", port=self.port, log_level="critical",
-            lifespan="off", ws_max_queue=1,
-        ))
+        options = {
+            "host": "127.0.0.1", "port": self.port, "log_level": "critical",
+            "lifespan": "off",
+        }
+        if "ws_max_queue" in inspect.signature(uvicorn.Config).parameters:
+            options["ws_max_queue"] = 1
+        self.server = uvicorn.Server(uvicorn.Config(app, **options))
         self.thread = threading.Thread(target=self.server.run, daemon=True)
         self.thread.start()
         deadline = time.monotonic() + 3.0

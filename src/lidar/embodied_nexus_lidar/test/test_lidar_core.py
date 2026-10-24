@@ -46,7 +46,7 @@ def difop(speed=(0x02, 0x58)):
 class ConfigTests(unittest.TestCase):
     def test_all_backends_have_checked_configs(self):
         for name, backend in (("c16.yaml", "c16"), ("c16_topics.yaml", "ros2_topics"),
-                              ("c16_mock.yaml", "mock")):
+                              ("c16_mock.yaml", "mock"), ("c16_sim.yaml", "ros2_topics")):
             cfg = load_config(PACKAGE / "config" / name)
             self.assertEqual(cfg["backend"], backend)
             self.assertEqual(cfg["device_id"], "lidar_main")

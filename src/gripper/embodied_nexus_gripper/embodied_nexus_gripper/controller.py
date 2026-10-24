@@ -51,6 +51,7 @@ class GripperController:
         self._reserved_goal_id = ""
         self._stop_sent = False
         self._hardware_stop_confirmed = False
+        self._stop_feedback_confirmed = False
         self._try_connect()
 
     def _try_connect(self) -> None:
@@ -105,6 +106,14 @@ class GripperController:
                 self._feedback = feedback
                 self._feedback_at = time.monotonic()
                 self._feedback_sequence += 1
+                if self._stop_sent and not self._stop_feedback_confirmed:
+                    feedback_cfg = self.config["feedback"]
+                    expected = feedback_cfg["reached_value"]
+                    if (feedback.speed_raw == 0 and expected is not None and
+                            feedback.reached == int(expected)):
+                        self._stop_feedback_confirmed = True
+                        if not getattr(self.backend, "feedback_is_simulated", False):
+                            self._hardware_stop_confirmed = True
                 if self._operation_state not in {"running", "stopping"}:
                     self._last_error = ""
                 return True
@@ -133,6 +142,7 @@ class GripperController:
                 "command_target_known": self._operation_target is not None,
                 "command_target_degrees": self._operation_target,
                 "feedback_valid": bool(feedback and age is not None and age <= float(self.config["feedback"]["stale_sec"])),
+                "feedback_source": "simulated_joint_state" if getattr(self.backend, "feedback_is_simulated", False) else "device_protocol",
                 "feedback_sequence": self._feedback_sequence,
                 "feedback_device_id": feedback.device_id if feedback else 0,
                 "feedback_reached": feedback.reached if feedback else 0,
@@ -142,6 +152,7 @@ class GripperController:
                 "lease_owner": self._lease_owner if self._lease_valid_locked() else "",
                 "stop_sent": self._stop_sent,
                 "hardware_stop_confirmed": self._hardware_stop_confirmed,
+                "stop_feedback_confirmed": self._stop_feedback_confirmed,
             }
 
     def descriptor(self) -> dict:
@@ -161,9 +172,10 @@ class GripperController:
                 {"name": "enable_motion", "parameters": [], "units": None},
             ],
             "feedback": {
-                "raw_motor_angle": True,
+                "raw_motor_angle": self.config["backend"] != "ros2_sim",
                 "opening_width_m": None, "finger_position": None, "force_n": None,
                 "completion_confirmed": bool(self.config["feedback"]["confirmed"]),
+                "source": "simulated_joint_state" if self.config["backend"] == "ros2_sim" else "device_protocol",
             },
         }
 
@@ -350,6 +362,7 @@ class GripperController:
             self._operation_stop_event = stop_event
             self._stop_sent = False
             self._hardware_stop_confirmed = False
+            self._stop_feedback_confirmed = False
 
         # Serialize against polling and establish a feedback sequence boundary
         # immediately before writing the command. Pre-command state can never
@@ -476,14 +489,17 @@ class GripperController:
                 error = str(exc)
         with self._lock:
             self._stop_sent = sent
-            self._hardware_stop_confirmed = confirmed
+            self._stop_feedback_confirmed = confirmed
+            self._hardware_stop_confirmed = confirmed and not getattr(self.backend, "feedback_is_simulated", False)
             if error:
                 self._last_error = error
             elif sent:
                 self._last_error = ""
             if self._operation_state == "stopping":
                 self._operation_state = "cancelled"
-        return {"success": sent, "stop_sent": sent, "hardware_stop_confirmed": confirmed, "error": error}
+        return {"success": sent, "stop_sent": sent,
+                "hardware_stop_confirmed": self._hardware_stop_confirmed,
+                "stop_feedback_confirmed": self._stop_feedback_confirmed, "error": error}
 
     def shutdown(self) -> None:
         try:

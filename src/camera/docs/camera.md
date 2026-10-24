@@ -59,6 +59,8 @@ WS   /ws?streams=color,depth,points&color_fps=15&depth_fps=5&color_codec=jpeg
 
 Each WebSocket frame consists of a UTF-8 JSON metadata message followed by one binary message. Color is JPEG by default (PNG is supported), depth uses lossless PNG16, and points use the `PointCloud2` binary layout described by the metadata. Per-client latest-frame delivery is bounded and skips stale queued frames.
 
+Every frame header includes its `channel`, `stamp_sec`, `timestamp_source`, `calibration_version`, and `frame_id`; depth frames also include `depth_scale_m`. Pair color and depth only when their timestamp sources and calibration versions match and their timestamps fall within the consumer's configured tolerance. The calibration endpoint reports both streams' image size, intrinsics, distortion coefficients/model and calibrated flag, plus the depth scale and depth-to-color rotation/translation in meters.
+
 ## Python client
 
 From the repository root on the Windows/Linux algorithm host, run `pip install -e sdk/python`. The distribution is `embodied-nexus-client`, with imports under `embodied_nexus_client`. The client uses HTTP from the standard library and `websockets` for live frames; it does not require ROS 2.

@@ -9,7 +9,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/config", ["config/gemini335.yaml", "config/gemini335_mock.yaml", "config/gemini335_factory_calibration.json"]),
+        ("share/" + package_name + "/config", ["config/gemini335.yaml", "config/gemini335_mock.yaml", "config/gemini335_sim.yaml", "config/gemini335_factory_calibration.json"]),
         ("share/" + package_name + "/launch", ["launch/camera.launch.py"]),
         ("share/" + package_name + "/test", ["test/test_camera_core.py"]),
     ],

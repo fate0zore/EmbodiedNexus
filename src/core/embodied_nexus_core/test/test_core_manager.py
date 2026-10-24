@@ -104,11 +104,16 @@ class CoreManagerTests(unittest.TestCase):
             "ament_index_python": ament_index,
             "ament_index_python.packages": package_index,
         }):
-            for profile in ("platform_mock.yaml", "platform_real.yaml"):
-                loaded = load_platform(repo / "src/core/embodied_nexus_core/config" / profile)
+            profiles = [repo / "src/core/embodied_nexus_core/config" / name
+                        for name in ("platform_mock.yaml", "platform_real.yaml")]
+            profiles.append(repo / "src/sim/gazebo/embodied_nexus_sim_gazebo/config/platform_sim.yaml")
+            for profile_path in profiles:
+                loaded = load_platform(profile_path)
                 self.assertEqual(len(loaded["devices"]), 5)
                 self.assertEqual({item["type"] for item in loaded["devices"]},
                                  {"base", "arm", "camera", "gripper", "lidar"})
+                if profile_path.name == "platform_sim.yaml":
+                    self.assertTrue(all(item["use_sim_time"] for item in loaded["devices"]))
 
     def test_package_config_reference_supports_symlink_install_resources(self):
         source_config = self.root / "source" / "config.yaml"
@@ -197,6 +202,26 @@ class CoreManagerTests(unittest.TestCase):
         self.assertEqual(manager._items["base_one"]["process_state"], "stop_blocked")
         self.assertIs(manager._items["base_one"]["process"], process)
         self.assertIsNone(process.returncode)
+
+    def test_simulated_gripper_shutdown_waits_for_joint_feedback(self):
+        manager = object.__new__(DeviceManager)
+        manager.platform = {"core": {"shutdown_timeout_sec": 0.5}}
+        status_count = 0
+
+        def request(_item, _suffix, *, method="GET", body=None, timeout=0.5):
+            nonlocal status_count
+            if method == "POST":
+                payload = {"stop_sent": True, "hardware_stop_confirmed": False}
+            else:
+                status_count += 1
+                payload = {"stop_feedback_confirmed": status_count >= 2,
+                           "hardware_stop_confirmed": False}
+            return 200, json.dumps(payload).encode(), "application/json"
+
+        manager._http = request
+        confirmed, response = manager._stop_confirmed({"id": "gripper_sim", "type": "gripper"})
+        self.assertTrue(confirmed)
+        self.assertTrue(response["feedback"]["stop_feedback_confirmed"])
 
     def test_conflicting_operation_is_rejected_without_waiting(self):
         manager = self.make_manager()

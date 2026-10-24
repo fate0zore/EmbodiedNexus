@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import rclpy
+from rclpy.clock import Clock, ClockType
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -62,7 +63,8 @@ class ArmNode(Node):
                                         cancel_callback=self._cancel_goal,
                                         callback_group=self.group)
         hz = float(self.config["feedback"]["rate_hz"])
-        self.timer = self.create_timer(1.0 / hz, self._tick, callback_group=self.group)
+        self.timer = self.create_timer(1.0 / hz, self._tick, callback_group=self.group,
+                                       clock=Clock(clock_type=ClockType.STEADY_TIME))
 
     @staticmethod
     def _json(value) -> str:
@@ -152,6 +154,9 @@ class ArmNode(Node):
         try:
             result = self.controller.set_joint_velocity(request.lease_id, request.velocity_rad_sec)
             response.controller_accepted = result["controller_accepted"]
+            response.retry_next_cycle = result.get("retry_next_cycle", False)
+            response.commanded_positions_rad = result.get("commanded_positions_rad", [0.0] * 6)
+            response.stationary_confirmed = result.get("stationary_confirmed", False)
             return self._ok(response)
         except Exception as exc:
             return self._ok(response, exc)

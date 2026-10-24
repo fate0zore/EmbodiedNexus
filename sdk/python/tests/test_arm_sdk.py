@@ -45,6 +45,21 @@ class ArmSdkTests(unittest.TestCase):
         client = ArmClient("http://localhost", "token", device_id="arm_lab")
         self.assertEqual(client._prefix, "/api/v1/arms/arm_lab")
 
+    def test_velocity_response_preserves_retry_and_command_feedback(self):
+        client = FakeArmClient()
+        client._request = lambda method, suffix="", body=None: {
+            "controller_accepted": False, "retry_next_cycle": True,
+            "commanded_positions_rad": [0.02, 0, 0, 0, 0, 0],
+            "stationary_confirmed": False,
+        }
+        lease = ArmLease(client, "lease", 3.0)
+        result = lease.set_joint_velocity([0.1, 0, 0, 0, 0, 0])
+        self.assertTrue(result["retry_next_cycle"])
+        self.assertFalse(result["controller_accepted"])
+        self.assertEqual(result["commanded_positions_rad"][0], 0.02)
+        self.assertFalse(result["stationary_confirmed"])
+        lease._stop_event.set()
+
 
 if __name__ == "__main__":
     unittest.main()

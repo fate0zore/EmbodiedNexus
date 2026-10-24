@@ -38,6 +38,13 @@ class ArmControllerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_config(broken)
 
+    def test_simulator_profile_uses_the_pluggable_ros_backend_contract(self):
+        sim = load_config(Path(__file__).resolve().parents[1] / "config" / "aubo_i5_sim.yaml")
+        self.assertEqual(sim["backend"], "ros2_sim")
+        self.assertEqual(sim["backend_options"]["arm_trajectory_topic"],
+                         "/sim/arachne/arm_controller/joint_trajectory")
+        self.assertEqual(len(sim["joints"]["names"]), 6)
+
     def test_move_uses_measured_feedback_and_reports_acceptance(self):
         lease = self.lease_and_enable()
         target = [0.08, 0, 0, 0, 0, 0]
@@ -58,7 +65,10 @@ class ArmControllerTests(unittest.TestCase):
         self.assertTrue(result["stationary_confirmed"])
 
     def test_state_reports_missing_or_moving_feedback_as_unknown_or_not_stationary(self):
-        self.assertTrue(self.controller.state()["stationary_confirmed"])
+        initial = self.controller.state()
+        self.assertTrue(initial["stationary_confirmed"])
+        self.assertEqual(initial["feedback_timestamp_source"], "host_receive")
+        self.assertIsNotNone(initial["stamp_sec"])
         self.backend.velocities = [0.1, 0, 0, 0, 0, 0]
         self.controller.poll_once()
         self.assertFalse(self.controller.state()["stationary_confirmed"])
@@ -81,11 +91,61 @@ class ArmControllerTests(unittest.TestCase):
         lease = self.lease_and_enable()
         self.controller.config["motion"]["watchdog_sec"] = 0.04
         self.controller.set_joint_velocity(lease, [0.1, 0, 0, 0, 0, 0])
-        time.sleep(0.06)
+        deadline = self.controller.lease_deadline
+        while time.monotonic() < deadline:
+            time.sleep(0.005)
         self.controller.tick()
         self.assertFalse(self.controller.motion_enabled)
         self.assertTrue(self.controller.state()["stop_requested"])
         self.assertEqual(self.backend.velocities, [0.0] * 6)
+
+    def test_velocity_updates_keep_servo_stream_continuous_until_zero(self):
+        lease = self.lease_and_enable()
+        self.backend.command_log.clear()
+        first = self.controller.set_joint_velocity(lease, [0.1, 0, 0, 0, 0, 0])
+        second = self.controller.set_joint_velocity(lease, [0.1, 0, 0, 0, 0, 0])
+        self.assertTrue(first["controller_accepted"])
+        self.assertTrue(second["controller_accepted"])
+        self.assertEqual(sum(name == "MotionControl.stopJoint" for name, _ in self.backend.command_log), 1)
+        self.assertEqual(sum(name == "MotionControl.servoJoint" for name, _ in self.backend.command_log), 2)
+        self.assertTrue(self.backend._servo_mode_enabled)
+        stream_state = self.controller.state()
+        self.assertTrue(stream_state["continuous_control_active"])
+        self.assertIsNotNone(stream_state["joint_velocity_command_age_sec"])
+        self.assertIsNotNone(stream_state["joint_velocity_command_stamp_sec"])
+        zero = self.controller.set_joint_velocity(lease, [0] * 6)
+        self.assertTrue(zero["controller_accepted"])
+        self.assertTrue(zero["stationary_confirmed"])
+        self.assertFalse(self.backend._servo_mode_enabled)
+        self.assertTrue(self.controller.motion_enabled)
+
+    def test_velocity_limit_is_enforced_and_busy_servo_command_is_retryable(self):
+        lease = self.lease_and_enable()
+        with self.assertRaises(ValueError):
+            self.controller.set_joint_velocity(lease, [0.26, 0, 0, 0, 0, 0])
+        original_execute = self.backend.execute
+        busy = {"next": True}
+
+        def return_busy_once(method, params=None):
+            if method == "MotionControl.servoJoint" and busy["next"]:
+                busy["next"] = False
+                return 2
+            return original_execute(method, params)
+
+        self.backend.execute = return_busy_once
+        response = self.controller.set_joint_velocity(lease, [0.1, 0, 0, 0, 0, 0])
+        self.assertFalse(response["controller_accepted"])
+        self.assertTrue(response["retry_next_cycle"])
+        self.assertFalse(self.controller.state()["controller_accepted"])
+
+    def test_joint_move_timeout_stops_and_does_not_report_success(self):
+        lease = self.lease_and_enable()
+        with self.assertRaises(TimeoutError):
+            self.controller.move_joints(lease, [0.4, 0, 0, 0, 0, 0], speed=0.1, timeout=0.01)
+        state = self.controller.state()
+        self.assertEqual(state["operation_state"], "failed")
+        self.assertTrue(state["stop_requested"])
+        self.assertTrue(state["stationary_confirmed"])
 
     def test_lease_conflict_expiry_and_stop_failure(self):
         lease, _ = self.controller.acquire_control("first", ttl_sec=0.05)

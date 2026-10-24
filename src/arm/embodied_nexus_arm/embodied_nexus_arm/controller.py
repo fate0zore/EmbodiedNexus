@@ -33,6 +33,7 @@ class ArmController:
         self.operation_state = "idle"
         self.cancel_event = threading.Event()
         self.velocity_command_time = 0.0
+        self.servo_mode_active = False
         self.teach_enabled = False
         self.stop_requested = False
         self.controller_accepted = False
@@ -43,16 +44,19 @@ class ArmController:
         self.tcp_offset = self.backend.read_optional("RobotConfig.getTcpOffset")
 
     def info(self) -> dict[str, Any]:
+        capabilities = ["joint_state", "move_joints", "joint_velocity", "power", "teach_mode", "stop"]
+        if hasattr(self.backend, "capabilities"):
+            capabilities = list(self.backend.capabilities)
         return {"device_id": self.config["device_id"], "device_type": "arm",
                 "model": self.config["model"], "backend": self.config["backend"],
-                "interface_version": "1.0", "capabilities": ["joint_state", "move_joints",
-                "joint_velocity", "power", "teach_mode", "stop"],
+                "interface_version": "1.0", "capabilities": capabilities,
                 "joint_names": list(self.config["joints"]["names"]),
                 "units": {"position": "rad", "velocity": "rad/s", "acceleration": "rad/s^2"}}
 
     def state(self) -> dict[str, Any]:
         with self.lock:
             now = time.monotonic()
+            wall_now = time.time()
             age = max(0.0, now - self.feedback_time) if self.feedback_time else None
             fresh = age is not None and age <= float(self.config["feedback"]["stale_sec"])
             fb = copy.deepcopy(self.feedback)
@@ -63,8 +67,9 @@ class ArmController:
                     "backend": self.config["backend"], "lifecycle_state": self.lifecycle_state,
                     "connected": self.connected, "feedback_valid": bool(fresh and fb),
                     "feedback_age_sec": age,
-                    "stamp_sec": time.time() - age if age is not None else None,
+                    "stamp_sec": fb.get("stamp_sec", wall_now - age if age is not None else None),
                     "joint_names": list(self.config["joints"]["names"]),
+                    "feedback_timestamp_source": fb.get("feedback_timestamp_source", "host_receive"),
                     "positions_rad": fb.get("positions_rad"),
                     "velocities_rad_sec": fb.get("velocities_rad_sec"),
                     "mode": fb.get("mode"), "safety_mode": fb.get("safety_mode"),
@@ -75,6 +80,15 @@ class ArmController:
                     "stop_requested": self.stop_requested,
                     "controller_accepted": self.controller_accepted,
                     "stationary_confirmed": stationary,
+                    "continuous_control_active": self.servo_mode_active,
+                    "joint_velocity_command_age_sec": (
+                        max(0.0, now - self.velocity_command_time)
+                        if self.velocity_command_time else None
+                    ),
+                    "joint_velocity_command_stamp_sec": (
+                        wall_now - max(0.0, now - self.velocity_command_time)
+                        if self.velocity_command_time else None
+                    ),
                     "payload": self.payload, "tcp_offset": self.tcp_offset,
                     "joint_limits_valid": self._effective_limits() is not None}
 
@@ -181,31 +195,52 @@ class ArmController:
             if not self.motion_enabled or self.active_operation or self.teach_enabled:
                 raise RuntimeError("arm velocity control requires an enabled idle arm")
             previous = self.velocity_command_time > 0
-            self.velocity_command_time = time.monotonic()
-        if previous:
-            if not self.backend.stop():
-                raise RuntimeError("Aubo did not confirm stop before the next velocity command")
         if all(abs(value) <= 1.0e-4 for value in velocity):
-            accepted = bool(self.backend.stop())
-            with self.lock:
-                self.velocity_command_time = 0.0
-                self.controller_accepted = accepted
+            accepted = self._halt_velocity_stream()
             if not accepted:
                 raise RuntimeError("Aubo did not confirm joint stop")
-            return {"controller_accepted": True}
+            state = self.state()
+            return {"controller_accepted": True, "stationary_confirmed": state["stationary_confirmed"]}
         if not previous:
-            self.backend.execute("MotionControl.setServoModeSelect", [0])
             if not self.backend.stop():
                 raise RuntimeError("Aubo did not confirm pre-velocity stop")
-        result = self.backend.execute("MotionControl.speedJoint", [
-            velocity, self.config["motion"]["speed_joint_acceleration_rad_sec2"],
-            self.config["motion"]["speed_joint_duration_sec"]])
-        accepted = result in (0, None)
-        if not accepted:
-            raise RuntimeError(f"Aubo speedJoint rejected command: result={result}")
+            result = self.backend.execute("MotionControl.setServoMode", [True])
+            if result not in (0, None):
+                self.backend.stop()
+                raise RuntimeError(f"Aubo servo mode rejected command: result={result}")
+            with self.lock:
+                self.servo_mode_active = True
+        try:
+            enabled = self.backend.execute("MotionControl.isServoModeEnabled")
+            if enabled is False:
+                raise RuntimeError("Aubo servo mode did not become active")
+            command_period = float(self.config["motion"]["servo_joint_command_period_sec"])
+            target = [float(q) + float(v) * command_period for q, v in zip(measured, velocity)]
+            for index, value in enumerate(target):
+                if not limits[0][index] <= value <= limits[1][index]:
+                    raise ValueError(f"joint velocity step exceeds limit for {self.config['joints']['names'][index]}")
+            servo = self.config["motion"]
+            result = self.backend.execute("MotionControl.servoJoint", [
+                target,
+                float(servo["servo_joint_velocity_rad_sec"]),
+                float(servo["servo_joint_acceleration_rad_sec2"]),
+                float(servo["servo_joint_period_sec"]),
+                float(servo["servo_joint_lookahead_sec"]),
+                int(servo["servo_joint_gain"]),
+            ])
+            if result not in (0, None, 2):
+                raise RuntimeError(f"Aubo servoJoint rejected command: result={result}")
+        except Exception:
+            self.stop("joint servo command failed")
+            raise
         with self.lock:
-            self.controller_accepted = True
-        return {"controller_accepted": True}
+            self.velocity_command_time = time.monotonic()
+            self.controller_accepted = result in (0, None)
+        return {
+            "controller_accepted": result in (0, None),
+            "retry_next_cycle": result == 2,
+            "commanded_positions_rad": target,
+        }
 
     def move_joints(self, lease_id: str, positions: list[float], speed: float = 0.0,
                     acceleration: float = 0.0, timeout: float = 0.0,
@@ -249,6 +284,8 @@ class ArmController:
         terminal_state = "failed"
         try:
             self._require_motion_ready(lease_id)
+            if self.servo_mode_active:
+                self._leave_servo_mode()
             self.backend.execute("MotionControl.setServoModeSelect", [0])
             if not self.backend.stop():
                 raise RuntimeError("Aubo did not confirm pre-move stop")
@@ -304,6 +341,9 @@ class ArmController:
         except Exception:
             stop_requested = True
             self.backend.stop()
+            # Refresh measured feedback after the stop request. Some backends,
+            # including the deterministic mock, can confirm the stop immediately.
+            self.poll_once()
             raise
         finally:
             with self.lock:
@@ -416,6 +456,14 @@ class ArmController:
             self.motion_enabled = False
             self.velocity_command_time = 0.0
         accepted = bool(self.backend.stop())
+        if self.servo_mode_active:
+            try:
+                servo_result = self.backend.execute("MotionControl.setServoMode", [False])
+                accepted = accepted and servo_result in (0, None)
+            except Exception:
+                accepted = False
+            with self.lock:
+                self.servo_mode_active = False
         if self.teach_enabled:
             try:
                 self._send_teach(False)
@@ -436,6 +484,32 @@ class ArmController:
         return {"stop_requested": True, "controller_accepted": accepted,
                 "stationary_confirmed": stationary, "hardware_estop": estop,
                 "reason": str(reason), "error": "" if accepted else getattr(self.backend, "last_error", "stop failed")}
+
+    def _leave_servo_mode(self) -> None:
+        """Stop once when changing from streaming servo targets to moveJoint."""
+        if not self.backend.stop():
+            raise RuntimeError("Aubo did not confirm stop before leaving servo mode")
+        result = self.backend.execute("MotionControl.setServoMode", [False])
+        if result not in (0, None):
+            raise RuntimeError(f"Aubo could not leave servo mode: result={result}")
+        with self.lock:
+            self.servo_mode_active = False
+            self.velocity_command_time = 0.0
+
+    def _halt_velocity_stream(self) -> bool:
+        """Halt a zero-velocity command while keeping the lease enabled."""
+        accepted = bool(self.backend.stop())
+        if self.servo_mode_active:
+            try:
+                result = self.backend.execute("MotionControl.setServoMode", [False])
+                accepted = accepted and result in (0, None)
+            except Exception:
+                accepted = False
+        with self.lock:
+            self.velocity_command_time = 0.0
+            self.servo_mode_active = False
+            self.controller_accepted = accepted
+        return accepted
 
     def poll_once(self) -> None:
         try:
@@ -477,6 +551,12 @@ class ArmController:
                 self.stop_requested = True
         if expired or watchdog:
             self.backend.stop()
+            if self.servo_mode_active:
+                try:
+                    self.backend.execute("MotionControl.setServoMode", [False])
+                except Exception:
+                    pass
+                self.servo_mode_active = False
             if self.teach_enabled:
                 try:
                     self._send_teach(False)

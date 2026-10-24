@@ -18,11 +18,12 @@ def main(argv=None) -> None:
     args, ros_args = parser.parse_known_args(argv)
     rclpy.init(args=ros_args)
     node = GripperRosGateway(config_path=args.config)
-    token_env = str(node.config["web"]["auth_token_env"])
+    web_config = node._config_data["web"]
+    token_env = str(web_config["auth_token_env"])
     token = os.environ.get(token_env, "")
     app = create_app(node, token)
     server = uvicorn.Server(uvicorn.Config(
-        app, host=str(node.config["web"]["bind_host"]), port=int(node.config["web"]["port"]),
+        app, host=str(web_config["bind_host"]), port=int(web_config["port"]),
         log_level="info", access_log=True,
     ))
     thread = threading.Thread(target=server.run, name="gripper-http", daemon=True)
@@ -30,7 +31,7 @@ def main(argv=None) -> None:
     executor.add_node(node)
     thread.start()
     node.get_logger().info(
-        f"MS42DC HTTP API listening on {node.config['web']['bind_host']}:{node.config['web']['port']}"
+        f"MS42DC HTTP API listening on {web_config['bind_host']}:{web_config['port']}"
     )
     try:
         executor.spin()

@@ -159,7 +159,10 @@ class ArmRosGateway(Node):
         req.lease_id = str(lease_id)
         req.velocity_rad_sec = [float(v) for v in velocity]
         result = self._call("velocity", req)
-        return {"controller_accepted": result.controller_accepted}
+        return {"controller_accepted": result.controller_accepted,
+                "retry_next_cycle": result.retry_next_cycle,
+                "commanded_positions_rad": list(result.commanded_positions_rad),
+                "stationary_confirmed": result.stationary_confirmed}
 
     def lifecycle(self, lease_id, command):
         req = SetArmLifecycle.Request()

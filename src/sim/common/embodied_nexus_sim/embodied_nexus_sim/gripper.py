@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+import math
+import threading
+import time
+
+from builtin_interfaces.msg import Duration
+from sensor_msgs.msg import JointState
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+
+from embodied_nexus_gripper import Feedback
+
+from .ros_support import SimRosNode, SimTimestampGuard, configured_topic, validate_options
+
+
+class Ros2SimGripperBackend:
+    """MS42DC motor-frame adapter driven by measured gripper joint state."""
+
+    feedback_is_simulated = True
+
+    def __init__(self, config: dict) -> None:
+        self.config = config
+        options = config["backend_options"]
+        validate_options(options, {"namespace", "joint_states_topic", "gripper_trajectory_topic",
+                                   "gripper_joint_names", "finger_travel_rad", "speed_at_150_rad_sec"})
+        root = str(options.get("namespace", "/sim/arachne")).rstrip("/")
+        if not root.startswith("/"):
+            raise ValueError("backend_options.namespace must be an absolute ROS namespace")
+        self.state_topic = configured_topic(options, "joint_states_topic", f"{root}/joint_states")
+        self.command_topic = configured_topic(options, "gripper_trajectory_topic", f"{root}/gripper_controller/joint_trajectory")
+        self.joints = list(options.get("gripper_joint_names", ["ms42dc_left_finger_joint", "ms42dc_right_finger_joint"]))
+        if len(self.joints) != 2 or len(set(self.joints)) != 2:
+            raise ValueError("backend_options.gripper_joint_names must contain two unique joints")
+        self.travel_rad = float(options.get("finger_travel_rad", 0.6))
+        self.speed_at_150 = float(options.get("speed_at_150_rad_sec", 0.6))
+        if not math.isfinite(self.travel_rad) or self.travel_rad <= 0 or not math.isfinite(self.speed_at_150) or self.speed_at_150 <= 0:
+            raise ValueError("gripper simulation travel and speed must be finite and positive")
+        self.feedback_is_simulated = True
+        self.opened = False
+        self._sample = None
+        self._receipt = 0.0
+        self._lock = threading.RLock()
+        self._stamp_guard = SimTimestampGuard()
+        self._clock_jump_pending = False
+
+    def open(self) -> None:
+        self._ros = SimRosNode(self.config["device_id"], "gripper")
+        self._publisher = self._ros.node.create_publisher(JointTrajectory, self.command_topic, 10)
+        self._subscription = self._ros.node.create_subscription(JointState, self.state_topic, self._on_state, 10)
+        if not self._ros.wait_for(lambda: self._receipt > 0.0, 10.0):
+            self._ros.close_ros()
+            raise TimeoutError(f"no simulated gripper feedback on {self.state_topic}")
+        self.opened = True
+
+    def _on_state(self, msg: JointState) -> None:
+        by_name = {name: index for index, name in enumerate(msg.name)}
+        if any(name not in by_name for name in self.joints):
+            return
+        indices = [by_name[name] for name in self.joints]
+        if len(msg.position) <= max(indices):
+            return
+        sample = ([float(msg.position[index]) for index in indices],
+                  [float(msg.velocity[index]) if len(msg.velocity) > index else 0.0 for index in indices])
+        with self._lock:
+            if self._stamp_guard.observe(msg.header.stamp):
+                self._clock_jump_pending = True
+            self._sample = sample
+            self._receipt = time.monotonic()
+
+    def _state(self):
+        with self._lock:
+            if self._sample is None or time.monotonic() - self._receipt > float(self.config["feedback"]["stale_sec"]):
+                raise TimeoutError("simulated gripper joint feedback is missing or stale")
+            return self._sample
+
+    def _feedback(self) -> Feedback:
+        positions, velocities = self._state()
+        closed = max(0.0, min(1.0, (positions[0] - positions[1]) / (2.0 * self.travel_rad)))
+        raw_max = int(self.config["motion"]["close_angle_tenths"])
+        angle = min(0xFFFFFFFF, max(0, round(closed * raw_max)))
+        speed = max(abs(value) for value in velocities)
+        reached = int(self.config["feedback"]["moving_value"] or 0) if speed > 0.01 else int(self.config["feedback"]["reached_value"] or 1)
+        return Feedback(device_id=int(self.config["protocol"]["device_id"]), reached=reached,
+                        speed_raw=max(0, round(speed * 1000.0)), angle_raw=angle)
+
+    def read_feedback(self):
+        if not self.opened:
+            raise OSError("simulated gripper is disconnected")
+        with self._lock:
+            clock_jump, self._clock_jump_pending = self._clock_jump_pending, False
+        if clock_jump:
+            raise RuntimeError("simulated ROS clock moved backwards")
+        return self._feedback()
+
+    def _publish(self, positions, duration: float) -> None:
+        message = JointTrajectory()
+        message.header.stamp = self._ros.node.get_clock().now().to_msg()
+        message.joint_names = self.joints
+        point = JointTrajectoryPoint()
+        point.positions = [float(value) for value in positions]
+        point.time_from_start = Duration(sec=int(duration), nanosec=int((duration % 1) * 1e9))
+        message.points = [point]
+        self._publisher.publish(message)
+
+    def command(self, direction: int, angle_tenths: int, speed_tenths: int) -> None:
+        if not self.opened:
+            raise OSError("simulated gripper is disconnected")
+        current, _ = self._state()
+        fraction = min(1.0, int(angle_tenths) / max(int(self.config["motion"]["close_angle_tenths"]), 1))
+        delta = self.travel_rad * fraction * (1.0 if int(direction) else -1.0)
+        target = max(0.0, min(self.travel_rad, current[0] + delta))
+        actual_delta = abs(target - current[0])
+        speed = self.speed_at_150 * max(int(speed_tenths), 1) / 150.0
+        self._publish([target, -target], max(0.15, actual_delta / speed))
+
+    def stop(self) -> None:
+        current, _ = self._state()
+        self._publish(current, 0.05)
+
+    def close(self) -> None:
+        if self.opened:
+            try:
+                self.stop()
+            except Exception:
+                pass
+        self.opened = False
+        if hasattr(self, "_ros"):
+            self._ros.close_ros()

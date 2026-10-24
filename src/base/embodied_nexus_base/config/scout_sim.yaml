@@ -1,0 +1,32 @@
+device_id: base_main
+model: scout_2
+backend: ros2_sim
+backend_options:
+  namespace: /sim/arachne
+  cmd_vel_topic: /sim/arachne/base_controller/cmd_vel
+  odom_topic: /sim/arachne/base_controller/odom
+interface_mode: both
+frames:
+  odom: odom
+  base: base_link
+  publish_tf: false
+motion:
+  max_linear_mps: 1.5
+  max_angular_rps: 1.5
+  default_linear_mps: 0.16
+  default_angular_rps: 0.60
+  position_tolerance_m: 0.02
+  yaw_tolerance_deg: 0.5
+  send_rate_hz: 50.0
+  command_timeout_sec: 0.5
+  operation_timeout_sec: 30.0
+feedback:
+  stale_sec: 1.0
+  control_mode_timeout_sec: 1.0
+control:
+  lease_ttl_sec: 2.0
+  max_lease_ttl_sec: 30.0
+web:
+  bind_host: 127.0.0.1
+  port: 8778
+  auth_token_env: EMBODIED_NEXUS_DEVICE_TOKEN

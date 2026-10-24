@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>embodied_nexus_sim_description</name>
+  <version>0.1.0</version>
+  <description>Reusable Scout 2.0, Aubo i5, MS42DC, Gemini335 and C16 simulation description.</description>
+  <maintainer email="maintainer@example.com">EmbodiedNexus</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>xacro</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

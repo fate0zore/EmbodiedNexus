@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import rclpy
+from rclpy.clock import Clock, ClockType
 from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
@@ -73,7 +74,8 @@ class BaseNode(Node):
             execute_callback=self._turn_relative, goal_callback=self._turn_goal,
             cancel_callback=self._cancel_action)
         hz = max(float(self.config["motion"]["send_rate_hz"]), 1.0)
-        self.timer = self.create_timer(1.0 / hz, self._tick)
+        self.timer = self.create_timer(1.0 / hz, self._tick,
+                                       clock=Clock(clock_type=ClockType.STEADY_TIME))
 
     @staticmethod
     def _json(value) -> str:
