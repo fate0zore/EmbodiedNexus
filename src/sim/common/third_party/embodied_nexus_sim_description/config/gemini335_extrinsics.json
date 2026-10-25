@@ -50,5 +50,5 @@
   "sample_count": 0,
   "mean_reprojection_error_px": 0.0,
   "selected_method": "",
-  "notes": "当前真实生效的相机外参（gemini335.launch.py 默认值），保存后可在 config 界面选择。"
+  "notes": "Yahboom current effective RGB optical extrinsic from the selected hand_eye_camera_extrinsics configuration; physical prior, not a new hand-eye solve."
 }

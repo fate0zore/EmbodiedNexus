@@ -29,7 +29,7 @@ ros2 run embodied_nexus_core nexus_core --config src/core/embodied_nexus_core/co
 
 页面提供可旋转、平移和缩放的三维场景，可选择固定坐标系、显示 TF 与机器人模型、设置点大小和点数上限，并显示 RGB 与深度图像及话题状态。内置“现有设备”和“Gazebo Arachne”数据源预设；预设只是常用话题建议，所有话题均可手动调整。
 
-Gazebo Arachne 预设使用 `/sim/arachne/robot_description`、`/sim/arachne/joint_states`、`/sim/arachne/lidar/points`、`/sim/arachne/camera/image_raw` 和 `/sim/arachne/camera/depth_image_raw`。其他设备读取其已发布的规范化 ROS 输出。`platform_real.yaml` 会由 Core 启动共享描述包中的 `robot_state_publisher`：它将 Arachne 组合 Xacro 发布到 `/robot_description`，并从 `/embodied_nexus/arms/arm_main/joint_states` 发布机械臂关节 TF 与固定安装 TF。实机 Scout 配置同时启用 `publish_tf`，由底盘节点发布 `odom → base_link`。Core 关闭时会清理自己启动的模型发布进程。模型网格通过 `embodied_nexus_sim_description` 包加载。
+Gazebo Arachne 预设使用 `/sim/arachne/robot_description`、`/sim/arachne/joint_states`、`/sim/arachne/lidar/points`、`/sim/arachne/camera/image_raw` 和 `/sim/arachne/camera/depth_image_raw`。其他设备读取其已发布的规范化 ROS 输出。`platform_real.yaml` 会由 Core 启动共享描述包中的 `robot_state_publisher`：它将 Arachne 组合 Xacro 发布到 `/robot_description`，并从 `/embodied_nexus/arms/arm_main/joint_states` 发布机械臂关节 TF 与固定安装 TF。相机光学坐标系使用 Yahboom 当前外参 `gemini335_extrinsics.json`。实机 Scout 配置同时启用 `publish_tf`，由底盘节点发布 `odom → base_link`。Core 关闭时会清理自己启动的模型发布进程。模型网格通过 `embodied_nexus_sim_description` 包加载。
 
 模型发布可通过 `visualization.robot_model.enabled` 开关控制，关节状态源可由 `visualization.robot_model.joint_states_topic` 指定。旧平台配置未设置该节时不会启动模型发布器；`platform_mock.yaml` 仍需由仿真或其他模型发布链提供描述与 TF。
 

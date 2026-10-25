@@ -17,9 +17,9 @@ CAMERA_FROM_OPTICAL = np.array([[0., 0., 1., 0.], [-1., 0., 0., 0.],
 
 def camera_geometry(width: int, height: int) -> dict:
     camera_share = Path(get_package_share_directory("embodied_nexus_camera"))
-    sim_share = Path(get_package_share_directory("embodied_nexus_sim_gazebo"))
+    description_share = Path(get_package_share_directory("embodied_nexus_sim_description"))
     factory = json.loads((camera_share / "config/gemini335_factory_calibration.json").read_text())
-    mount = json.loads((sim_share / "config/gemini335_extrinsics.json").read_text())
+    mount = json.loads((description_share / "config/gemini335_extrinsics.json").read_text())
     color_optical = np.asarray(mount["matrix_4x4"], dtype=float)
     depth_to_color = np.eye(4)
     depth_to_color[:3, :3] = np.asarray(factory["transform_depth_to_color"]["rot"]).reshape(3, 3)
