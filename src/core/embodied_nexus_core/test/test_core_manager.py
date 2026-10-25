@@ -149,8 +149,12 @@ class CoreManagerTests(unittest.TestCase):
         self.addCleanup(listener.close)
         process = FakeProcess()
         settings = {"enabled": True, "port": listener.getsockname()[1], "resource_packages": []}
-        runtime = RosbridgeRuntime(settings, lambda: [], popen=lambda *_args, **_kwargs: process,
+        launch_arguments = []
+        runtime = RosbridgeRuntime(settings, lambda: [],
+                                   popen=lambda *args, **_kwargs: (launch_arguments.append(args[0]) or process),
                                    wait_sec=0.2)
+        self.assertIn("topics_pub_glob:=__embodied_nexus_core_read_only__", launch_arguments[0])
+        self.assertIn("services_glob:=__embodied_nexus_core_read_only__", launch_arguments[0])
         self.assertTrue(runtime.ready())
         with patch("embodied_nexus_core.visualization.os.killpg") as kill_group:
             runtime.close()

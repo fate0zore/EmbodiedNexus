@@ -49,7 +49,12 @@ class RosbridgeRuntime:
                 "ros2", "launch", "rosbridge_server", "rosbridge_websocket_launch.xml",
                 f"address:=127.0.0.1", f"port:={self.port}",
                 "max_message_size:=33554432", "incoming_queue_size:=20", "write_queue_size:=2",
-                "topics_pub_glob:=[]", "services_glob:=[]",
+                # Empty ROS launch parameter values are inferred as an empty
+                # array on Humble, which leaves these parameters uninitialized.
+                # Keep the rosapi write/service globs explicitly non-matching;
+                # Core's WebSocket proxy independently enforces read-only access.
+                "topics_pub_glob:=__embodied_nexus_core_read_only__",
+                "services_glob:=__embodied_nexus_core_read_only__",
             ], stdin=subprocess.DEVNULL, stdout=None, stderr=None, start_new_session=True)
             deadline = time.monotonic() + wait_sec
             while time.monotonic() < deadline:
