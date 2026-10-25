@@ -29,7 +29,9 @@ ros2 run embodied_nexus_core nexus_core --config src/core/embodied_nexus_core/co
 
 页面提供可旋转、平移和缩放的三维场景，可选择固定坐标系、显示 TF 与机器人模型、设置点大小和点数上限，并显示 RGB 与深度图像及话题状态。内置“现有设备”和“Gazebo Arachne”数据源预设；预设只是常用话题建议，所有话题均可手动调整。
 
-Gazebo Arachne 预设使用 `/sim/arachne/robot_description`、`/sim/arachne/joint_states`、`/sim/arachne/lidar/points`、`/sim/arachne/camera/image_raw` 和 `/sim/arachne/camera/depth_image_raw`。其他设备读取其已发布的规范化 ROS 输出。机器人模型来自现有 `std_msgs/msg/String` URDF 话题；链接姿态使用 `/tf` 与 `/tf_static`，关节姿态使用 `sensor_msgs/msg/JointState`。Core 不会额外启动模型或 TF 发布节点，因此完整模型显示依赖现场已有的 URDF、TF 和关节状态发布链路。
+Gazebo Arachne 预设使用 `/sim/arachne/robot_description`、`/sim/arachne/joint_states`、`/sim/arachne/lidar/points`、`/sim/arachne/camera/image_raw` 和 `/sim/arachne/camera/depth_image_raw`。其他设备读取其已发布的规范化 ROS 输出。`platform_real.yaml` 会由 Core 启动共享描述包中的 `robot_state_publisher`：它将 Arachne 组合 Xacro 发布到 `/robot_description`，并从 `/embodied_nexus/arms/arm_main/joint_states` 发布机械臂关节 TF 与固定安装 TF。实机 Scout 配置同时启用 `publish_tf`，由底盘节点发布 `odom → base_link`。Core 关闭时会清理自己启动的模型发布进程。模型网格通过 `embodied_nexus_sim_description` 包加载。
+
+模型发布可通过 `visualization.robot_model.enabled` 开关控制，关节状态源可由 `visualization.robot_model.joint_states_topic` 指定。旧平台配置未设置该节时不会启动模型发布器；`platform_mock.yaml` 仍需由仿真或其他模型发布链提供描述与 TF。
 
 仿真相机使用 Yahboom `config` 当前选中的安装外参和工厂内参，RGB 与深度分别配置取景位置及投影，分辨率改变时同步缩放 CameraInfo。仿真输出为理想去畸变图像；默认机械臂姿态下相机朝向地面，RGB 大片灰色与下沿出现夹爪属于该场景的实际观测。参数来源见 [Gazebo 指南](../../sim/gazebo/embodied_nexus_sim_gazebo/docs/gazebo-fortress.md)。
 
@@ -45,12 +47,15 @@ Humble 仓库中的 rosbridge 2.0.8 会根据已发现的 ROS 发布者推断兼
 
 ## 平台配置
 
-平台 YAML 可省略根级 `visualization` 节；省略时默认启用 Web RViz、使用端口 9090 和默认模型包许可列表。设置 `enabled: false` 可停用 rosbridge，而不影响 Core 其他功能。
+平台 YAML 可省略根级 `visualization` 节；省略时默认启用 Web RViz、使用端口 9090 和默认模型包许可列表，模型发布默认关闭。设置 `enabled: false` 可停用 rosbridge，而不影响 Core 其他功能。
 
 ```yaml
-visualiza
+visualization:
   enabled: true
   port: 9090
+  robot_model:
+    enabled: true
+    joint_states_topic: /embodied_nexus/arms/arm_main/joint_states
   resource_packages:
     - embodied_nexus_sim_description
     - embodied_nexus_arm

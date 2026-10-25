@@ -37,10 +37,32 @@ class RosbridgeRuntime:
         self.explicit_qos = _explicit_qos_available()
         self._topic_reader = topic_reader
         self._process = None
+        self._model_process = None
         self._error = ""
+        self._model_error = ""
+        model_settings = settings.get("robot_model", {})
+        self.robot_model_enabled = bool(model_settings.get("enabled", False))
+        self._configured_joint_states_topic = str(
+            model_settings.get("joint_states_topic", "/embodied_nexus/arms/arm_main/joint_states")
+        )
         if not self.enabled:
             self._error = "可视化已在平台配置中关闭"
             return
+        if self.robot_model_enabled:
+            try:
+                self._model_process = popen([
+                    "ros2", "launch", "embodied_nexus_sim_description",
+                    "real_robot_state_publisher.launch.py",
+                    f"joint_states_topic:={self._configured_joint_states_topic}",
+                ], stdin=subprocess.DEVNULL, stdout=None, stderr=None, start_new_session=True)
+                # Let an immediately failing launch report its exit while
+                # keeping Core startup independent from model availability.
+                time.sleep(0.1)
+                if self._model_process.poll() is not None:
+                    self._model_error = "robot_state_publisher 启动失败，请检查描述包和 ROS 依赖"
+                    self._model_process = None
+            except (OSError, ValueError, KeyError) as exc:
+                self._model_error = f"无法启动 robot_state_publisher：{exc}"
         try:
             self._process = popen([
                 "ros2", "launch", "rosbridge_server", "rosbridge_websocket_launch.xml",
@@ -101,6 +123,16 @@ class RosbridgeRuntime:
             error = self._error
             if not error:
                 error = "rosbridge 进程已退出" if self._process is not None and self._process.poll() is not None else "rosbridge 未监听"
+        model_process_alive = self._model_process is not None and self._model_process.poll() is None
+        model_topic_available = any(
+            name.rstrip("/") == "/robot_description" and "std_msgs/msg/String" in types
+            for name, types in self._safe_topics()
+        )
+        model_error = self._model_error
+        if self.robot_model_enabled and not model_error and not model_process_alive:
+            model_error = "robot_state_publisher 进程已退出"
+        elif self.robot_model_enabled and not model_error and not model_topic_available:
+            model_error = "等待 /robot_description 话题"
         return {
             "enabled": self.enabled,
             "available": available,
@@ -108,6 +140,13 @@ class RosbridgeRuntime:
             "resource_packages": list(self.resource_packages),
             "explicit_qos": self.explicit_qos,
             "error": error,
+            "robot_model": {
+                "enabled": self.robot_model_enabled,
+                "available": model_process_alive and model_topic_available,
+                "description_topic": "/robot_description",
+                "joint_states_topic": self._configured_joint_states_topic,
+                "error": model_error if self.robot_model_enabled else "",
+            },
             "topics": [{"name": name, "type": msg_type}
                        for name, msg_type in sorted(self.topic_types().items())],
             "presets": [
@@ -119,7 +158,18 @@ class RosbridgeRuntime:
         }
 
     def close(self) -> None:
-        process, self._process = self._process, None
+        self._close_process("_model_process")
+        self._close_process("_process")
+
+    def _safe_topics(self) -> list[tuple[str, list[str]]]:
+        try:
+            return self._topic_reader()
+        except Exception:
+            return []
+
+    def _close_process(self, attribute: str) -> None:
+        process = getattr(self, attribute)
+        setattr(self, attribute, None)
         if process is None or process.poll() is not None:
             return
         if os.name == "nt":

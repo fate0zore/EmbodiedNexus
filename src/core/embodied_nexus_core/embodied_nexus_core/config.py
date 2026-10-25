@@ -20,6 +20,10 @@ DEFAULT_CORE = {
 DEFAULT_VISUALIZATION = {
     "enabled": True,
     "port": 9090,
+    "robot_model": {
+        "enabled": False,
+        "joint_states_topic": "/embodied_nexus/arms/arm_main/joint_states",
+    },
     "resource_packages": [
         "embodied_nexus_sim_description", "embodied_nexus_base", "embodied_nexus_arm",
         "embodied_nexus_gripper", "embodied_nexus_camera", "embodied_nexus_lidar",
@@ -132,6 +136,17 @@ def load_platform(path: str | Path | None = None, *, check_packages: bool = True
         raise ValueError("visualization.enabled must be boolean")
     if isinstance(visualization["port"], bool) or not isinstance(visualization["port"], int) or not 1 <= visualization["port"] <= 65535:
         raise ValueError("visualization.port must be in [1, 65535]")
+    robot_model = visualization["robot_model"]
+    if not isinstance(robot_model, dict) or set(robot_model) - set(DEFAULT_VISUALIZATION["robot_model"]):
+        raise ValueError("visualization.robot_model contains unknown fields")
+    normalized_robot_model = dict(DEFAULT_VISUALIZATION["robot_model"])
+    normalized_robot_model.update(robot_model)
+    if not isinstance(normalized_robot_model["enabled"], bool):
+        raise ValueError("visualization.robot_model.enabled must be boolean")
+    joint_states_topic = normalized_robot_model["joint_states_topic"]
+    if not isinstance(joint_states_topic, str) or not re.fullmatch(r"/[A-Za-z][A-Za-z0-9_/]*", joint_states_topic) or "//" in joint_states_topic:
+        raise ValueError("visualization.robot_model.joint_states_topic must be an absolute ROS topic")
+    visualization["robot_model"] = normalized_robot_model
     packages = visualization["resource_packages"]
     if not isinstance(packages, list) or any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name) for name in packages):
         raise ValueError("visualization.resource_packages must be a list of ROS package names")

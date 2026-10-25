@@ -11,7 +11,7 @@ serial:
 frames:
   odom: odom
   base: base_link
-  publish_tf: false
+  publish_tf: true
 motion:
   max_linear_mps: 1.5
   max_angular_rps: 1.5

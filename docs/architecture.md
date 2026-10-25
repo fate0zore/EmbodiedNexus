@@ -187,7 +187,7 @@ python3 src/lidar/embodied_nexus_lidar/test/validate_lidar_modes.py
 
 `src/core/` 是跨设备协调模块，只调用各设备现有的 launch、ROS 接口和 HTTP/WebSocket 入口，不导入设备内部实现。`embodied_nexus_core` 提供进程管理和状态汇总；`embodied_nexus_core_interfaces` 提供 ROS 管理服务。设备仍各自在独立进程中运行，core 启动后不会自动启动设备。
 
-平台配置位于 `src/core/embodied_nexus_core/config/`。`platform_mock.yaml` 默认列出五类 mock 设备，`platform_real.yaml` 引用各设备模块已有实机配置。可选根级 `visualization` 配置控制 Web RViz 的桥接开关、仅本机监听端口及可读取模型资源包；旧配置缺省启用默认设置。`config` 支持相对平台文件的普通路径和 `package://<ros-package>/<share-relative-path>`；设备列表的 ID 必须和该设备配置中的 `device_id` 或 `camera_id` 相同。每个 ID 全局唯一，同类设备可配置多个实例。平台校验检查文件引用和设备 ID；每个设备包在启动时继续校验自身参数。core 提供的 30 秒启动等待、5 秒停止反馈等待、1 秒轮询和 3 秒网关失联判定可在 `core` 段调整。
+平台配置位于 `src/core/embodied_nexus_core/config/`。`platform_mock.yaml` 默认列出五类 mock 设备，`platform_real.yaml` 引用各设备模块已有实机配置。可选根级 `visualization` 配置控制 Web RViz 桥接、模型发布、模型关节状态来源及可读取资源包；旧配置缺省启用桥接但不启动模型发布器。实机配置启用 `embodied_nexus_sim_description` 的 Arachne Xacro 发布 `/robot_description`、`/tf_static` 和由机械臂关节状态驱动的 `/tf`，Scout 配置发布 `odom → base_link`。`config` 支持相对平台文件的普通路径和 `package://<ros-package>/<share-relative-path>`；设备列表的 ID 必须和该设备配置中的 `device_id` 或 `camera_id` 相同。每个 ID 全局唯一，同类设备可配置多个实例。平台校验检查文件引用和设备 ID；每个设备包在启动时继续校验自身参数。core 提供的 30 秒启动等待、5 秒停止反馈等待、1 秒轮询和 3 秒网关失联判定可在 `core` 段调整。
 
 在 Humble 环境构建全部 core 依赖并启动：
 

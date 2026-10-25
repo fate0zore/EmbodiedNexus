@@ -3,6 +3,6 @@ project(embodied_nexus_sim_description)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY urdf config meshes third_party DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY urdf config meshes third_party launch DESTINATION share/${PROJECT_NAME})
 install(FILES UPSTREAM_README.md DESTINATION share/${PROJECT_NAME})
 ament_package()
