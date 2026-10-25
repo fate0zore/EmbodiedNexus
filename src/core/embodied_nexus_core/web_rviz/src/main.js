@@ -59,6 +59,7 @@ let depthRange = 6;
 let lastClock = 0;
 const staticTf = new Map();
 const dynamicTf = new Map();
+const observedSensorFrames = new Set();
 const transformCache = new Map();
 const preparedData = new Map();
 const pendingSensors = new Set();
@@ -403,7 +404,7 @@ function lookupTransform(targetFrame, sourceFrame, stampSec = lastClock || Numbe
 
 function refreshFrameOptions() {
   const current = $("fixed-frame").value;
-  const frames = new Set();
+  const frames = new Set(observedSensorFrames);
   for (const edge of [...staticTf.values(), ...[...dynamicTf.values()].flatMap((list) => list.slice(-1))]) {
     frames.add(edge.parent); frames.add(edge.child);
   }
@@ -415,6 +416,15 @@ function refreshFrameOptions() {
   }
   $("fixed-frame").value = frames.has(current) ? current : frames.has("odom") ? "odom" : frames.has("base_link") ? "base_link" : [...frames][0];
   $("frame-label").textContent = `固定坐标系：${$("fixed-frame").value}`;
+}
+
+function rememberSensorFrame(message) {
+  const frame = String(message.header?.frame_id || "").replace(/^\//, "");
+  if (frame && !observedSensorFrames.has(frame)) {
+    observedSensorFrames.add(frame);
+    refreshFrameOptions();
+  }
+  return frame;
 }
 
 function frameAxis(frame) {
@@ -589,10 +599,12 @@ function replaceCloud(buffers, frame, stampSec, kind) {
 }
 
 function handleCloud(message, kind, buffers = pointCloudBuffers(message, maxPoints)) {
+  rememberSensorFrame(message);
   replaceCloud(buffers, message.header?.frame_id || "", stampFromMessage(message), kind);
 }
 
 function handleScan(message) {
+  rememberSensorFrame(message);
   const fixed = $("fixed-frame").value, stamp = stampFromMessage(message);
   const pose = lookupTransform(fixed, message.header?.frame_id || "", stamp);
   if (!pose) {
