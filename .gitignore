@@ -6,6 +6,8 @@ install/
 log/
 *.egg-info/
 .idea/
+src/core/embodied_nexus_core/web_rviz/node_modules/
+src/core/embodied_nexus_core/web_rviz/dist/
 
 # Runtime calibration captures, candidates and local credentials
 recordings/camera_calibration/

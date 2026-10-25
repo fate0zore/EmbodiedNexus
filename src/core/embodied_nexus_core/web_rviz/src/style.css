@@ -1,0 +1,61 @@
+:root { color-scheme: dark; --viewer-bg: #101714; --panel: #17201c; --line: #2a3932; --muted: #899990; --accent: #8bdbb2; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--viewer-bg); color: #e8f1ec; font: 13px/1.45 Inter, "Segoe UI", sans-serif; }
+button, select, input { font: inherit; }
+button, select { color: inherit; }
+.viewer-shell { min-height: 100vh; }
+.viewer-topbar { height: 68px; display: flex; align-items: center; padding: 0 22px; border-bottom: 1px solid var(--line); background: #141c18; gap: 22px; }
+.back-link { color: #b0c0b7; text-decoration: none; font-size: 12px; }
+.viewer-brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; color: #092216; background: var(--accent); font-weight: 800; font-size: 11px; }
+.viewer-brand strong, .viewer-brand small { display: block; }
+.viewer-brand strong { font-size: 14px; letter-spacing: .01em; }
+.viewer-brand small { color: var(--muted); font-size: 10px; margin-top: 1px; }
+.viewer-status { margin-left: auto; display: flex; align-items: center; gap: 8px; color: #b9c8c0; font-size: 11px; }
+.viewer-status i { width: 8px; height: 8px; border-radius: 50%; background: #d2a356; box-shadow: 0 0 10px #d2a35655; }
+.viewer-status.is-online i { background: var(--accent); box-shadow: 0 0 10px #8bdbb255; }
+.viewer-layout { display: grid; grid-template-columns: minmax(0, 1fr) 350px; min-height: calc(100vh - 68px); }
+.scene-panel { min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+.scene-toolbar { min-height: 58px; display: flex; align-items: center; gap: 12px; padding: 9px 15px; background: #141c18; border-bottom: 1px solid var(--line); }
+.scene-toolbar label { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+.scene-toolbar select, .side-card select { border: 1px solid #34453c; background: #1c2822; border-radius: 7px; padding: 7px 9px; min-width: 118px; font-size: 11px; outline: none; }
+.scene-toolbar button, .icon-button { border: 1px solid #34453c; background: #1c2822; border-radius: 7px; padding: 7px 10px; cursor: pointer; font-size: 11px; }
+#scene-message { margin-left: auto; font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.three-canvas { flex: 1; min-height: 480px; position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 48%, #1d2923 0%, #121a16 58%, #101714 100%); }
+.three-canvas canvas { display: block; width: 100%; height: 100%; }
+.empty-state { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; color: #8e9d94; font-size: 12px; pointer-events: none; }
+.scene-footer { display: flex; justify-content: space-between; padding: 9px 15px; color: #819188; border-top: 1px solid var(--line); background: #141c18; font-size: 10px; }
+.side-panel { padding: 12px; display: flex; flex-direction: column; gap: 10px; background: #111815; }
+.side-card { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 13px; }
+.card-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.card-heading small, .image-card small { color: var(--accent); font: 700 8px/1.2 Inter, sans-serif; letter-spacing: .13em; }
+.card-heading h2 { margin: 3px 0 0; font-size: 13px; font-weight: 650; }
+.field-label { display: block; color: #9caca3; font-size: 10px; margin: 9px 0 5px; }
+.side-card select { width: 100%; }
+.card-note { color: var(--muted); font-size: 10px; margin: 7px 0 0; }
+.layer-list { display: grid; gap: 8px; padding-top: 10px; margin-top: 11px; border-top: 1px solid var(--line); color: #bdc9c2; font-size: 10px; }
+.layer-list label { display: flex; align-items: center; gap: 7px; }
+input[type="checkbox"] { accent-color: #7bd0a3; }
+.toggle input { display: none; }
+.toggle span { display: block; width: 32px; height: 18px; border-radius: 99px; background: #3b4942; position: relative; cursor: pointer; }
+.toggle span::after { content: ""; position: absolute; width: 12px; height: 12px; left: 3px; top: 3px; border-radius: 50%; background: #ced8d2; transition: .15s ease; }
+.toggle input:checked + span { background: #347a57; }
+.toggle input:checked + span::after { transform: translateX(14px); background: white; }
+.range-label { display: flex; justify-content: space-between; }
+.range-label output { color: #e0eee6; font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; height: 3px; accent-color: var(--accent); }
+.image-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.image-card { overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+.image-card > div { padding: 8px 9px; display: flex; justify-content: space-between; align-items: center; }
+.image-card > div span { color: var(--muted); font-size: 8px; }
+.image-card canvas { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #0b100d; display: block; }
+.data-card { min-height: 110px; }
+.data-card .card-heading { margin-bottom: 7px; }
+.data-status { color: #aab9b0; font-size: 10px; }
+.data-status p { margin: 4px 0; display: flex; justify-content: space-between; gap: 12px; }
+.data-status b { font-weight: 500; color: #dce8e1; text-align: right; }
+.data-status .status-error { color: #e1a584; }
+.icon-button { min-width: 30px; height: 29px; padding: 0; color: var(--accent); font-size: 18px; }
+@media (max-width: 980px) { .viewer-layout { grid-template-columns: minmax(0, 1fr) 310px; } .scene-toolbar { flex-wrap: wrap; } }
+@media (max-width: 740px) { .viewer-layout { display: flex; flex-direction: column; } .scene-panel { border-right: 0; } .three-canvas { min-height: 55vh; } .side-panel { display: grid; grid-template-columns: 1fr 1fr; } .image-grid { align-self: start; } }
+@media (max-width: 520px) { .viewer-topbar { padding: 0 13px; gap: 13px; } .side-panel { display: flex; } .scene-toolbar { align-items: stretch; } .scene-toolbar label { flex: 1; justify-content: space-between; } .scene-toolbar select { flex: 1; } #scene-message { width: 100%; margin: 0; } }

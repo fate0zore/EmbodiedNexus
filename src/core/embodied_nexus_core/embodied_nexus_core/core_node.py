@@ -23,6 +23,7 @@ from embodied_nexus_core_interfaces.srv import (
 
 from .config import default_config_path, load_platform, public_platform
 from .manager import DeviceManager
+from .visualization import RosbridgeRuntime
 from .web_server import create_app
 
 
@@ -33,10 +34,16 @@ class CoreNode(Node):
         self.config_file = str(self.get_parameter("config_file").value)
         self.manager = DeviceManager(self.config_file)
         core = self.manager.platform["core"]
+        self.visualization = RosbridgeRuntime(
+            self.manager.platform["visualization"], self.get_topic_names_and_types,
+        )
+        if self.visualization.enabled and not self.visualization.ready():
+            self.get_logger().warning(self.visualization.info()["error"])
         token = os.environ.get(str(core["auth_token_env"]), "")
         if not token or not re.fullmatch(r"[A-Za-z0-9._~-]+", token):
+            self.visualization.close()
             raise RuntimeError(f"set {core['auth_token_env']} before starting the core")
-        self.app = create_app(self.manager, token)
+        self.app = create_app(self.manager, token, self.visualization)
         web_options = {
             "host": str(core["bind_host"]),
             "port": int(core["port"]),
@@ -57,6 +64,7 @@ class CoreNode(Node):
             self.web_server.should_exit = True
             self.web_thread.join(timeout=1.0)
             self.manager.close_monitor()
+            self.visualization.close()
             self.destroy_node()
             raise RuntimeError(f"core HTTP gateway failed to listen on {core['bind_host']}:{core['port']}")
         self.manager.start_monitor()
@@ -171,6 +179,7 @@ class CoreNode(Node):
         if self.web_thread.is_alive():
             self.web_thread.join(timeout=3.0)
         self.manager.close_monitor()
+        self.visualization.close()
         self.destroy_node()
 
 

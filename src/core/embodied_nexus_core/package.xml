@@ -16,6 +16,9 @@
   <exec_depend>python3-starlette</exec_depend>
   <exec_depend>python3-uvicorn</exec_depend>
   <exec_depend>python3-websockets</exec_depend>
+  <exec_depend>rosbridge_server</exec_depend>
+  <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>embodied_nexus_core_interfaces</exec_depend>
   <exec_depend>embodied_nexus_base</exec_depend>
   <exec_depend>embodied_nexus_arm</exec_depend>

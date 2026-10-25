@@ -3,11 +3,15 @@ from __future__ import annotations
 import json
 import inspect
 import socket
+import sys
+import tempfile
 import threading
 import time
+import types
 import urllib.error
 import urllib.request
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import uvicorn
@@ -166,6 +170,7 @@ class CoreGatewayTests(unittest.TestCase):
 
     def test_core_web_dashboard_and_assets_are_public(self):
         for path, content_type in (("/", "text/html"),
+                                   ("/rviz/", "text/html"),
                                    ("/app.css", "text/css"),
                                    ("/app.js", "javascript"),
                                    ("/commands.json", "application/json")):
@@ -176,6 +181,9 @@ class CoreGatewayTests(unittest.TestCase):
             self.assertTrue(body, path)
             if path == "/":
                 self.assertIn("Core 运维面板".encode("utf-8"), body)
+                self.assertIn(b"/rviz/", body)
+            elif path == "/rviz/":
+                self.assertIn("Web RViz".encode("utf-8"), body)
             elif path == "/app.js":
                 self.assertIn(b"localStorage", body)
                 self.assertIn(b"clipboard", body)
@@ -185,6 +193,131 @@ class CoreGatewayTests(unittest.TestCase):
                                  {"base", "arm", "gripper", "camera", "lidar"})
                 self.assertNotIn(b"core-secret", body)
                 self.assertNotIn(b"internal-secret", body)
+
+    def test_visualization_status_is_authenticated_and_reports_supported_topics(self):
+        class Visualization:
+            enabled = True
+            port = 9090
+            resource_packages = ("description",)
+
+            @staticmethod
+            def info():
+                return {"enabled": True, "available": True, "port": 9090,
+                        "resource_packages": ["description"], "topics": [
+                            {"name": "/tf", "type": "tf2_msgs/msg/TFMessage"}], "presets": []}
+
+            @staticmethod
+            def topic_types():
+                return {"/tf": "tf2_msgs/msg/TFMessage"}
+
+            @staticmethod
+            def ready():
+                return True
+
+        server = _Server(create_app(self.manager, "core-secret", Visualization()))
+        self.addCleanup(server.close)
+        url = f"http://127.0.0.1:{server.port}/api/v1/core/visualization"
+        request = urllib.request.Request(url)
+        with self.assertRaises(urllib.error.HTTPError) as denied_error:
+            urllib.request.urlopen(request)
+        self.assertEqual(denied_error.exception.code, 401)
+        response = urllib.request.urlopen(urllib.request.Request(url, headers={"Authorization": "Bearer core-secret"}))
+        self.assertEqual(json.loads(response.read())["topics"][0]["name"], "/tf")
+
+    def test_visualization_resource_route_requires_auth_and_confines_paths(self):
+        class Visualization:
+            resource_packages = ("description",)
+
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        (root / "meshes").mkdir()
+        (root / "meshes" / "robot.dae").write_text("model", encoding="utf-8")
+        ament = types.ModuleType("ament_index_python")
+        packages = types.ModuleType("ament_index_python.packages")
+        packages.get_package_share_directory = lambda _name: str(root)
+        ament.packages = packages
+        server = _Server(create_app(self.manager, "core-secret", Visualization()))
+        self.addCleanup(server.close)
+        resource_url = f"http://127.0.0.1:{server.port}/api/v1/core/visualization/resources/description/meshes/robot.dae"
+        with patch.dict(sys.modules, {"ament_index_python": ament, "ament_index_python.packages": packages}):
+            with self.assertRaises(urllib.error.HTTPError) as denied_error:
+                urllib.request.urlopen(resource_url)
+            self.assertEqual(denied_error.exception.code, 401)
+            request = urllib.request.Request(resource_url, headers={"Authorization": "Bearer core-secret"})
+            self.assertEqual(urllib.request.urlopen(request).read(), b"model")
+            traversal = urllib.request.Request(
+                f"http://127.0.0.1:{server.port}/api/v1/core/visualization/resources/description/%2e%2e/robot.dae",
+                headers={"Authorization": "Bearer core-secret"})
+            with self.assertRaises(urllib.error.HTTPError) as traversal_error:
+                urllib.request.urlopen(traversal)
+            self.assertEqual(traversal_error.exception.code, 404)
+            unallowed = urllib.request.Request(
+                f"http://127.0.0.1:{server.port}/api/v1/core/visualization/resources/unlisted/meshes/robot.dae",
+                headers={"Authorization": "Bearer core-secret"})
+            with self.assertRaises(urllib.error.HTTPError) as unallowed_error:
+                urllib.request.urlopen(unallowed)
+            self.assertEqual(unallowed_error.exception.code, 404)
+
+    def test_visualization_websocket_forwards_only_subscriptions_and_binary_data(self):
+        observed = {}
+        topic_graph = {"/points": "sensor_msgs/msg/PointCloud2"}
+
+        async def bridge(socket: WebSocket):
+            await socket.accept()
+            observed["subscribe"] = json.loads(await socket.receive_text())
+            await socket.send_bytes(b"\x81\x01")
+            observed["unsubscribe"] = json.loads(await socket.receive_text())
+            await socket.send_text("unsubscribed")
+            try:
+                await socket.receive_text()
+            except Exception:
+                return
+
+        bridge_server = _Server(Starlette(routes=[WebSocketRoute("/", bridge)]))
+
+        class Visualization:
+            enabled = True
+            port = bridge_server.port
+            resource_packages = ()
+            explicit_qos = True
+
+            @staticmethod
+            def topic_types():
+                return dict(topic_graph)
+
+            @staticmethod
+            def ready():
+                return True
+
+            @staticmethod
+            def info():
+                return {"enabled": True, "available": True, "port": bridge_server.port,
+                        "resource_packages": [], "topics": [], "presets": []}
+
+        core = _Server(create_app(self.manager, "core-secret", Visualization()))
+        self.addCleanup(core.close)
+        self.addCleanup(bridge_server.close)
+        url = f"ws://127.0.0.1:{core.port}/api/v1/core/visualization/ws"
+        with websockets.sync.client.connect(
+            url, subprotocols=["en-core-viz-v1", "bearer.core-secret"], open_timeout=3.0,
+        ) as client:
+            client.send(json.dumps({"op": "subscribe", "topic": "/points", "type": "sensor_msgs/msg/PointCloud2",
+                                   "id": "viewer-1", "throttle_rate": 200, "queue_length": 1,
+                                   "qos": {"history": "keep_last", "depth": 1,
+                                           "reliability": "best_effort", "durability": "volatile"}}))
+            self.assertEqual(client.recv(), b"\x81\x01")
+            topic_graph.clear()
+            client.send(json.dumps({"op": "unsubscribe", "topic": "/points", "id": "viewer-1"}))
+            self.assertEqual(client.recv(), "unsubscribed")
+            client.send(json.dumps({"op": "publish", "topic": "/cmd_vel", "msg": {}}))
+            with self.assertRaises(websockets.exceptions.ConnectionClosedError) as close_error:
+                client.recv()
+            self.assertEqual(close_error.exception.rcvd.code, 4403)
+        self.assertEqual(observed["subscribe"]["compression"], "cbor")
+        self.assertEqual(observed["subscribe"]["topic"], "/points")
+        self.assertEqual(observed["subscribe"]["qos"]["reliability"], "best_effort")
+        self.assertEqual(observed["unsubscribe"]["op"], "unsubscribe")
 
     def test_command_catalog_matches_mock_and_sim_launch_assets(self):
         assets = Path(__file__).resolve().parents[1] / "web"

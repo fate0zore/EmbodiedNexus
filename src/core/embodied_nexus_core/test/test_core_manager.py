@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import sys
 import tempfile
 import time
@@ -13,6 +14,7 @@ import yaml
 
 from embodied_nexus_core.config import load_platform
 from embodied_nexus_core.manager import DeviceManager, OperationInProgress
+from embodied_nexus_core.visualization import RosbridgeRuntime, SUPPORTED_TYPES, _explicit_qos_available
 
 
 class FakeProcess:
@@ -89,6 +91,72 @@ class CoreManagerTests(unittest.TestCase):
         platform_path.write_text(yaml.safe_dump(data), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "duplicate device id"):
             load_platform(platform_path, check_packages=False)
+
+    def test_visualization_defaults_and_validation(self):
+        platform_path = self.make_platform(ids=("base_one",))
+        platform = load_platform(platform_path, check_packages=False)
+        self.assertEqual(platform["visualization"]["port"], 9090)
+        self.assertTrue(platform["visualization"]["enabled"])
+        data = yaml.safe_load(platform_path.read_text(encoding="utf-8"))
+        data["visualization"] = {"enabled": True, "port": 0}
+        platform_path.write_text(yaml.safe_dump(data), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "visualization.port"):
+            load_platform(platform_path, check_packages=False)
+
+    def test_visualization_runtime_filters_topics_and_can_be_disabled(self):
+        settings = {"enabled": False, "port": 9090, "resource_packages": ["description"]}
+        runtime = RosbridgeRuntime(settings, lambda: [], popen=lambda *_a, **_k: self.fail("disabled bridge started"))
+        self.assertFalse(runtime.info()["available"])
+        self.assertEqual(runtime.topic_types(), {})
+
+        settings["enabled"] = True
+        runtime = RosbridgeRuntime(settings, lambda: [
+            ("/tf", ["tf2_msgs/msg/TFMessage"]),
+            ("/cmd_vel", ["geometry_msgs/msg/Twist"]),
+            ("/embodied_nexus/core/status", ["std_msgs/msg/String"]),
+            ("/robot_description", ["std_msgs/msg/String"]),
+        ], popen=lambda *_a, **_k: (_ for _ in ()).throw(FileNotFoundError("ros2 not found")))
+        self.assertFalse(runtime.info()["available"])
+        self.assertEqual(runtime.topic_types(), {
+            "/tf": "tf2_msgs/msg/TFMessage", "/robot_description": "std_msgs/msg/String",
+        })
+        self.assertIn("sensor_msgs/msg/PointCloud2", SUPPORTED_TYPES)
+        self.assertNotIn("sensor_msgs/msg/CompressedImage", SUPPORTED_TYPES)
+
+    def test_rosbridge_explicit_qos_capability_tracks_protocol_version(self):
+        ament_index = types.ModuleType("ament_index_python")
+        package_index = types.ModuleType("ament_index_python.packages")
+        package_share = self.root / "rosbridge_library"
+        package_share.mkdir()
+        package_xml = package_share / "package.xml"
+        package_index.get_package_share_directory = lambda _name: str(package_share)
+        ament_index.packages = package_index
+        with patch.dict(sys.modules, {
+            "ament_index_python": ament_index,
+            "ament_index_python.packages": package_index,
+        }):
+            package_xml.write_text("<package><version>2.0.8</version></package>", encoding="utf-8")
+            self.assertFalse(_explicit_qos_available())
+            package_xml.write_text("<package><version>2.1.0</version></package>", encoding="utf-8")
+            self.assertTrue(_explicit_qos_available())
+            package_index.get_package_share_directory = lambda _name: (_ for _ in ()).throw(LookupError())
+            self.assertFalse(_explicit_qos_available())
+
+    def test_visualization_runtime_closes_its_bridge_process(self):
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        self.addCleanup(listener.close)
+        process = FakeProcess()
+        settings = {"enabled": True, "port": listener.getsockname()[1], "resource_packages": []}
+        runtime = RosbridgeRuntime(settings, lambda: [], popen=lambda *_args, **_kwargs: process,
+                                   wait_sec=0.2)
+        self.assertTrue(runtime.ready())
+        with patch("embodied_nexus_core.visualization.os.killpg") as kill_group:
+            runtime.close()
+        kill_group.assert_called_once()
+        self.assertFalse(runtime.ready())
+        self.assertEqual(process.returncode, 0)
 
     def test_bundled_mock_and_real_profiles_resolve_all_installed_package_resources(self):
         repo = Path(__file__).resolve().parents[4]

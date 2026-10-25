@@ -17,6 +17,14 @@ DEFAULT_CORE = {
     "start_timeout_sec": 30.0, "shutdown_timeout_sec": 5.0,
     "poll_interval_sec": 1.0, "gateway_unavailable_sec": 3.0,
 }
+DEFAULT_VISUALIZATION = {
+    "enabled": True,
+    "port": 9090,
+    "resource_packages": [
+        "embodied_nexus_sim_description", "embodied_nexus_base", "embodied_nexus_arm",
+        "embodied_nexus_gripper", "embodied_nexus_camera", "embodied_nexus_lidar",
+    ],
+}
 DEVICE_TYPES = {
     "base": ("embodied_nexus_base", "base.launch.py", "device_id", "bases"),
     "arm": ("embodied_nexus_arm", "arm.launch.py", "device_id", "arms"),
@@ -63,8 +71,8 @@ def resolve_config_reference(reference: str, platform_path: Path) -> Path:
 def load_platform(path: str | Path | None = None, *, check_packages: bool = True) -> dict[str, Any]:
     platform_path = Path(path or default_config_path()).expanduser().resolve()
     raw = yaml.safe_load(platform_path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict) or set(raw) != {"core", "devices"}:
-        raise ValueError("platform root must contain exactly 'core' and 'devices'")
+    if not isinstance(raw, dict) or set(raw) - {"core", "devices", "visualization"} or not {"core", "devices"}.issubset(raw):
+        raise ValueError("platform root must contain 'core' and 'devices', with optional 'visualization'")
     core = dict(DEFAULT_CORE)
     if not isinstance(raw["core"], dict) or set(raw["core"]) - set(DEFAULT_CORE):
         raise ValueError("core config contains unknown fields")
@@ -111,7 +119,25 @@ def load_platform(path: str | Path | None = None, *, check_packages: bool = True
             _validate_ros_package(kind)
         devices.append({"id": device_id, "type": kind, "config": str(config_path),
                         "enabled": enabled, "use_sim_time": use_sim_time})
-    return {"config_file": str(platform_path), "core": core, "devices": devices}
+    raw_visualization = raw.get("visualization", {})
+    if not isinstance(raw_visualization, dict):
+        raise ValueError("visualization config must be a mapping")
+    if set(raw_visualization) - set(DEFAULT_VISUALIZATION):
+        raise ValueError("visualization config contains unknown fields")
+    visualization = dict(DEFAULT_VISUALIZATION)
+    visualization.update(raw_visualization)
+    if set(visualization) - set(DEFAULT_VISUALIZATION):
+        raise ValueError("visualization config contains unknown fields")
+    if not isinstance(visualization["enabled"], bool):
+        raise ValueError("visualization.enabled must be boolean")
+    if isinstance(visualization["port"], bool) or not isinstance(visualization["port"], int) or not 1 <= visualization["port"] <= 65535:
+        raise ValueError("visualization.port must be in [1, 65535]")
+    packages = visualization["resource_packages"]
+    if not isinstance(packages, list) or any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name) for name in packages):
+        raise ValueError("visualization.resource_packages must be a list of ROS package names")
+    visualization["resource_packages"] = list(dict.fromkeys(packages))
+    return {"config_file": str(platform_path), "core": core, "devices": devices,
+            "visualization": visualization}
 
 
 def _validate_ros_package(kind: str) -> None:

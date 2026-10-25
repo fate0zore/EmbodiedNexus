@@ -6,6 +6,10 @@ core:
   shutdown_timeout_sec: 5.0
   poll_interval_sec: 1.0
   gateway_unavailable_sec: 3.0
+visualization:
+  enabled: true
+  port: 9090
+  resource_packages: [embodied_nexus_sim_description, embodied_nexus_base, embodied_nexus_arm, embodied_nexus_gripper, embodied_nexus_camera, embodied_nexus_lidar]
 devices:
   - {id: base_main, type: base, config: "package://embodied_nexus_base/config/scout_mock.yaml", enabled: true}
   - {id: arm_main, type: arm, config: "package://embodied_nexus_arm/config/aubo_i5_mock.yaml", enabled: true}

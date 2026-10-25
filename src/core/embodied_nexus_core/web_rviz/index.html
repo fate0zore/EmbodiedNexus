@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Web RViz · EmbodiedNexus Core</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <div class="viewer-shell">
+      <header class="viewer-topbar">
+        <a class="back-link" href="/">← Core</a>
+        <div class="viewer-brand"><span class="brand-mark">EN</span><span><strong>Web RViz</strong><small>只读机器人可视化</small></span></div>
+        <div class="viewer-status"><i id="connection-dot"></i><span id="connection-label">正在连接</span></div>
+      </header>
+      <main class="viewer-layout">
+        <section class="scene-panel">
+          <div class="scene-toolbar">
+            <label>数据源<select id="preset-select"><option value="devices">现有设备</option><option value="gazebo_arachne">Gazebo Arachne</option></select></label>
+            <label>固定坐标系<select id="fixed-frame"><option value="base_link">base_link</option><option value="odom">odom</option><option value="map">map</option></select></label>
+            <button id="reset-view" type="button">重置视角</button>
+            <span id="scene-message" role="status">等待 ROS 话题</span>
+          </div>
+          <div id="three-canvas" class="three-canvas"><div id="empty-state" class="empty-state">正在加载 ROS 话题…</div></div>
+          <div class="scene-footer"><span>左键旋转 · 右键平移 · 滚轮缩放</span><span id="frame-label">固定坐标系：base_link</span></div>
+        </section>
+        <aside class="side-panel">
+          <section class="side-card model-card">
+            <div class="card-heading"><div><small>ROBOT MODEL</small><h2>机器人模型</h2></div><label class="toggle"><input id="model-toggle" type="checkbox" checked /><span></span></label></div>
+            <label class="field-label" for="description-topic">模型话题</label>
+            <select id="description-topic"><option value="">等待 robot_description</option></select>
+            <p id="model-state" class="card-note">选择已发布的 URDF 模型话题。</p>
+            <div class="layer-list">
+              <label><input id="tf-toggle" type="checkbox" checked /> 坐标轴与 TF</label>
+              <label><input id="lidar-toggle" type="checkbox" checked /> 雷达点云 / 激光扫描</label>
+              <label><input id="camera-cloud-toggle" type="checkbox" checked /> 相机点云</label>
+            </div>
+          </section>
+          <section class="side-card sensor-card">
+            <div class="card-heading"><div><small>SENSOR TOPICS</small><h2>传感器数据</h2></div><button id="refresh-topics" class="icon-button" type="button" title="刷新 ROS 话题">↻</button></div>
+            <label class="field-label" for="cloud-topic">点云</label><select id="cloud-topic"><option value="">未选择</option></select>
+            <label class="field-label" for="scan-topic">激光扫描</label><select id="scan-topic"><option value="">未选择</option></select>
+            <label class="field-label" for="rgb-topic">RGB 图像</label><select id="rgb-topic"><option value="">未选择</option></select>
+            <label class="field-label" for="depth-topic">深度图像</label><select id="depth-topic"><option value="">未选择</option></select>
+            <label class="field-label range-label" for="point-size">点大小 <output id="point-size-value">0.035</output></label>
+            <input id="point-size" type="range" min="0.01" max="0.12" step="0.005" value="0.035" />
+            <label class="field-label range-label" for="max-points">最大点数 <output id="max-points-value">100000</output></label>
+            <input id="max-points" type="range" min="10000" max="200000" step="10000" value="100000" />
+            <label class="field-label range-label" for="depth-range">深度显示范围 <output id="depth-range-value">0.5–6 m</output></label>
+            <input id="depth-range" type="range" min="1" max="12" step="0.5" value="6" />
+          </section>
+          <section class="image-grid">
+            <div class="image-card"><div><small>RGB</small><span id="rgb-state">等待数据</span></div><canvas id="rgb-image"></canvas></div>
+            <div class="image-card"><div><small>DEPTH</small><span id="depth-state">等待数据</span></div><canvas id="depth-image"></canvas></div>
+          </section>
+          <section class="side-card data-card"><div class="card-heading"><div><small>LIVE STATUS</small><h2>数据状态</h2></div></div><div id="data-status" class="data-status"><p>正在读取 ROS graph…</p></div></section>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

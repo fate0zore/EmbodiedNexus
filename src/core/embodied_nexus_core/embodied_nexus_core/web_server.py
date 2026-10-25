@@ -3,8 +3,11 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import mimetypes
+import re
 import threading
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -26,7 +29,7 @@ def _authorized(request: StarletteRequest, token: str) -> bool:
     return hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {token}")
 
 
-def create_app(manager: Any, token: str) -> Starlette:
+def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette:
     if not token:
         raise ValueError("core gateway requires a token from the configured environment variable")
 
@@ -56,6 +59,155 @@ def create_app(manager: Any, token: str) -> Starlette:
         if denied := await auth(request):
             return denied
         return JSONResponse(public_platform(manager.platform))
+
+    async def visualization_info(request: StarletteRequest):
+        if denied := await auth(request):
+            return denied
+        if visualization is None:
+            return JSONResponse({"enabled": False, "available": False, "port": 0,
+                                 "error": "Web RViz 未配置", "topics": [], "presets": []})
+        return JSONResponse(await asyncio.to_thread(visualization.info))
+
+    async def visualization_resource(request: StarletteRequest):
+        if denied := await auth(request):
+            return denied
+        package = request.path_params["package"]
+        relative = request.path_params["path"]
+        if visualization is None or package not in visualization.resource_packages:
+            return JSONResponse({"error": "model resource package is not allowed"}, status_code=404)
+        parts = PurePosixPath(relative)
+        if (parts.is_absolute() or "\\" in relative or ".." in parts.parts or
+                Path(relative).suffix.lower() not in {".dae", ".stl", ".obj", ".mtl", ".urdf", ".xacro", ".png", ".jpg", ".jpeg"}):
+            return JSONResponse({"error": "invalid model resource path"}, status_code=404)
+        try:
+            from ament_index_python.packages import get_package_share_directory
+            root = Path(get_package_share_directory(package)).resolve()
+            target = root.joinpath(*parts.parts).resolve(strict=True)
+            target.relative_to(root)
+            if not target.is_file():
+                raise FileNotFoundError(relative)
+            return Response(target.read_bytes(), media_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream",
+                            headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
+        except (ImportError, FileNotFoundError, ValueError, OSError):
+            return JSONResponse({"error": "model resource not found"}, status_code=404)
+
+    async def visualization_ws(websocket: WebSocket):
+        offered = [part.strip() for part in websocket.headers.get("sec-websocket-protocol", "").split(",")]
+        supplied = next((part[7:] for part in offered if part.startswith("bearer.")), "")
+        expected = "en-core-viz-v1"
+        if expected not in offered or not hmac.compare_digest(supplied, token):
+            await websocket.close(code=4401)
+            return
+        if visualization is None or not visualization.ready():
+            await websocket.close(code=1013)
+            return
+        try:
+            async with websockets.connect(
+                f"ws://127.0.0.1:{visualization.port}", open_timeout=2.0, close_timeout=1.0,
+                max_queue=2, max_size=32 * 1024 * 1024, compression=None,
+            ) as upstream:
+                await websocket.accept(subprotocol=expected)
+                client_subscriptions: dict[str, str] = {}
+                async def client_to_rosbridge():
+                    while True:
+                        incoming = await websocket.receive()
+                        if incoming["type"] == "websocket.disconnect":
+                            return
+                        payload = incoming.get("text")
+                        if payload is None:
+                            await websocket.close(code=4403, reason="JSON subscribe messages only")
+                            return
+                        try:
+                            message = json.loads(payload)
+                        except (TypeError, ValueError):
+                            await websocket.close(code=4403, reason="invalid JSON")
+                            return
+                        if not isinstance(message, dict) or message.get("op") not in {"subscribe", "unsubscribe"}:
+                            await websocket.close(code=4403, reason="read-only topic subscriptions only")
+                            return
+                        topic = message.get("topic")
+                        if not isinstance(topic, str):
+                            await websocket.send_text(json.dumps({"op": "core_error", "error": "invalid topic"}))
+                            continue
+                        if message["op"] == "unsubscribe":
+                            subscription_id = message.get("id")
+                            if topic not in client_subscriptions or subscription_id != client_subscriptions[topic]:
+                                await websocket.send_text(json.dumps({"op": "core_error", "error": "topic is not subscribed"}))
+                                continue
+                            forwarded = {"op": "unsubscribe", "topic": topic, "id": subscription_id}
+                            client_subscriptions.pop(topic, None)
+                            await upstream.send(json.dumps(forwarded, separators=(",", ":")))
+                            continue
+                        topic_types = await asyncio.to_thread(visualization.topic_types)
+                        if topic not in topic_types:
+                            await websocket.send_text(json.dumps({"op": "core_error", "error": "unsupported or unavailable topic"}))
+                            continue
+                        if len(client_subscriptions) >= 16 or topic in client_subscriptions:
+                            await websocket.send_text(json.dumps({"op": "core_error", "error": "subscription limit reached or topic already subscribed"}))
+                            continue
+                        subscription_id = message.get("id")
+                        if not isinstance(subscription_id, str) or len(subscription_id) > 128 or not re.fullmatch(r"[A-Za-z0-9._:-]+", subscription_id):
+                            await websocket.send_text(json.dumps({"op": "core_error", "error": "invalid subscription id"}))
+                            continue
+                        msg_type = topic_types[topic]
+                        if message.get("type", msg_type) != msg_type:
+                            await websocket.send_text(json.dumps({"op": "core_error", "error": "topic type does not match ROS graph"}))
+                            continue
+                        qos = message.get("qos")
+                        if qos is not None and (
+                            not isinstance(qos, dict) or set(qos) - {"history", "depth", "reliability", "durability"} or
+                            qos.get("history", "keep_last") not in {"keep_last", "keep_all"} or
+                            qos.get("reliability", "best_effort") not in {"reliable", "best_effort", "best_available"} or
+                            qos.get("durability", "volatile") not in {"transient_local", "volatile", "best_available"} or
+                            not isinstance(qos.get("depth", 10), int) or isinstance(qos.get("depth", 10), bool) or
+                            not 1 <= qos.get("depth", 10) <= 100
+                        ):
+                            await websocket.send_text(json.dumps({"op": "core_error", "error": "invalid subscription QoS"}))
+                            continue
+                        throttle = message.get("throttle_rate", 0)
+                        queue = message.get("queue_length", 1)
+                        if (not isinstance(throttle, int) or isinstance(throttle, bool) or not 0 <= throttle <= 60000 or
+                                not isinstance(queue, int) or isinstance(queue, bool) or not 1 <= queue <= 10):
+                            await websocket.send_text(json.dumps({"op": "core_error", "error": "invalid subscription limits"}))
+                            continue
+                        forwarded = {"op": "subscribe", "topic": topic, "type": msg_type,
+                                     "compression": "cbor", "throttle_rate": throttle,
+                                     "queue_length": queue}
+                        forwarded["id"] = subscription_id
+                        if "qos" in message and getattr(visualization, "explicit_qos", False):
+                            forwarded["qos"] = message["qos"]
+                        client_subscriptions[topic] = subscription_id
+                        await upstream.send(json.dumps(forwarded, separators=(",", ":")))
+
+                async def rosbridge_to_client():
+                    async for message in upstream:
+                        if isinstance(message, bytes):
+                            await websocket.send_bytes(message)
+                        else:
+                            await websocket.send_text(message)
+
+                client_task = asyncio.create_task(client_to_rosbridge())
+                bridge_task = asyncio.create_task(rosbridge_to_client())
+                tasks = [client_task, bridge_task]
+                try:
+                    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                    for task in pending:
+                        task.cancel()
+                    if (bridge_task in done and websocket.client_state.name == "CONNECTED" and
+                            websocket.application_state.name == "CONNECTED"):
+                        await websocket.close(code=1013, reason="rosbridge disconnected")
+                finally:
+                    for task in tasks:
+                        if not task.done():
+                            task.cancel()
+                    await asyncio.gather(*tasks, return_exceptions=True)
+        except WebSocketDisconnect:
+            return
+        except Exception:
+            try:
+                await websocket.close(code=1013)
+            except Exception:
+                pass
 
     async def validate(request: StarletteRequest):
         if denied := await auth(request):
@@ -201,6 +353,10 @@ def create_app(manager: Any, token: str) -> Starlette:
                 pass
 
     routes = [
+        Route("/api/v1/core/visualization", visualization_info, methods=["GET"]),
+        Route("/api/v1/core/visualization/resources/{package:str}/{path:path}", visualization_resource,
+              methods=["GET"]),
+        WebSocketRoute("/api/v1/core/visualization/ws", visualization_ws),
         Route("/api/v1/core/status", status, methods=["GET"]),
         Route("/api/v1/core/devices", devices, methods=["GET"]),
         Route("/api/v1/core/devices/manage_all", manage_all, methods=["POST"]),
@@ -212,6 +368,7 @@ def create_app(manager: Any, token: str) -> Starlette:
         WebSocketRoute("/api/v1/{category:str}/{device_id:str}/ws", proxy_websocket),
         Route("/api/v1/{category:str}/{device_id:str}/{path:path}", proxy_http,
               methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]),
+        Mount("/rviz", app=StaticFiles(directory=str(_rviz_assets_dir()), html=True), name="core-rviz"),
         Mount("/", app=StaticFiles(directory=str(_web_assets_dir()), html=True), name="core-web"),
     ]
     app = Starlette(routes=routes)
@@ -232,6 +389,20 @@ def _web_assets_dir() -> Path:
         raise FileNotFoundError("Core web assets are not installed") from exc
     if not (installed / "index.html").is_file():
         raise FileNotFoundError(f"Core web assets are missing from {installed}")
+    return installed
+
+
+def _rviz_assets_dir() -> Path:
+    source = Path(__file__).resolve().parents[1] / "web_rviz" / "dist"
+    if (source / "index.html").is_file():
+        return source
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        installed = Path(get_package_share_directory("embodied_nexus_core")) / "web" / "rviz"
+    except Exception as exc:
+        raise FileNotFoundError("Web RViz assets are not built or installed; run core.sh build core") from exc
+    if not (installed / "index.html").is_file():
+        raise FileNotFoundError("Web RViz assets are missing; run core.sh build core")
     return installed
 
 

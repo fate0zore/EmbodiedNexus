@@ -187,14 +187,13 @@ python3 src/lidar/embodied_nexus_lidar/test/validate_lidar_modes.py
 
 `src/core/` 是跨设备协调模块，只调用各设备现有的 launch、ROS 接口和 HTTP/WebSocket 入口，不导入设备内部实现。`embodied_nexus_core` 提供进程管理和状态汇总；`embodied_nexus_core_interfaces` 提供 ROS 管理服务。设备仍各自在独立进程中运行，core 启动后不会自动启动设备。
 
-平台配置位于 `src/core/embodied_nexus_core/config/`。`platform_mock.yaml` 默认列出五类 mock 设备，`platform_real.yaml` 引用各设备模块已有实机配置。`config` 支持相对平台文件的普通路径和 `package://<ros-package>/<share-relative-path>`；设备列表的 ID 必须和该设备配置中的 `device_id` 或 `camera_id` 相同。每个 ID 全局唯一，同类设备可配置多个实例。平台校验检查文件引用和设备 ID；每个设备包在启动时继续校验自身参数。core 提供的 30 秒启动等待、5 秒停止反馈等待、1 秒轮询和 3 秒网关失联判定可在 `core` 段调整。
+平台配置位于 `src/core/embodied_nexus_core/config/`。`platform_mock.yaml` 默认列出五类 mock 设备，`platform_real.yaml` 引用各设备模块已有实机配置。可选根级 `visualization` 配置控制 Web RViz 的桥接开关、仅本机监听端口及可读取模型资源包；旧配置缺省启用默认设置。`config` 支持相对平台文件的普通路径和 `package://<ros-package>/<share-relative-path>`；设备列表的 ID 必须和该设备配置中的 `device_id` 或 `camera_id` 相同。每个 ID 全局唯一，同类设备可配置多个实例。平台校验检查文件引用和设备 ID；每个设备包在启动时继续校验自身参数。core 提供的 30 秒启动等待、5 秒停止反馈等待、1 秒轮询和 3 秒网关失联判定可在 `core` 段调整。
 
 在 Humble 环境构建全部 core 依赖并启动：
 
 ```bash
 source /opt/ros/humble/setup.bash
-python3 -m pip install --user "starlette>=1.3.1" "uvicorn>=0.15" "websockets>=10.4"
-colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_core
+bash src/core/scripts/core.sh build core
 source install/setup.bash
 export EMBODIED_NEXUS_CORE_TOKEN='replace-with-a-private-url-safe-token'
 ros2 run embodied_nexus_core nexus_core --config src/core/embodied_nexus_core/config/platform_mock.yaml
@@ -205,6 +204,8 @@ core 默认监听 `0.0.0.0:8780`。core token 通过配置指定的环境变量�
 ROS 管理服务位于 `/embodied_nexus/core/`，状态汇总发布在 `/embodied_nexus/core/status`。HTTP 管理路径为 `/api/v1/core/status`、`/devices`、`/devices/<id>`、`/devices/manage_all`、`/config`、`/config/validate` 和 `/shutdown`。设备管理 POST 的 action 可选 `start`、`shutdown`、`restart`；批量 action 可选 `start_all`、`shutdown_all`、`stop_all`。`stop_all` 只请求执行设备停止，不关闭它们或停止传感器采集；`/shutdown` 关闭受管设备后请求退出 core。
 
 同源根路径提供 Core Web 运维面板，使用上述认证 API 展示状态、管理设备生命周期及查看只读平台配置。面板只在浏览器 `localStorage` 保存用户输入的 Core token；静态页面和资源不含 token。设备实时视频、配置编辑和直接运动控制不属于首版页面。
+
+同源 `/rviz/` 提供 Web RViz：模型、TF、点云、LaserScan、RGB 和深度数据通过只读 topic subscription 显示。浏览器经 Core token 认证代理连接仅绑定 `127.0.0.1` 的 ROS bridge；Core 关闭时清理该进程，桥接不可用不会影响设备管理。前端构建需 Node.js 20+ / npm，ROS 依赖需安装 `ros-humble-rosbridge-server`；配置和话题说明见 [Web RViz 指南](../src/core/docs/web-rviz.md)。
 
 ```python
 from embodied_nexus_client import CoreClient

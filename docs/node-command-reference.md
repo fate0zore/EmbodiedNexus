@@ -9,7 +9,7 @@
 ```bash
 cd ~/EmbodiedNexus
 source /opt/ros/humble/setup.bash
-colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_core
+bash src/core/scripts/core.sh build core
 colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_sim_gazebo
 source install/setup.bash
 ```
@@ -38,10 +38,10 @@ function Invoke-EmbodiedNexusWslCommand {
 }
 ```
 
-首次构建也可以从 PowerShell 调用 WSL；第二条构建命令只构建 Gazebo 仿真及其依赖：
+首次构建可从 PowerShell 调用 Core 包装脚本；Web RViz 前端用 Windows Node.js 构建，ROS 包仍在 WSL 编译。Gazebo 仿真构建继续通过已有 WSL 命令运行：
 
 ```powershell
-Invoke-EmbodiedNexusWslCommand -RosCommand 'colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_core'
+& .\src\core\scripts\core.ps1 build core
 Invoke-EmbodiedNexusWslCommand -RosCommand 'colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_sim_gazebo && source install/setup.bash'
 ```
 

@@ -34,6 +34,23 @@ case "$command_name" in
     target="${2:-core}"
     case "$target" in
       core)
+        rviz_dir="$REPO_ROOT/src/core/embodied_nexus_core/web_rviz"
+        if [[ "${3:-}" == "--frontend-ready" ]]; then
+          if [[ ! -f "$rviz_dir/dist/index.html" ]]; then
+            echo "PowerShell reported a completed Web RViz build, but dist/index.html is missing." >&2
+            exit 2
+          fi
+        elif [[ -n "${3:-}" ]]; then
+          echo "Unexpected core build option: $3" >&2
+          usage >&2
+          exit 2
+        elif command -v npm >/dev/null 2>&1 && [[ "$(node -p 'process.platform' 2>/dev/null || true)" == "linux" ]]; then
+          npm --prefix "$rviz_dir" ci
+          npm --prefix "$rviz_dir" run build
+        elif [[ ! -f "$rviz_dir/dist/index.html" ]]; then
+          echo "Web RViz build assets are missing. Install Node.js 20+ and npm, then run npm ci and npm run build in src/core/embodied_nexus_core/web_rviz." >&2
+          exit 2
+        fi
         colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_core
         ;;
       sim)
