@@ -7,6 +7,9 @@
   <license>MIT</license>
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>xacro</exec_depend>
@@ -20,6 +23,7 @@
   <exec_depend>joint_state_broadcaster</exec_depend>
   <exec_depend>joint_trajectory_controller</exec_depend>
   <exec_depend>embodied_nexus_core</exec_depend>
+  <exec_depend>embodied_nexus_camera</exec_depend>
   <exec_depend>embodied_nexus_sim</exec_depend>
   <exec_depend>embodied_nexus_sim_description</exec_depend>
   <test_depend>python3-yaml</test_depend>

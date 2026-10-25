@@ -17,7 +17,7 @@ python3 -m pip install --user "starlette>=1.3.1" "uvicorn>=0.15" "websockets>=10
 source /opt/ros/humble/setup.bash
 bash src/core/scripts/core.sh build core
 source install/setup.bash
-export EMBODIED_NEXUS_CORE_TOKEN='替换为安全的 URL-safe token'
+export EMBODIED_NEXUS_CORE_TOKEN='token'
 ros2 run embodied_nexus_core nexus_core --config src/core/embodied_nexus_core/config/platform_mock.yaml
 ```
 
@@ -31,11 +31,15 @@ ros2 run embodied_nexus_core nexus_core --config src/core/embodied_nexus_core/co
 
 Gazebo Arachne 预设使用 `/sim/arachne/robot_description`、`/sim/arachne/joint_states`、`/sim/arachne/lidar/points`、`/sim/arachne/camera/image_raw` 和 `/sim/arachne/camera/depth_image_raw`。其他设备读取其已发布的规范化 ROS 输出。机器人模型来自现有 `std_msgs/msg/String` URDF 话题；链接姿态使用 `/tf` 与 `/tf_static`，关节姿态使用 `sensor_msgs/msg/JointState`。Core 不会额外启动模型或 TF 发布节点，因此完整模型显示依赖现场已有的 URDF、TF 和关节状态发布链路。
 
+仿真相机使用 Yahboom `config` 当前选中的安装外参和工厂内参，RGB 与深度分别配置取景位置及投影，分辨率改变时同步缩放 CameraInfo。仿真输出为理想去畸变图像；默认机械臂姿态下相机朝向地面，RGB 大片灰色与下沿出现夹爪属于该场景的实际观测。参数来源见 [Gazebo 指南](../../sim/gazebo/embodied_nexus_sim_gazebo/docs/gazebo-fortress.md)。
+
 URDF 中的 `package://` 网格从 ament 安装的 ROS 包读取。模型包必须列入平台 YAML 的 `visualization.resource_packages`，资源接口会检查 Core token、包许可和解析后的文件路径。默认许可列表包含共享仿真描述包及设备包；缺少安装包或资源时页面会显示资源加载错误，不复制仓库模型文件，也不依赖源码相对路径。
 
-支持的可视化话题包括 URDF 字符串、TF、PointCloud2、LaserScan、Image 和 JointState。点云读取字段偏移、点步长、行跨度和大小端，支持 XYZ、RGB/RGBA 或 intensity，跳过无效坐标并按点数上限采样。图像支持 RGB/BGR/RGBA/BGRA、mono8、16UC1/mono16 和 32FC1；深度图使用米制色阶，可调显示范围。
+支持的可视化话题包括 URDF 字符串、TF、PointCloud2、LaserScan、Image 和 JointState。雷达与相机点云可同时显示，分别选择话题、开关图层；相机点云固定使用洋红色以便与雷达区分，雷达点云保留消息中的 RGB 或 intensity 色彩。点云读取字段偏移、点步长、行跨度和大小端，支持 XYZ、RGB/RGBA 或 intensity，跳过无效坐标并按点数上限采样。图像支持 RGB/BGR/RGBA/BGRA、mono8、16UC1/mono16 和 32FC1；深度图使用米制色阶，可调显示范围。
 
-图像与点云默认限频至 5 Hz，每个话题只保留最新缓冲帧；浏览器 Worker 解码 CBOR，点云默认最多绘制 100,000 点。传感器点云与激光扫描按消息时间查询 TF；没有可用变换时会隐藏并暂停对应图层，收到可用 TF 后自动恢复。仿真时间回跳时会清理动态 TF 缓存。静态 TF 和模型描述使用 transient-local 订阅策略；传感器采用适合传感器数据的 QoS。
+三维场景按需绘制，上限为 30 FPS，没有新数据或视角变化时不持续重绘；像素倍率上限为 1.25。关闭点云图层时取消对应订阅，页面隐藏或离开时断开全部订阅，返回后自动重新连接。图像与点云默认限频至 5 Hz，每个话题只保留最新缓冲帧；浏览器 Worker 解码 CBOR 并转换点云和图像，通过可转移缓冲区交给主线程。TF、模型及关节与传感器使用独立连接；TF 变换图按时间戳缓存，点云复用 GPU 缓冲，默认最多绘制 100,000 点。传感器点云与激光扫描按消息时间查询 TF；没有可用变换时会隐藏并暂停对应图层，收到可用 TF 后自动恢复。仿真时间回跳时会清理动态 TF 缓存。静态 TF 和模型描述使用 transient-local 订阅策略；传感器采用适合传感器数据的 QoS。
+
+本机 Gazebo 默认使用 `balanced` 档：320×240 RGB-D、相机与雷达均为 5 Hz、关闭阴影；相机内参和设备捕获配置自动匹配分辨率。与原来的 640×480、10 Hz 相比，原始 RGB-D 数据量降为八分之一。需要原分辨率与频率时，使用 `ros2 launch embodied_nexus_sim_gazebo sim.launch.py performance:=full`，或设置 `EMBODIED_NEXUS_SIM_PERFORMANCE=full` 后调用 Gazebo Bash/PowerShell 脚本。物理步长、控制频率和雷达扫描覆盖范围保持原配置。
 
 Humble 仓库中的 rosbridge 2.0.8 会根据已发现的 ROS 发布者推断兼容 QoS；协议显式 `qos` 字段从 2.1.0 起提供。Core 会读取已安装的 `rosbridge_library` 版本，在支持时发送显式 QoS；2.0.8 则使用桥接自身的发布者兼容推断逻辑。
 
@@ -44,7 +48,7 @@ Humble 仓库中的 rosbridge 2.0.8 会根据已发现的 ROS 发布者推断兼
 平台 YAML 可省略根级 `visualization` 节；省略时默认启用 Web RViz、使用端口 9090 和默认模型包许可列表。设置 `enabled: false` 可停用 rosbridge，而不影响 Core 其他功能。
 
 ```yaml
-visualization:
+visualiza
   enabled: true
   port: 9090
   resource_packages:
@@ -55,7 +59,7 @@ visualization:
 ## 排查
 
 - 页面提示 rosbridge 不可用：检查已安装 `ros-humble-rosbridge-server`、Core 启动日志和 `127.0.0.1:9090` 端口占用情况。
-- 话题列表为空或没有数据：确认对应设备/仿真已启动，并在 ROS 2 环境中检查话题名称、类型和 QoS。
+- 话题列表为空或没有数据：确认对应设备/仿真已启动，并在 ROS 2 环境中检查话题名称、类型和 QoS。Gazebo 首次启动时，等待 Arachne 模型生成后再连接 Gazebo 传感器桥接；页面数据源选“Gazebo Arachne”。
 - 模型只有坐标轴或提示等待 TF：确认 URDF、`/tf`、`/tf_static` 和 `/joint_states`（或预设话题）正在发布，且固定坐标系与机器人根链接连通。
 - 网格或纹理加载失败：确认对应 ROS 描述包已安装且列入 `resource_packages`，并检查 URDF/DAE 中的资源路径。
 - RGB 或深度显示“不支持”：确认话题类型为 `sensor_msgs/msg/Image`，编码属于页面支持范围。

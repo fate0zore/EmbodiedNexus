@@ -35,6 +35,10 @@ button, select { color: inherit; }
 .card-note { color: var(--muted); font-size: 10px; margin: 7px 0 0; }
 .layer-list { display: grid; gap: 8px; padding-top: 10px; margin-top: 11px; border-top: 1px solid var(--line); color: #bdc9c2; font-size: 10px; }
 .layer-list label { display: flex; align-items: center; gap: 7px; }
+.layer-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; }
+.lidar-swatch { background: #52e0a1; }
+.scan-swatch { background: #ffac62; }
+.camera-swatch { background: #ff66cc; }
 input[type="checkbox"] { accent-color: #7bd0a3; }
 .toggle input { display: none; }
 .toggle span { display: block; width: 32px; height: 18px; border-radius: 99px; background: #3b4942; position: relative; cursor: pointer; }

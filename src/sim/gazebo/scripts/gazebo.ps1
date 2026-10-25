@@ -5,7 +5,7 @@ $scriptWslPath = (& wsl.exe -d $wslDistro -- wslpath -u -a $scriptWindowsPath).T
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($scriptWslPath)) { throw 'Could not convert the Gazebo script path to WSL.' }
 $oldWslEnv = $env:WSLENV
 $wslEnvEntries = if ($oldWslEnv) { @($oldWslEnv -split ':' | Where-Object { $_ }) } else { @() }
-foreach ($name in @('EMBODIED_NEXUS_CORE_TOKEN', 'IGN_IP', 'ROS_DOMAIN_ID')) {
+foreach ($name in @('EMBODIED_NEXUS_CORE_TOKEN', 'IGN_IP', 'ROS_DOMAIN_ID', 'EMBODIED_NEXUS_SIM_PERFORMANCE')) {
     $found = $false
     foreach ($entry in $wslEnvEntries) { if (($entry -split '/')[0] -eq $name) { $found = $true; break } }
     if (-not $found) { $wslEnvEntries += "$name/u" }

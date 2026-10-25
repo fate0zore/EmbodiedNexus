@@ -119,14 +119,14 @@ class CameraClient:
             compression=None,
         ) as websocket:
             while True:
-                metadata = websocket.recv()
+                metadata = websocket.recv(timeout=self.timeout)
                 if isinstance(metadata, bytes):
                     raise RuntimeError("server sent a binary payload without metadata")
                 header = json.loads(metadata)
                 if header.get("type") == "status":
                     yield CameraFrame(header, b"")
                     continue
-                payload = websocket.recv()
+                payload = websocket.recv(timeout=self.timeout)
                 if not isinstance(payload, bytes):
                     raise RuntimeError("server did not follow frame metadata with binary payload")
                 yield CameraFrame(header, payload)

@@ -30,7 +30,7 @@ class RosbridgeRuntime:
     """Own the optional, loopback-only rosbridge process used by the viewer."""
 
     def __init__(self, settings: dict[str, Any], topic_reader: Callable[[], list[tuple[str, str]]], *,
-                 popen=subprocess.Popen, wait_sec: float = 5.0):
+                 popen=subprocess.Popen, wait_sec: float = 30.0):
         self.enabled = bool(settings["enabled"])
         self.port = int(settings["port"])
         self.resource_packages = tuple(settings["resource_packages"])
@@ -113,7 +113,7 @@ class RosbridgeRuntime:
             "presets": [
                 {"id": "devices", "label": "现有设备", "fixed_frame": "base_link",
                  "robot_description": "/robot_description"},
-                {"id": "gazebo_arachne", "label": "Gazebo Arachne", "fixed_frame": "odom",
+                {"id": "gazebo_arachne", "label": "Gazebo Arachne", "fixed_frame": "base_link",
                  "robot_description": "/sim/arachne/robot_description"},
             ],
         }

@@ -34,15 +34,17 @@ export function pointCloudBuffers(message, maximum = 100000) {
     const x = readField(view, offset + fields.x.offset, fields.x.datatype, little);
     const y = readField(view, offset + fields.y.offset, fields.y.datatype, little);
     const z = readField(view, offset + fields.z.offset, fields.z.datatype, little);
-    if (![x, y, z].every(Number.isFinite)) continue;
-    positions.set([x, y, z], output * 3);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+    const dst = output * 3;
+    positions[dst] = x; positions[dst + 1] = y; positions[dst + 2] = z;
     if (rgb) {
       const packed = view.getUint32(offset + rgb.offset, little) >>> 0;
-      colors.set([((packed >> 16) & 255) / 255, ((packed >> 8) & 255) / 255, (packed & 255) / 255], output * 3);
+      colors[dst] = ((packed >> 16) & 255) / 255;
+      colors[dst + 1] = ((packed >> 8) & 255) / 255; colors[dst + 2] = (packed & 255) / 255;
     } else if (intensity) {
       const value = Math.max(0, Math.min(1, readField(view, offset + intensity.offset, intensity.datatype, little)));
-      colors.set([value, 0.35 + value * 0.55, 1 - value * 0.8], output * 3);
-    } else colors.set([0.32, 0.88, 0.63], output * 3);
+      colors[dst] = value; colors[dst + 1] = 0.35 + value * 0.55; colors[dst + 2] = 1 - value * 0.8;
+    } else { colors[dst] = 0.32; colors[dst + 1] = 0.88; colors[dst + 2] = 0.63; }
     output++;
   }
   return { positions: positions.subarray(0, output * 3), colors: colors.subarray(0, output * 3), count: output };
@@ -99,9 +101,8 @@ export function selectTransform(transforms, parent, child, stampSec, maxAge = 1)
   return dynamic[0] && stampSec - dynamic[0].stamp <= maxAge ? dynamic[0] : null;
 }
 
-export function lookupTfMatrix(edges, targetFrame, sourceFrame) {
-  const target = targetFrame.replace(/^\//, ""), source = sourceFrame.replace(/^\//, "");
-  if (target === source) return new THREE.Matrix4();
+export function buildTfPoses(edges, targetFrame) {
+  const target = targetFrame.replace(/^\//, "");
   const graph = new Map();
   for (const edge of edges) {
     const matrix = new THREE.Matrix4().compose(
@@ -113,18 +114,21 @@ export function lookupTfMatrix(edges, targetFrame, sourceFrame) {
     (graph.get(edge.parent) || graph.set(edge.parent, []).get(edge.parent)).push([edge.child, matrix]);
     (graph.get(edge.child) || graph.set(edge.child, []).get(edge.child)).push([edge.parent, inverse]);
   }
-  const queue = [[target, new THREE.Matrix4()]], visited = new Set([target]);
-  while (queue.length) {
-    const [frame, pose] = queue.shift();
+  const poses = new Map([[target, new THREE.Matrix4()]]), queue = [target];
+  for (let index = 0; index < queue.length; index++) {
+    const frame = queue[index], pose = poses.get(frame);
     for (const [next, relative] of graph.get(frame) || []) {
-      if (visited.has(next)) continue;
+      if (poses.has(next)) continue;
       const combined = pose.clone().multiply(relative);
-      if (next === source) return combined;
-      visited.add(next);
-      queue.push([next, combined]);
+      poses.set(next, combined);
+      queue.push(next);
     }
   }
-  return null;
+  return poses;
+}
+
+export function lookupTfMatrix(edges, targetFrame, sourceFrame) {
+  return buildTfPoses(edges, targetFrame).get(sourceFrame.replace(/^\//, "")) || null;
 }
 
 export const FIELD_SIZE_BYTES = FIELD_SIZE;

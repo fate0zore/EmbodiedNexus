@@ -10,7 +10,8 @@ setup(
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", ["launch/sim.launch.py"]),
-        ("share/" + package_name + "/config", ["config/controllers.yaml", "config/platform_sim.yaml"]),
+        ("share/" + package_name + "/config", ["config/controllers.yaml", "config/platform_sim.yaml",
+                                             "config/gemini335_extrinsics.json"]),
         ("share/" + package_name + "/worlds", ["worlds/workcell.sdf"]),
         ("share/" + package_name + "/docs", ["docs/gazebo-fortress.md"]),
         ("share/" + package_name + "/examples", [
@@ -18,6 +19,7 @@ setup(
         ]),
         ("share/" + package_name + "/test", [
             "test/test_sim_assets.py", "test/test_sensor_relay.py", "test/test_clock_guard.py",
+            "test/test_performance_profiles.py",
         ]),
     ],
     install_requires=["setuptools"],

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import math
-import struct
 import time
+import numpy as np
 
 import rclpy
 from rclpy.node import Node
@@ -10,7 +10,7 @@ from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image, PointCloud2, PointField
 
 
-def _transform_lidar_cloud(message: PointCloud2, yaw_rad: float, z_offset_m: float) -> PointCloud2:
+def _transform_lidar_cloud(message: PointCloud2, yaw_rad: float) -> PointCloud2:
     offsets = {field.name: field.offset for field in message.fields}
     if not {"x", "y", "z"}.issubset(offsets):
         raise ValueError("simulated lidar cloud must include x, y and z fields")
@@ -21,18 +21,15 @@ def _transform_lidar_cloud(message: PointCloud2, yaw_rad: float, z_offset_m: flo
     endian = ">" if message.is_bigendian else "<"
     data = bytearray(message.data)
     cosine, sine = math.cos(yaw_rad), math.sin(yaw_rad)
-    for row in range(message.height):
-        row_start = row * message.row_step
-        for column in range(message.width):
-            point_start = row_start + column * message.point_step
-            x = struct.unpack_from(endian + "f", data, point_start + offsets["x"])[0]
-            y = struct.unpack_from(endian + "f", data, point_start + offsets["y"])[0]
-            z = struct.unpack_from(endian + "f", data, point_start + offsets["z"])[0]
-            if not all(math.isfinite(value) for value in (x, y, z)):
-                continue
-            struct.pack_into(endian + "f", data, point_start + offsets["x"], cosine * x - sine * y)
-            struct.pack_into(endian + "f", data, point_start + offsets["y"], sine * x + cosine * y)
-            struct.pack_into(endian + "f", data, point_start + offsets["z"], z + z_offset_m)
+    layout = np.dtype({"names": ["x", "y", "z"], "formats": [endian + "f4"] * 3,
+                       "offsets": [offsets[name] for name in ("x", "y", "z")],
+                       "itemsize": message.point_step})
+    points = np.ndarray((message.height, message.width), dtype=layout, buffer=data,
+                        strides=(message.row_step, message.point_step))
+    valid = np.isfinite(points["x"]) & np.isfinite(points["y"]) & np.isfinite(points["z"])
+    x, y = points["x"][valid], points["y"][valid]
+    points["x"][valid] = cosine * x - sine * y
+    points["y"][valid] = sine * x + cosine * y
     message.data = bytes(data)
     message.header.frame_id = "lidar_link"
     return message
@@ -97,7 +94,7 @@ class SimSensorRelay(Node):
 
     def _cloud(self, half: str, yaw_rad: float, message: PointCloud2) -> None:
         try:
-            self._lidar_clouds[half] = _transform_lidar_cloud(message, yaw_rad, -0.2)
+            self._lidar_clouds[half] = _transform_lidar_cloud(message, yaw_rad)
             self._lidar_received[half] = time.monotonic()
             front, rear = self._lidar_clouds["front"], self._lidar_clouds["rear"]
             if front is None or rear is None:

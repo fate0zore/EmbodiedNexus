@@ -35,7 +35,8 @@ pointcloud:
   max_depth_m: 5.0
   stride: 4
   max_points: 50000
-  max_pair_delta_ms: 100.0
+  # Gazebo's separate RGB and depth sensors are phase-offset by one 5 Hz frame.
+  max_pair_delta_ms: 250.0
   output_fps: 5.0
   roi: []
 calibration:

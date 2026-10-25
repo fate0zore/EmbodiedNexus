@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { imagePixels, lookupTfMatrix, pointCloudBuffers, selectTransform } from "../src/ros-data.js";
+import { buildTfPoses, imagePixels, lookupTfMatrix, pointCloudBuffers, selectTransform } from "../src/ros-data.js";
 
 test("PointCloud2 honors point fields, row padding, endianness and RGB", () => {
   const data = new Uint8Array(40);
@@ -72,4 +72,12 @@ test("TF graph composes link transforms and traverses inverse edges", () => {
   const sensorFromMap = lookupTfMatrix(edges, "sensor", "map");
   const mapOriginInSensor = new THREE.Vector3().applyMatrix4(sensorFromMap);
   assert.ok(mapOriginInSensor.distanceTo(new THREE.Vector3(-1, 1, 0)) < 1e-6);
+});
+
+test("one TF traversal resolves all connected frames and excludes disconnected frames", () => {
+  const edge = (parent, child, x) => ({ parent, child, translation: { x, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } });
+  const poses = buildTfPoses([edge("map", "base", 2), edge("base", "sensor", 3), edge("other", "lost", 4)], "base");
+  assert.deepEqual([...poses.keys()].sort(), ["base", "map", "sensor"]);
+  assert.equal(poses.get("map").elements[12], -2);
+  assert.equal(poses.get("sensor").elements[12], 3);
 });

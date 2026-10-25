@@ -12,7 +12,7 @@
       <header class="viewer-topbar">
         <a class="back-link" href="/">← Core</a>
         <div class="viewer-brand"><span class="brand-mark">EN</span><span><strong>Web RViz</strong><small>只读机器人可视化</small></span></div>
-        <div class="viewer-status"><i id="connection-dot"></i><span id="connection-label">正在连接</span></div>
+        <div id="viewer-status" class="viewer-status"><i id="connection-dot"></i><span id="connection-label">正在连接</span></div>
       </header>
       <main class="viewer-layout">
         <section class="scene-panel">
@@ -33,13 +33,14 @@
             <p id="model-state" class="card-note">选择已发布的 URDF 模型话题。</p>
             <div class="layer-list">
               <label><input id="tf-toggle" type="checkbox" checked /> 坐标轴与 TF</label>
-              <label><input id="lidar-toggle" type="checkbox" checked /> 雷达点云 / 激光扫描</label>
-              <label><input id="camera-cloud-toggle" type="checkbox" checked /> 相机点云</label>
+              <label><input id="lidar-toggle" type="checkbox" checked /><i class="layer-swatch lidar-swatch"></i><i class="layer-swatch scan-swatch"></i> 雷达点云 / 激光扫描</label>
+              <label><input id="camera-cloud-toggle" type="checkbox" checked /><i class="layer-swatch camera-swatch"></i> 相机点云（洋红）</label>
             </div>
           </section>
           <section class="side-card sensor-card">
             <div class="card-heading"><div><small>SENSOR TOPICS</small><h2>传感器数据</h2></div><button id="refresh-topics" class="icon-button" type="button" title="刷新 ROS 话题">↻</button></div>
-            <label class="field-label" for="cloud-topic">点云</label><select id="cloud-topic"><option value="">未选择</option></select>
+            <label class="field-label" for="cloud-topic">雷达点云</label><select id="cloud-topic"><option value="">未选择</option></select>
+            <label class="field-label" for="camera-cloud-topic">相机点云</label><select id="camera-cloud-topic"><option value="">未选择</option></select>
             <label class="field-label" for="scan-topic">激光扫描</label><select id="scan-topic"><option value="">未选择</option></select>
             <label class="field-label" for="rgb-topic">RGB 图像</label><select id="rgb-topic"><option value="">未选择</option></select>
             <label class="field-label" for="depth-topic">深度图像</label><select id="depth-topic"><option value="">未选择</option></select>
@@ -58,6 +59,16 @@
         </aside>
       </main>
     </div>
+    <script>
+      window.__webRvizBooted = false;
+      window.__webRvizBootTimer = window.setTimeout(() => {
+        if (window.__webRvizBooted) return;
+        const message = "Web RViz 前端脚本未能启动，请强制刷新页面并检查浏览器控制台。";
+        document.getElementById("connection-label").textContent = "前端脚本未启动";
+        document.getElementById("scene-message").textContent = message;
+        document.getElementById("empty-state").textContent = message;
+      }, 5000);
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

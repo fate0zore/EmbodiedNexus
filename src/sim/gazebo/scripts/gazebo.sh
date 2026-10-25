@@ -16,6 +16,8 @@ Usage: bash src/sim/gazebo/scripts/gazebo.sh <build|start|headless>
 
 Set EMBODIED_NEXUS_CORE_TOKEN before start. IGN_IP defaults to the WSL eth0 IPv4
 address; override it when Windows must reach a different WSL interface address.
+EMBODIED_NEXUS_SIM_PERFORMANCE defaults to balanced (320x240 RGB-D at 5 Hz,
+5 Hz lidar, shadows off). Set full for the original 640x480 / 10 Hz profile.
 Stop the foreground launch with Ctrl+C. Ctrl+Z only suspends it.
 USAGE
 }
@@ -53,7 +55,7 @@ case "$action" in
       gui=false
     fi
     exec ros2 launch embodied_nexus_sim_gazebo sim.launch.py \
-      "gui:=$gui" "core_token:=$EMBODIED_NEXUS_CORE_TOKEN"
+      "gui:=$gui" "performance:=${EMBODIED_NEXUS_SIM_PERFORMANCE:-balanced}" "core_token:=$EMBODIED_NEXUS_CORE_TOKEN"
     ;;
   help|-h|--help) usage ;;
   *) echo "Action must be build, start or headless." >&2; usage >&2; exit 2 ;;
