@@ -4,7 +4,7 @@ backend: serial
 interface_mode: both
 
 serial:
-  port: /dev/motor_serial
+  port: /dev/serial/by-id/usb-1a86_USB_Single_Serial_58EB003416-if00
   baudrate: 115200
   timeout_sec: 0.25
   reconnect_backoff_sec: 1.0
@@ -24,9 +24,9 @@ feedback:
   stale_sec: 1.0
   reached_value: 1
   moving_value: 0
-  require_moving_transition: true
-  # Confirm against the actual gripper and motor firmware before enabling motion.
-  confirmed: false
+  require_moving_transition: false
+  # Operator-confirmed feedback mapping for this physical gripper.
+  confirmed: true
 
 control:
   operation_timeout_sec: 10.0
