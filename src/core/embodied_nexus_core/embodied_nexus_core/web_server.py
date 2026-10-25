@@ -6,6 +6,7 @@ import json
 import mimetypes
 import re
 import threading
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any
@@ -82,8 +83,17 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
         try:
             from ament_index_python.packages import get_package_share_directory
             root = Path(get_package_share_directory(package)).resolve()
+            allowed_roots = [root]
+            manifest = root / "package.xml"
+            if manifest.is_symlink():
+                source_manifest = manifest.resolve(strict=True)
+                source_package = ET.parse(source_manifest).getroot().findtext("name", "")
+                source_root = source_manifest.parent.resolve()
+                if source_package == package and source_root != root:
+                    allowed_roots.append(source_root)
             target = root.joinpath(*parts.parts).resolve(strict=True)
-            target.relative_to(root)
+            if not any(target.is_relative_to(allowed_root) for allowed_root in allowed_roots):
+                raise ValueError("model resource escapes its installed package")
             if not target.is_file():
                 raise FileNotFoundError(relative)
             return Response(target.read_bytes(), media_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream",

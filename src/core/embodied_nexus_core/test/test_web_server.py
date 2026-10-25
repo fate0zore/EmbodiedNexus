@@ -259,6 +259,43 @@ class CoreGatewayTests(unittest.TestCase):
                 urllib.request.urlopen(unallowed)
             self.assertEqual(unallowed_error.exception.code, 404)
 
+    def test_visualization_resource_route_supports_colcon_symlink_install(self):
+        class Visualization:
+            resource_packages = ("description",)
+
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        source = root / "source" / "description"
+        source_meshes = source / "meshes"
+        share = root / "install" / "share" / "description"
+        source_meshes.mkdir(parents=True)
+        (source / "package.xml").write_text(
+            "<package><name>description</name></package>", encoding="utf-8")
+        (source_meshes / "robot.dae").write_text("model", encoding="utf-8")
+        (root / "outside.dae").write_text("outside", encoding="utf-8")
+        (share / "meshes").mkdir(parents=True)
+        (share / "package.xml").symlink_to(source / "package.xml")
+        (share / "meshes" / "robot.dae").symlink_to(source_meshes / "robot.dae")
+        (share / "meshes" / "escape.dae").symlink_to(root / "outside.dae")
+
+        ament = types.ModuleType("ament_index_python")
+        packages = types.ModuleType("ament_index_python.packages")
+        packages.get_package_share_directory = lambda _name: str(share)
+        ament.packages = packages
+        server = _Server(create_app(self.manager, "core-secret", Visualization()))
+        self.addCleanup(server.close)
+        resource_base = f"http://127.0.0.1:{server.port}/api/v1/core/visualization/resources/description/meshes"
+        with patch.dict(sys.modules, {"ament_index_python": ament, "ament_index_python.packages": packages}):
+            request = urllib.request.Request(f"{resource_base}/robot.dae",
+                                             headers={"Authorization": "Bearer core-secret"})
+            self.assertEqual(urllib.request.urlopen(request).read(), b"model")
+            escape = urllib.request.Request(f"{resource_base}/escape.dae",
+                                            headers={"Authorization": "Bearer core-secret"})
+            with self.assertRaises(urllib.error.HTTPError) as escape_error:
+                urllib.request.urlopen(escape)
+            self.assertEqual(escape_error.exception.code, 404)
+
     def test_visualization_websocket_forwards_only_subscriptions_and_binary_data(self):
         observed = {}
         topic_graph = {"/points": "sensor_msgs/msg/PointCloud2"}
