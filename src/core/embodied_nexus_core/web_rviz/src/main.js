@@ -214,7 +214,9 @@ function subscribe(topicName) {
   const socket = isSensorTopic(topicName) ? sensorWs : ws;
   if (!topic || socket?.readyState !== WebSocket.OPEN) return;
   if (selection.has(topicName)) return;
-  const id = `viewer-${crypto.randomUUID()}`;
+  const randomId = globalThis.crypto?.randomUUID?.() ??
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const id = `viewer-${randomId}`;
   selection.set(topicName, id);
   send({ ...optionsFor(topic), id });
 }
