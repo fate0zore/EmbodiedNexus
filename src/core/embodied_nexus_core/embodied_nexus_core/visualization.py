@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import inspect
 import os
 import re
 import signal
 import socket
 import subprocess
 import time
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,13 +18,10 @@ SUPPORTED_TYPES = {
 
 
 def _explicit_qos_available() -> bool:
-    """The rosbridge subscribe qos field was added after Humble's 2.0.8 release."""
+    """Detect the installed rosbridge capability instead of trusting its version tag."""
     try:
-        from ament_index_python.packages import get_package_share_directory
-        package_xml = Path(get_package_share_directory("rosbridge_library")) / "package.xml"
-        version = ET.parse(package_xml).getroot().findtext("version", "0")
-        numbers = tuple(int(part) for part in re.findall(r"\d+", version)[:3])
-        return numbers >= (2, 1, 0)
+        from rosbridge_library.capabilities.subscribe import Subscription
+        return "qos" in inspect.signature(Subscription.subscribe).parameters
     except Exception:
         return False
 

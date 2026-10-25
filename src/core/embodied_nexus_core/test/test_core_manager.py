@@ -123,23 +123,31 @@ class CoreManagerTests(unittest.TestCase):
         self.assertIn("sensor_msgs/msg/PointCloud2", SUPPORTED_TYPES)
         self.assertNotIn("sensor_msgs/msg/CompressedImage", SUPPORTED_TYPES)
 
-    def test_rosbridge_explicit_qos_capability_tracks_protocol_version(self):
-        ament_index = types.ModuleType("ament_index_python")
-        package_index = types.ModuleType("ament_index_python.packages")
-        package_share = self.root / "rosbridge_library"
-        package_share.mkdir()
-        package_xml = package_share / "package.xml"
-        package_index.get_package_share_directory = lambda _name: str(package_share)
-        ament_index.packages = package_index
+    def test_rosbridge_explicit_qos_capability_tracks_subscribe_signature(self):
+        rosbridge = types.ModuleType("rosbridge_library")
+        capabilities = types.ModuleType("rosbridge_library.capabilities")
+        subscribe = types.ModuleType("rosbridge_library.capabilities.subscribe")
+
+        class SupportsQos:
+            def subscribe(self, sid, qos=None):
+                pass
+
+        class WithoutQos:
+            def subscribe(self, sid):
+                pass
+
+        rosbridge.__path__ = []
+        capabilities.__path__ = []
+        subscribe.Subscription = SupportsQos
+        rosbridge.capabilities = capabilities
+        capabilities.subscribe = subscribe
         with patch.dict(sys.modules, {
-            "ament_index_python": ament_index,
-            "ament_index_python.packages": package_index,
+            "rosbridge_library": rosbridge,
+            "rosbridge_library.capabilities": capabilities,
+            "rosbridge_library.capabilities.subscribe": subscribe,
         }):
-            package_xml.write_text("<package><version>2.0.8</version></package>", encoding="utf-8")
-            self.assertFalse(_explicit_qos_available())
-            package_xml.write_text("<package><version>2.1.0</version></package>", encoding="utf-8")
             self.assertTrue(_explicit_qos_available())
-            package_index.get_package_share_directory = lambda _name: (_ for _ in ()).throw(LookupError())
+            subscribe.Subscription = WithoutQos
             self.assertFalse(_explicit_qos_available())
 
     def test_visualization_runtime_closes_its_bridge_process(self):
