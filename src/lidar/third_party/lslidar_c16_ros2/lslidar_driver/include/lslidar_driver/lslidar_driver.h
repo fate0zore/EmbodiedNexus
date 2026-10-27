@@ -185,69 +185,200 @@ namespace lslidar_driver {
 
     class LslidarDriver : public rclcpp::Node {
     public:
+        /**
+         * @brief 创建使用默认节点选项的雷达驱动节点。
+         * @return 无返回值。
+         */
         LslidarDriver();
 
+        /**
+         * @brief 使用指定 ROS 节点选项创建雷达驱动节点。
+         * @param options 传递给 ROS 节点基类的节点选项。
+         * @return 无返回值。
+         */
         LslidarDriver(const rclcpp::NodeOptions &options);
 
+        /**
+         * @brief 停止驱动线程并释放节点资源。
+         * @return 无返回值。
+         */
         virtual ~LslidarDriver();
 
+        /**
+         * @brief 检查雷达数据包的块头标记和结构是否合法。
+         * @param packet 待验证的雷达数据包。
+         * @return 验证通过返回 true，否则返回 false。
+         */
         bool checkPacketValidity(lslidar_msgs::msg::LslidarPacket::UniquePtr &packet);
 
         //check if a point is in the required range
         //bool isPointInRange(const double &distance);
 
+        /**
+         * @brief 声明并读取雷达驱动的 ROS 参数。
+         * @return 返回参数读取和配置是否成功。
+         */
         bool loadParameters();
 
+        /**
+         * @brief 将当前雷达驱动参数写入日志。
+         * @return 无返回值。
+         */
         void outputParameters();
 
+        /**
+         * @brief 初始化雷达数据使用的时间戳状态。
+         * @return 无返回值。
+         */
         void initTimeStamp();
 
+        /**
+         * @brief 创建雷达驱动所需的 ROS 发布器、服务和数据输入源。
+         * @return 返回 ROS 通信接口是否创建成功。
+         */
         bool createRosIO();
 
+        /**
+         * @brief 发布当前扫描周期生成的点云消息。
+         * @return 无返回值。
+         */
         void publishPointcloud();
 
+        /**
+         * @brief 发布当前扫描周期生成的 LaserScan 消息。
+         * @return 无返回值。
+         */
         void publishScan();
 
+        /**
+         * @brief 根据服务请求控制雷达上电，并填充服务响应。
+         * @param req 雷达控制服务请求。
+         * @param res 雷达控制服务响应。
+         * @return 返回服务操作是否成功。
+         */
         bool powerOn(std::shared_ptr<lslidar_msgs::srv::LslidarControl::Request> req,
                      std::shared_ptr<lslidar_msgs::srv::LslidarControl::Response> res);
 
+        /**
+         * @brief 根据服务请求启停雷达电机，并填充服务响应。
+         * @param req 电机控制服务请求。
+         * @param res 电机控制服务响应。
+         * @return 返回服务操作是否成功。
+         */
         bool motorControl(std::shared_ptr<lslidar_msgs::srv::MotorControl::Request> req,
                           std::shared_ptr<lslidar_msgs::srv::MotorControl::Response> res);
 
+        /**
+         * @brief 设置雷达电机速度并填充服务响应。
+         * @param req 电机速度服务请求。
+         * @param res 电机速度服务响应。
+         * @return 返回服务操作是否成功。
+         */
         bool motorSpeed(std::shared_ptr<lslidar_msgs::srv::MotorSpeed::Request> req,
                         std::shared_ptr<lslidar_msgs::srv::MotorSpeed::Response> res);
 
+        /**
+         * @brief 配置雷达时间同步方式并填充服务响应。
+         * @param req 时间服务请求。
+         * @param res 时间服务响应。
+         * @return 返回服务操作是否成功。
+         */
         bool timeService(std::shared_ptr<lslidar_msgs::srv::TimeService::Request> req,
                          std::shared_ptr<lslidar_msgs::srv::TimeService::Response> res);
 
+        /**
+         * @brief 设置雷达数据发送端口并填充服务响应。
+         * @param req 数据端口服务请求。
+         * @param res 数据端口服务响应。
+         * @return 返回服务操作是否成功。
+         */
         bool setDataPort(std::shared_ptr<lslidar_msgs::srv::DataPort::Request> req,
                          std::shared_ptr<lslidar_msgs::srv::DataPort::Response> res);
 
+        /**
+         * @brief 设置雷达设备服务端口并填充服务响应。
+         * @param req 设备端口服务请求。
+         * @param res 设备端口服务响应。
+         * @return 返回服务操作是否成功。
+         */
         bool setDevPort(std::shared_ptr<lslidar_msgs::srv::DevPort::Request> req,
                         std::shared_ptr<lslidar_msgs::srv::DevPort::Response> res);
 
+        /**
+         * @brief 设置雷达数据目标 IP 地址并填充服务响应。
+         * @param req 数据 IP 服务请求。
+         * @param res 数据 IP 服务响应。
+         * @return 返回服务操作是否成功。
+         */
         bool setDataIp(std::shared_ptr<lslidar_msgs::srv::DataIp::Request> req,
                        std::shared_ptr<lslidar_msgs::srv::DataIp::Response> res);
 
+        /**
+         * @brief 设置雷达数据目的 IP 地址并填充服务响应。
+         * @param req 目的 IP 服务请求。
+         * @param res 目的 IP 服务响应。
+         * @return 返回服务操作是否成功。
+         */
         bool setDestinationIp(std::shared_ptr<lslidar_msgs::srv::DestinationIp::Request> req,
                               std::shared_ptr<lslidar_msgs::srv::DestinationIp::Response> res);
 
+        /**
+         * @brief 填充发送给雷达的控制数据包头。
+         * @param config_data 待发送的控制数据缓冲区。
+         * @return 无返回值。
+         */
         static void setPacketHeader(unsigned char *config_data);
 
+        /**
+         * @brief 通过网络套接字向雷达发送控制数据包。
+         * @param config_data 待发送的控制数据缓冲区。
+         * @return 发送成功返回 true，否则返回 false。
+         */
         bool sendPacketTolidar(unsigned char *config_data) const;
 
+        /**
+         * @brief 持续接收并处理雷达设备配置数据包。
+         * @return 无返回值。
+         */
         void difopPoll();
 
+        /**
+         * @brief 在后台线程中持续读取雷达扫描数据。
+         * @return 无返回值。
+         */
         void pollThread(void);
 
+        /**
+         * @brief 读取并处理一轮雷达数据包，更新点云和扫描消息。
+         * @return 返回本轮数据轮询是否成功。
+         */
         bool poll();
 
+        /**
+         * @brief 将点云消息投影为 LaserScan 消息。
+         * @param cloud_msg 待转换的点云消息。
+         * @param output_scan 接收转换结果的 LaserScan 输出参数。
+         * @return 无返回值。
+         */
         void pointcloudToLaserscan(const sensor_msgs::msg::PointCloud2 &cloud_msg, sensor_msgs::msg::LaserScan &output_scan);
 
+        /**
+         * @brief 加载驱动参数、创建 ROS 接口并准备数据输入。
+         * @return 返回驱动初始化是否成功。
+         */
         bool initialize();
 
+        /**
+         * @brief 解码雷达数据包并更新扫描点数据。
+         * @param packet 待解码的雷达数据包。
+         * @return 无返回值。
+         */
         void decodePacket(lslidar_msgs::msg::LslidarPacket::UniquePtr &packet);
 
+        /**
+         * @brief 读取设备信息并识别雷达型号及标定配置。
+         * @return 返回雷达型号识别是否成功。
+         */
         bool determineLidarType();
 
         //int calculateRemappedScanIndex(int fir_idx, int ring_);

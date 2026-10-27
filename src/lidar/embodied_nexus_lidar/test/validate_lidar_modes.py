@@ -35,12 +35,28 @@ TOKEN = "lidar-smoke-token"
 
 
 def free_port() -> int:
+    """查找一个当前可用的本机 TCP 端口。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
 
 
 def external_cloud(node: Node) -> PointCloud2:
+    """等待并获取外部 ROS 话题发布的点云。
+
+    Args:
+        node: 提供 ROS 参数、服务或话题接口的节点实例。 类型为 Node。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 PointCloud2。
+    """
     message = PointCloud2()
     message.header.stamp = node.get_clock().now().to_msg()
     message.header.frame_id = "lidar_link"
@@ -58,6 +74,18 @@ def external_cloud(node: Node) -> PointCloud2:
 
 
 def wait_for_cloud(process, node, received, publish=None, timeout=12.0):
+    """等待的点云。
+
+    Args:
+        process: 处理，作为等待的点云所需的输入。
+        node: 提供 ROS 参数、服务或话题接口的节点实例。
+        received: received，作为等待的点云所需的输入。
+        publish: 发布，作为等待的点云所需的输入。
+        timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if process.poll() is not None:
@@ -71,6 +99,17 @@ def wait_for_cloud(process, node, received, publish=None, timeout=12.0):
 
 
 def wait_for_web(process, url, token, timeout=15.0):
+    """等待的web。
+
+    Args:
+        process: 处理，作为等待的web所需的输入。
+        url: URL，作为等待的web所需的输入。
+        token: 用于身份验证的访问令牌。
+        timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。
+
+    Returns:
+        无返回值。
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if process.poll() is not None:
@@ -87,6 +126,19 @@ def wait_for_web(process, url, token, timeout=15.0):
 
 def run_launch(harness: Node, *, config: Path, mode: str, port: int | None,
                verify_web: bool, publish_external: bool = False) -> dict:
+    """运行启动。
+
+    Args:
+        harness: harness，作为运行启动所需的输入。 类型为 Node。
+        config: 设备或平台配置对象，提供本次操作所需参数。 类型为 Path。
+        mode: mode，作为运行启动所需的输入。 类型为 str。
+        port: 网络服务使用的端口号。 类型为 int | None。
+        verify_web: 验证web，作为运行启动所需的输入。 类型为 bool。
+        publish_external: 发布external，作为运行启动所需的输入。 类型为 bool。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict。
+    """
     received = []
     output_base = PREFIX if mode != "web" else f"{PREFIX}/_internal"
     subscription = harness.create_subscription(
@@ -169,6 +221,14 @@ def run_launch(harness: Node, *, config: Path, mode: str, port: int | None,
 
 
 def main() -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     rclpy.init()
     harness = rclpy.create_node("embodied_nexus_lidar_validation")
     try:

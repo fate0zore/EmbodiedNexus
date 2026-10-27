@@ -36,6 +36,15 @@ from embodied_nexus_sim.ros_support import SimTimestampGuard
 
 
 def _wait(predicate, timeout=3.0):
+    """等待当前设备或操作。
+
+    Args:
+        predicate: predicate，作为等待当前设备或操作所需的输入。
+        timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if predicate():
@@ -47,14 +56,38 @@ def _wait(predicate, timeout=3.0):
 class RosBackendContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        """设置upclass。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         rclpy.init()
 
     @classmethod
     def tearDownClass(cls):
+        """释放测试类创建的共享进程和资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if rclpy.ok():
             rclpy.shutdown()
 
     def setUp(self):
+        """为当前测试准备所需对象和资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         suffix = uuid.uuid4().hex[:8]
         self.root = f"/sim/backend_contract_{suffix}"
         self.node = Node(f"backend_contract_{suffix}")
@@ -65,6 +98,14 @@ class RosBackendContractTests(unittest.TestCase):
         self.backend = None
 
     def tearDown(self):
+        """清理当前测试创建的对象和资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if self.backend is not None:
             self.backend.close()
         self.executor.shutdown(timeout_sec=1.0)
@@ -73,6 +114,14 @@ class RosBackendContractTests(unittest.TestCase):
         self.node.destroy_node()
 
     def test_base_twist_and_odometry_keep_measured_pose_and_stale_state(self):
+        """验证底盘twist和odometrykeepmeasured位姿和stale状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         odom_topic = f"{self.root}/base/odom"
         command_topic = f"{self.root}/base/cmd_vel"
         odom_pub = self.node.create_publisher(Odometry, odom_topic, 10)
@@ -84,6 +133,14 @@ class RosBackendContractTests(unittest.TestCase):
         publish_state = {"enabled": True}
 
         def publish_odom():
+            """发布odom。
+
+            Args:
+                无参数。
+
+            Returns:
+                无返回值。
+            """
             if not publish_state["enabled"]:
                 return
             message = Odometry()
@@ -128,6 +185,14 @@ class RosBackendContractTests(unittest.TestCase):
         self.assertEqual(commands[-1].twist.angular.z, 0.0)
 
     def test_sim_timestamp_guard_detects_only_backward_time(self):
+        """验证simtimestampguarddetectsonlybackward时间。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         guard = SimTimestampGuard()
         self.assertFalse(guard.observe(RosTime(sec=10, nanosec=0)))
         self.assertFalse(guard.observe(RosTime(sec=10, nanosec=0)))
@@ -136,6 +201,14 @@ class RosBackendContractTests(unittest.TestCase):
         self.assertFalse(guard.observe(RosTime(sec=2, nanosec=100)))
 
     def test_base_clock_rewind_disconnects_feedback_but_allows_zero_velocity(self):
+        """验证底盘clockrewinddisconnects反馈butallowszero速度。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         odom_topic = f"{self.root}/rewind/odom"
         command_topic = f"{self.root}/rewind/cmd_vel"
         odom_pub = self.node.create_publisher(Odometry, odom_topic, 10)
@@ -144,6 +217,14 @@ class RosBackendContractTests(unittest.TestCase):
         stamp = {"value": RosTime(sec=10)}
 
         def publish_odom():
+            """发布odom。
+
+            Args:
+                无参数。
+
+            Returns:
+                无返回值。
+            """
             message = Odometry()
             message.header.stamp = stamp["value"]
             message.pose.pose.orientation.w = 1.0
@@ -160,6 +241,14 @@ class RosBackendContractTests(unittest.TestCase):
         observed = {}
 
         def clock_rewind_seen():
+            """检查测试期间是否检测到仿真时钟回跳。
+
+            Args:
+                无参数。
+
+            Returns:
+                本次处理产生的结果值。
+            """
             result = self.backend.poll()
             if not result[2] and "moved backwards" in result[3]:
                 observed["result"] = result
@@ -176,6 +265,14 @@ class RosBackendContractTests(unittest.TestCase):
         self.assertEqual(commands[-1].twist.angular.z, 0.0)
 
     def test_arm_joint_state_is_measured_and_trajectory_commands_are_stamped(self):
+        """验证机械臂关节状态ismeasured和trajectorycommandsarestamped。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         state_topic = f"{self.root}/joint_states"
         command_topic = f"{self.root}/arm_controller/joint_trajectory"
         names = ["aubo_shoulder_joint", "aubo_upperArm_joint", "aubo_foreArm_joint",
@@ -188,6 +285,14 @@ class RosBackendContractTests(unittest.TestCase):
             lambda message: (commands.append(message), command_received.set()), 10)
 
         def publish_joint_state():
+            """发布关节状态。
+
+            Args:
+                无参数。
+
+            Returns:
+                无返回值。
+            """
             message = JointState()
             message.header.stamp = RosTime(sec=3)
             message.name = names
@@ -213,6 +318,14 @@ class RosBackendContractTests(unittest.TestCase):
         self.assertEqual(self.backend.capabilities[-1], "stop")
 
     def test_gripper_motor_mapping_uses_actual_joint_feedback(self):
+        """验证夹爪控制电机mappingusesactual关节反馈。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         state_topic = f"{self.root}/joint_states"
         command_topic = f"{self.root}/gripper_controller/joint_trajectory"
         names = ["ms42dc_left_finger_joint", "ms42dc_right_finger_joint"]
@@ -225,6 +338,14 @@ class RosBackendContractTests(unittest.TestCase):
         measured = {"position": [0.0, 0.0], "velocity": [0.0, 0.0]}
 
         def publish_joint_state():
+            """发布关节状态。
+
+            Args:
+                无参数。
+
+            Returns:
+                无返回值。
+            """
             message = JointState()
             message.name = names
             message.position = list(measured["position"])

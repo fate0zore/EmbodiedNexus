@@ -27,27 +27,78 @@ from .manager import OperationInProgress
 
 
 def _authorized(request: StarletteRequest, token: str) -> bool:
+    """授权当前设备或操作。
+
+    Args:
+        request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+        token: 用于身份验证的访问令牌。 类型为 str。
+
+    Returns:
+        布尔值，表示授权当前设备或操作是否成功或成立。
+    """
     return hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {token}")
 
 
 def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette:
+    """创建app。
+
+    Args:
+        manager: manager，作为创建app所需的输入。 类型为 Any。
+        token: 用于身份验证的访问令牌。 类型为 str。
+        visualization: visualization，作为创建app所需的输入。 类型为 Any。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 Starlette。
+    """
     if not token:
         raise ValueError("core gateway requires a token from the configured environment variable")
 
     async def auth(request: StarletteRequest) -> JSONResponse | None:
+        """执行 auth 对应的处理流程。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 JSONResponse | None。
+        """
         return None if _authorized(request, token) else JSONResponse({"error": "unauthorized"}, status_code=401)
 
     async def status(request: StarletteRequest):
+        """获取服务当前运行状态。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if denied := await auth(request):
             return denied
         return JSONResponse(await asyncio.to_thread(manager.status))
 
     async def devices(request: StarletteRequest):
+        """设备列表当前设备或操作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if denied := await auth(request):
             return denied
         return JSONResponse({"devices": await asyncio.to_thread(manager.list_devices)})
 
     async def device(request: StarletteRequest):
+        """设备当前设备或操作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if denied := await auth(request):
             return denied
         try:
@@ -57,11 +108,27 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
             return JSONResponse({"error": str(exc)}, status_code=404)
 
     async def config(request: StarletteRequest):
+        """获取当前配置。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if denied := await auth(request):
             return denied
         return JSONResponse(public_platform(manager.platform))
 
     async def visualization_info(request: StarletteRequest):
+        """执行 visualization_info 对应的处理流程。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if denied := await auth(request):
             return denied
         if visualization is None:
@@ -70,6 +137,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
         return JSONResponse(await asyncio.to_thread(visualization.info))
 
     async def visualization_resource(request: StarletteRequest):
+        """执行 visualization_resource 对应的处理流程。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if denied := await auth(request):
             return denied
         package = request.path_params["package"]
@@ -102,6 +177,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
             return JSONResponse({"error": "model resource not found"}, status_code=404)
 
     async def visualization_ws(websocket: WebSocket):
+        """执行 visualization_ws 对应的处理流程。
+
+        Args:
+            websocket: websocket，作为执行 visualization_ws 对应的处理流程所需的输入。 类型为 WebSocket。
+
+        Returns:
+            无返回值。
+        """
         offered = [part.strip() for part in websocket.headers.get("sec-websocket-protocol", "").split(",")]
         supplied = next((part[7:] for part in offered if part.startswith("bearer.")), "")
         expected = "en-core-viz-v1"
@@ -119,6 +202,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
                 await websocket.accept(subprotocol=expected)
                 client_subscriptions: dict[str, str] = {}
                 async def client_to_rosbridge():
+                    """客户端torosbridge。
+
+                    Args:
+                        无参数。
+
+                    Returns:
+                        无返回值。
+                    """
                     while True:
                         incoming = await websocket.receive()
                         if incoming["type"] == "websocket.disconnect":
@@ -190,6 +281,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
                         await upstream.send(json.dumps(forwarded, separators=(",", ":")))
 
                 async def rosbridge_to_client():
+                    """执行 rosbridge_to_client 对应的处理流程。
+
+                    Args:
+                        无参数。
+
+                    Returns:
+                        无返回值。
+                    """
                     async for message in upstream:
                         if isinstance(message, bytes):
                             await websocket.send_bytes(message)
@@ -220,6 +319,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
                 pass
 
     async def validate(request: StarletteRequest):
+        """验证当前设备或操作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if denied := await auth(request):
             return denied
         from .config import load_platform
@@ -233,6 +340,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
             return JSONResponse({"valid": False, "error": str(exc)}, status_code=400)
 
     async def manage_device(request: StarletteRequest):
+        """管理设备。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if denied := await auth(request):
             return denied
         device_id = request.path_params["device_id"]
@@ -256,6 +371,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
             return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
 
     async def manage_all(request: StarletteRequest):
+        """管理all。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if denied := await auth(request):
             return denied
         try:
@@ -275,6 +398,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
             return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
 
     async def shutdown_core(request: StarletteRequest):
+        """关闭core。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if denied := await auth(request):
             return denied
         result = await asyncio.to_thread(manager.request_core_shutdown)
@@ -284,6 +415,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
         return JSONResponse(result, status_code=409)
 
     async def proxy_http(request: StarletteRequest):
+        """执行 proxy_http 对应的处理流程。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 StarletteRequest。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if denied := await auth(request):
             return denied
         item, target = _device_target(manager, {**request.path_params, "query_string": request.url.query})
@@ -301,6 +440,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
             return JSONResponse({"error": f"device gateway unavailable: {exc}"}, status_code=503)
 
     async def proxy_websocket(websocket: WebSocket):
+        """执行 proxy_websocket 对应的处理流程。
+
+        Args:
+            websocket: websocket，作为执行 proxy_websocket 对应的处理流程所需的输入。 类型为 WebSocket。
+
+        Returns:
+            无返回值。
+        """
         category = websocket.path_params["category"]
         device_id = websocket.path_params["device_id"]
         kind = next((key for key, value in DEVICE_TYPES.items() if value[3] == category), None)
@@ -328,6 +475,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
                 await websocket.accept(subprotocol=expected)
 
                 async def client_to_device():
+                    """客户端to设备。
+
+                    Args:
+                        无参数。
+
+                    Returns:
+                        无返回值。
+                    """
                     while True:
                         message = await websocket.receive()
                         if message["type"] == "websocket.disconnect":
@@ -338,6 +493,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
                             await upstream.send(message["bytes"])
 
                 async def device_to_client():
+                    """设备to客户端。
+
+                    Args:
+                        无参数。
+
+                    Returns:
+                        无返回值。
+                    """
                     async for message in upstream:
                         if isinstance(message, bytes):
                             await websocket.send_bytes(message)
@@ -387,6 +550,14 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
 
 
 def _web_assets_dir() -> Path:
+    """定位已安装的 Core Web 静态资源目录。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 Path。
+    """
     source_roots = (Path(__file__).resolve().parents[1] / "web",
                     Path(__file__).resolve().parent / "web")
     for candidate in source_roots:
@@ -403,6 +574,14 @@ def _web_assets_dir() -> Path:
 
 
 def _rviz_assets_dir() -> Path:
+    """定位已安装的 Web RViz 静态资源目录。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 Path。
+    """
     source = Path(__file__).resolve().parents[1] / "web_rviz" / "dist"
     if (source / "index.html").is_file():
         return source
@@ -417,10 +596,27 @@ def _rviz_assets_dir() -> Path:
 
 
 def threading_event():
+    """创建供后台线程协作使用的同步事件。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     return threading.Event()
 
 
 def _device_target(manager: Any, params: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
+    """设备目标。
+
+    Args:
+        manager: manager，作为设备目标所需的输入。 类型为 Any。
+        params: params，作为设备目标所需的输入。 类型为 dict[str, Any]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 tuple[dict[str, Any] | None, str]。
+    """
     category = params["category"]
     device_id = params["device_id"]
     kind = next((key for key, value in DEVICE_TYPES.items() if value[3] == category), None)
@@ -439,6 +635,14 @@ _HOP_BY_HOP_HEADERS = {
 
 
 def _forward_headers(headers: dict[str, str]) -> dict[str, str]:
+    """复制允许转发到目标服务的请求头。
+
+    Args:
+        headers: 随请求发送的 HTTP 请求头集合。 类型为 dict[str, str]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict[str, str]。
+    """
     excluded = set(_HOP_BY_HOP_HEADERS)
     excluded.update(value.strip().lower() for value in headers.get("connection", "").split(","))
     return {key: value for key, value in headers.items()
@@ -446,6 +650,14 @@ def _forward_headers(headers: dict[str, str]) -> dict[str, str]:
 
 
 def _response_headers(headers: Any) -> dict[str, str]:
+    """响应headers。
+
+    Args:
+        headers: 随请求发送的 HTTP 请求头集合。 类型为 Any。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict[str, str]。
+    """
     result = {key: value for key, value in headers.items()
               if key.lower() not in _HOP_BY_HOP_HEADERS}
     if "content-type" not in {key.lower() for key in result}:
@@ -455,6 +667,18 @@ def _response_headers(headers: Any) -> dict[str, str]:
 
 def _proxy_request(item: dict[str, Any], target: str, method: str, body: bytes,
                    request_headers: dict[str, str]) -> tuple[int, bytes, dict[str, str]]:
+    """将浏览器请求代理到 ROS Bridge 并转发响应。
+
+    Args:
+        item: 条目，作为执行 _proxy_request 对应的处理流程所需的输入。 类型为 dict[str, Any]。
+        target: 目标，作为执行 _proxy_request 对应的处理流程所需的输入。 类型为 str。
+        method: HTTP 请求方法，例如 GET 或 POST。 类型为 str。
+        body: 随请求发送的 JSON 数据。 类型为 bytes。
+        request_headers: 请求headers，作为执行 _proxy_request 对应的处理流程所需的输入。 类型为 dict[str, str]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 tuple[int, bytes, dict[str, str]]。
+    """
     headers = _forward_headers(request_headers)
     headers["Authorization"] = f"Bearer {item['token']}"
     headers.setdefault("Content-Type", "application/json")

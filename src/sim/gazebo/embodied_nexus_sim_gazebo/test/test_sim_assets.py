@@ -15,6 +15,14 @@ DESCRIPTION = REPO / "src/sim/common/third_party/embodied_nexus_sim_description"
 
 class SimulationAssetTests(unittest.TestCase):
     def test_xacro_and_world_are_well_formed_and_vendor_meshes_are_installed(self):
+        """验证xacro和worldarewellformed和vendormeshesareinstalled。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         for source in DESCRIPTION.rglob("*.xacro"):
             ET.parse(source)
         ET.parse(GAZEBO / "worlds/workcell.sdf")
@@ -29,6 +37,14 @@ class SimulationAssetTests(unittest.TestCase):
         self.assertEqual(missing, [])
 
     def test_platform_profile_and_control_joints_match_device_contracts(self):
+        """验证platformprofile和控制权jointsmatch设备contracts。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         profile = yaml.safe_load((GAZEBO / "config/platform_sim.yaml").read_text(encoding="utf-8"))
         self.assertEqual({item["type"] for item in profile["devices"]},
                          {"base", "arm", "gripper", "camera", "lidar"})
@@ -39,6 +55,14 @@ class SimulationAssetTests(unittest.TestCase):
         self.assertEqual(len(controllers["/sim/arachne/gripper_controller"]["ros__parameters"]["joints"]), 2)
 
     def test_gazebo_launch_uses_humble_fortress_bridge_message_types(self):
+        """验证gazebo启动useshumblefortressbridge消息类型。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         launch = (GAZEBO / "launch/sim.launch.py").read_text(encoding="utf-8")
         self.assertIn("gz_ros2_control/GazeboSimSystem", launch)
         self.assertIn("gz_ros2_control-system", launch)
@@ -63,6 +87,14 @@ class SimulationAssetTests(unittest.TestCase):
         self.assertIn("use_stamped_vel: true", controllers)
 
     def test_every_upstream_license_notice_is_recorded(self):
+        """验证everyupstreamlicensenoticeisrecorded。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         licenses = DESCRIPTION / "third_party/licenses"
         self.assertTrue((licenses / "arachne-MIT-LICENSE.txt").is_file())
         self.assertTrue((licenses / "scout-ros2-Apache-2.0.txt").is_file())

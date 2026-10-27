@@ -31,6 +31,16 @@ PERFORMANCE_PROFILES = {
 
 
 def _inject_fortress_plugins(robot_xml: str, controllers_file: str, profile: str = "balanced") -> str:
+    """为机器人描述注入 Gazebo Fortress 插件配置。
+
+    Args:
+        robot_xml: robotxml，作为执行 _inject_fortress_plugins 对应的处理流程所需的输入。 类型为 str。
+        controllers_file: controllers文件，作为执行 _inject_fortress_plugins 对应的处理流程所需的输入。 类型为 str。
+        profile: profile，作为执行 _inject_fortress_plugins 对应的处理流程所需的输入。 类型为 str。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 str。
+    """
     settings = PERFORMANCE_PROFILES[profile]
     robot = ET.fromstring(robot_xml)
     # Match the upstream Arachne tire contact parameters. The low lateral
@@ -115,6 +125,16 @@ def _inject_fortress_plugins(robot_xml: str, controllers_file: str, profile: str
 
 
 def _setup(context, *args, **kwargs):
+    """设置当前设备或操作。
+
+    Args:
+        context: context，作为设置当前设备或操作所需的输入。
+        *args: 额外的位置参数集合。
+        **kwargs: 额外的关键字参数集合。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     profile = LaunchConfiguration("performance").perform(context)
     if profile not in PERFORMANCE_PROFILES:
         raise ValueError("performance must be balanced or full")
@@ -241,6 +261,14 @@ def _setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    """生成 ROS launch 启动描述。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     return LaunchDescription([
         DeclareLaunchArgument("gui", default_value="true"),
         DeclareLaunchArgument("performance", default_value="balanced"),

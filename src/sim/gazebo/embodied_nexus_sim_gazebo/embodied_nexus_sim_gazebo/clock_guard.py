@@ -17,12 +17,28 @@ class ClockRewindLatch:
     """Stay faulted after the first backward jump until this process restarts."""
 
     def __init__(self) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._guard = SimTimestampGuard()
         self._last_stamp_sec: float | None = None
         self.faulted = False
         self.just_faulted = False
 
     def observe(self, stamp) -> bool:
+        """记录时钟样本并检测时钟跳变。
+
+        Args:
+            stamp: 时间戳，作为执行 observe 对应的处理流程所需的输入。
+
+        Returns:
+            布尔值，表示执行 observe 对应的处理流程是否成功或成立。
+        """
         current = float(stamp.sec) + float(stamp.nanosec) * 1e-9
         rewound = self._guard.observe(stamp)
         advanced = (self._last_stamp_sec is None or
@@ -41,6 +57,14 @@ class SimClockGuard(Node):
     """Pause Fortress after a backward clock jump so stale commands cannot run."""
 
     def __init__(self, world_name: str) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            world_name: world名称，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         super().__init__("sim_clock_guard", parameter_overrides=[
             Parameter("use_sim_time", value=False),
         ])
@@ -58,6 +82,14 @@ class SimClockGuard(Node):
             Clock, "/clock", self._on_clock, qos)
 
     def _on_clock(self, message: Clock) -> None:
+        """处理clock事件。
+
+        Args:
+            message: 待处理的消息对象。 类型为 Clock。
+
+        Returns:
+            无返回值。
+        """
         if not self._clock_guard.observe(message.clock):
             return
         now = time.monotonic()
@@ -74,6 +106,14 @@ class SimClockGuard(Node):
         future.add_done_callback(self._pause_finished)
 
     def _pause_finished(self, future) -> None:
+        """处理 Gazebo 暂停服务的异步完成结果。
+
+        Args:
+            future: 异步服务调用返回的 Future 对象。
+
+        Returns:
+            无返回值。
+        """
         self._pause_request_pending = False
         try:
             response = future.result()
@@ -85,6 +125,14 @@ class SimClockGuard(Node):
 
 
 def main(argv=None) -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        argv: argv，作为解析启动参数并运行程序入口所需的输入。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--world-name", default="embodied_nexus_workcell")
     args, ros_args = parser.parse_known_args(argv)

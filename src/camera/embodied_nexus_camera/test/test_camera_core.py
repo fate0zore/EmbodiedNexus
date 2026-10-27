@@ -17,9 +17,25 @@ from embodied_nexus_camera.runtime import CameraRuntime
 
 class CameraConfigTest(unittest.TestCase):
     def test_default_configuration_is_valid(self):
+        """验证获取默认配置isvalid。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         validate_config(DEFAULT_CONFIG)
 
     def test_simulator_rgbd_topics_use_calibrated_frame_names(self):
+        """验证simulatorrgbdtopicsusecalibrated坐标系names。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         profile = Path(__file__).resolve().parents[1] / "config" / "gemini335_sim.yaml"
         from embodied_nexus_camera.config import load_config
         config = load_config(profile)
@@ -28,6 +44,14 @@ class CameraConfigTest(unittest.TestCase):
         self.assertEqual(config["capture"]["depth_frame_id"], "camera_depth_optical_frame")
 
     def test_ros_topic_source_cannot_loop_to_own_output(self):
+        """验证ros话题来源cannotlooptoownoutput。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         config = json.loads(json.dumps(DEFAULT_CONFIG))
         config["source"]["backend"] = "ros2_topics"
         config["source"]["color_topic"] = "/embodied_nexus/cameras/camera_front/color/image_raw"
@@ -35,21 +59,53 @@ class CameraConfigTest(unittest.TestCase):
             validate_config(config)
 
     def test_runtime_update_rejects_capture_changes(self):
+        """验证runtime更新rejects采集changes。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         with self.assertRaisesRegex(ValueError, "requires restart"):
             apply_runtime_patch(DEFAULT_CONFIG, {"capture": {"color_fps": 10}})
 
     def test_runtime_update_is_validated_and_does_not_mutate_base(self):
+        """验证runtime更新isvalidated和doesnotmutate底盘。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         changed = apply_runtime_patch(DEFAULT_CONFIG, {"streams": {"jpeg_quality": 70}})
         self.assertEqual(changed["streams"]["jpeg_quality"], 70)
         self.assertEqual(DEFAULT_CONFIG["streams"]["jpeg_quality"], 85)
 
     def test_pointcloud_roi_is_runtime_configurable_and_validated(self):
+        """验证点云roiisruntimeconfigurable和validated。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         changed = apply_runtime_patch(DEFAULT_CONFIG, {"pointcloud": {"roi": [10, 20, 100, 80]}})
         self.assertEqual(changed["pointcloud"]["roi"], [10, 20, 100, 80])
         with self.assertRaisesRegex(ValueError, "pointcloud.roi"):
             apply_runtime_patch(DEFAULT_CONFIG, {"pointcloud": {"roi": [-1, 0, 10, 10]}})
 
     def test_v4l2_controls_are_numeric_and_capture_scoped(self):
+        """验证v4l2controlsarenumeric和采集scoped。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         config = json.loads(json.dumps(DEFAULT_CONFIG))
         config["capture"]["color_controls"] = {"exposure_time_absolute": 156, "gain": 16}
         validate_config(config)
@@ -58,6 +114,14 @@ class CameraConfigTest(unittest.TestCase):
             validate_config(config)
 
     def test_calibration_sample_delete_updates_manifest(self):
+        """验证calibration采集样本删除updatesmanifest。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         with tempfile.TemporaryDirectory() as temp:
             config = json.loads(json.dumps(DEFAULT_CONFIG))
             config["calibration_session"]["root"] = temp
@@ -77,6 +141,14 @@ class CameraConfigTest(unittest.TestCase):
 
 class CalibrationAndGeometryTest(unittest.TestCase):
     def test_external_xyz_cloud_layout_and_rgb_projection(self):
+        """验证externalxyz点云layout和rgbprojection。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cloud = SimpleNamespace(
             fields=[SimpleNamespace(name=name, count=1, datatype=7, offset=index * 4) for index, name in enumerate(("x", "y", "z"))],
             is_bigendian=False, width=2, height=1, point_step=12, row_step=24,
@@ -91,6 +163,14 @@ class CalibrationAndGeometryTest(unittest.TestCase):
         np.testing.assert_array_equal(rgb, [[30, 20, 10], [0, 0, 0]])
 
     def test_yahboom_factory_profile_loads_from_package_config(self):
+        """验证yahboomfactoryprofileloadsfrompackage配置。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         config_path = Path(__file__).resolve().parents[1] / "config" / "gemini335.yaml"
         config = load_config(config_path)
         calibration = load_calibration(
@@ -103,6 +183,14 @@ class CalibrationAndGeometryTest(unittest.TestCase):
         self.assertEqual(len(calibration.depth.distortion), 8)
 
     def test_resolution_scaling_requires_explicit_opt_in(self):
+        """验证resolutionscalingrequiresexplicitoptin。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         config_path = Path(__file__).resolve().parents[1] / "config" / "gemini335.yaml"
         config = load_config(config_path)
         args = {
@@ -121,6 +209,14 @@ class CalibrationAndGeometryTest(unittest.TestCase):
         self.assertAlmostEqual(scaled.color.fx, 2 * reference.color.fx)
 
     def test_orbbec_native_factory_distortion_order_is_preserved(self):
+        """验证orbbecnativefactorydistortionorderispreserved。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         model = _model_from_entry({
             "image_size": [640, 480],
             "intrinsic": {"fx": 500, "fy": 501, "cx": 320, "cy": 240},
@@ -131,6 +227,14 @@ class CalibrationAndGeometryTest(unittest.TestCase):
         self.assertEqual(model.cv_distortion.tolist(), [1, 2, 7, 8, 3, 4, 5, 6])
 
     def test_rgbd_projection_returns_meters_and_rgb_order(self):
+        """验证rgbdprojectionreturnsmeters和rgborder。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         model = CameraModel(4, 4, 2, 2, 1.5, 1.5, [0, 0, 0, 0, 0], calibrated=True)
         calibration = RgbdCalibration(model, model, 0.001, np.eye(3), np.zeros(3), "test", "test")
         depth = np.full((4, 4), 1000, np.uint16)
@@ -142,6 +246,14 @@ class CalibrationAndGeometryTest(unittest.TestCase):
         np.testing.assert_allclose(points[:, 3:], np.tile([30, 20, 10], (16, 1)))
 
     def test_depth_roi_uses_original_image_coordinates_and_checks_bounds(self):
+        """验证depthroiusesoriginal图像coordinates和checksbounds。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         model = CameraModel(4, 4, 2, 2, 1.5, 1.5, [0, 0, 0, 0, 0], calibrated=True)
         calibration = RgbdCalibration(model, model, 0.001, np.eye(3), np.zeros(3), "test", "test")
         depth = np.full((4, 4), 1000, np.uint16)
@@ -154,6 +266,14 @@ class CalibrationAndGeometryTest(unittest.TestCase):
             depth_to_xyzrgb(depth, color, calibration, roi=[3, 3, 2, 2])
 
     def test_point_cloud_requires_calibration_and_pair_timing(self):
+        """验证点点云requirescalibration和pairtiming。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         model = CameraModel(2, 2, 1, 1, 0.5, 0.5, [0, 0, 0, 0], calibrated=False)
         calibration = RgbdCalibration(model, model, 0.001, np.eye(3), np.zeros(3))
         with self.assertRaisesRegex(ValueError, "calibration"):
@@ -169,6 +289,14 @@ class CalibrationAndGeometryTest(unittest.TestCase):
 
 class WebTransportTest(unittest.TestCase):
     def test_latest_frame_cache_and_encoded_frame(self):
+        """验证latest坐标系cache和encoded坐标系。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         hub = CameraHub("camera_front")
         image = np.zeros((8, 12, 3), np.uint8)
         frame = hub.publish("color", image, stamp_sec=123.0, encoding="bgr8", width=12, height=8)
@@ -178,6 +306,14 @@ class WebTransportTest(unittest.TestCase):
         self.assertTrue(hub.status(DEFAULT_CONFIG)["streams"]["color"]["available"])
 
     def test_pointcloud_error_is_not_cleared_by_new_color_frames(self):
+        """验证点云errorisnotclearedbynewcolorframes。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         hub = CameraHub("camera_front")
         hub.error("no synchronized pair", "points")
         hub.publish("color", np.zeros((2, 2, 3), np.uint8), stamp_sec=1.0)
@@ -188,9 +324,34 @@ class WebTransportTest(unittest.TestCase):
         self.assertEqual(hub.status(DEFAULT_CONFIG)["dropped_frames"], 3)
 
     def test_masked_client_websocket_frame(self):
+        """验证masked客户端websocket坐标系。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         class FakeSocket:
-            def __init__(self, data): self.data = bytearray(data)
+            def __init__(self, data):
+                """初始化对象并保存构造参数或依赖。
+
+                Args:
+                    data: 待处理的原始数据或消息载荷。
+
+                Returns:
+                    无返回值。
+                """
+                self.data = bytearray(data)
             def recv(self, size):
+                """接收并返回下一条 WebSocket 消息。
+
+                Args:
+                    size: size，作为执行 recv 对应的处理流程所需的输入。
+
+                Returns:
+                    本次处理产生的结果值。
+                """
                 chunk = self.data[:size]
                 del self.data[:size]
                 return bytes(chunk)

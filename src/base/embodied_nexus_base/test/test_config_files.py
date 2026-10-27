@@ -8,6 +8,14 @@ from embodied_nexus_base.config import load_config
 
 class BaseConfigTests(unittest.TestCase):
     def test_shipped_mock_and_scout_configs_validate(self):
+        """验证shippedmock和scoutconfigs验证。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         config_dir = Path(__file__).resolve().parents[1] / "config"
         mock = load_config(config_dir / "scout_mock.yaml")
         scout = load_config(config_dir / "scout_waveshare.yaml")

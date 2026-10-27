@@ -337,3 +337,7 @@ Modify:  1.Optimize code to reduce CPU usage
       	     5.Solve the problem of continuous zero crossing angle between two adjacent data packet points in 3.0 lidar, and fix the inability of 3.0 lidar to power on and off
        	    6.Restrict the range of lidar IP settings and prohibit setting 224 network segments as lidar IPs
 Date    : 2024-04-10
+
+## 本地补丁记录
+
+- 2026-10-27：在当前仓库的 `src/lidar/third_party/lslidar_c16_ros2/lslidar_driver/` 中补充 C++ Doxygen 函数说明，覆盖参数、返回值和功能；仅为文档注释，不改变驱动行为。该修改属于本地补丁，上游来源与路径仍按本文前述记录。

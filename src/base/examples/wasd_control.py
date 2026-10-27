@@ -17,7 +17,16 @@ SEND_PERIOD_SEC = 0.05
 
 
 def velocity_for_keys(keys: set[str], linear_speed: float, angular_speed: float) -> tuple[float, float]:
-    """Map held keys to Scout differential-drive velocity; opposing keys cancel."""
+    """Map held keys to Scout differential-drive velocity; opposing keys cancel.
+
+    Args:
+        keys: 当前处于按下状态的键集合，用于合成底盘运动指令。 类型为 set[str]。
+        linear_speed: 底盘前进或后退时使用的线速度上限。 类型为 float。
+        angular_speed: 底盘转向时使用的角速度上限。 类型为 float。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 tuple[float, float]。
+    """
     forward = int("w" in keys) - int("s" in keys)
     left = int("a" in keys) - int("d" in keys)
     return forward * linear_speed, left * angular_speed
@@ -25,6 +34,14 @@ def velocity_for_keys(keys: set[str], linear_speed: float, angular_speed: float)
 
 class WasdWindow:
     def __init__(self, root: tk.Tk) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            root: root，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 tk.Tk。
+
+        Returns:
+            无返回值。
+        """
         self.root = root
         self.root.title("EmbodiedNexus · Scout 底盘 WASD 控制")
         self.root.resizable(False, False)
@@ -60,6 +77,14 @@ class WasdWindow:
         self.worker.start()
 
     def _build(self) -> None:
+        """构建当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         frame = ttk.Frame(self.root, padding=12)
         frame.grid(sticky="nsew")
         ttk.Label(frame, text="服务地址").grid(row=0, column=0, sticky="w")
@@ -89,17 +114,50 @@ class WasdWindow:
             frame.columnconfigure(column, weight=1)
 
     def _connect(self) -> None:
+        """连接当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._enqueue("connect", self.url.get().strip(), self.device_id.get().strip(), self.token.get())
 
     def _enable(self) -> None:
+        """更新设备运动使能状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._clear_keys()
         self._enqueue("enable")
 
     def _stop(self) -> None:
+        """停止设备当前动作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._clear_keys()
         self.stop_requested.set()
 
     def _enqueue(self, name: str, *args) -> None:
+        """将设备命令放入后台发送队列。
+
+        Args:
+            name: 名称，作为将设备命令放入后台发送队列所需的输入。 类型为 str。
+            *args: 额外的位置参数集合。
+
+        Returns:
+            无返回值。
+        """
         if self.closing:
             return
         try:
@@ -108,6 +166,14 @@ class WasdWindow:
             self._ui_status("操作队列已满，请稍后重试")
 
     def _key_press(self, event) -> None:
+        """记录按键按下并更新运动状态。
+
+        Args:
+            event: 浏览器或 ROS 派发的事件对象。
+
+        Returns:
+            无返回值。
+        """
         if isinstance(event.widget, (tk.Entry, ttk.Entry)):
             return
         key = event.keysym.lower()
@@ -121,6 +187,14 @@ class WasdWindow:
             self._show_keys()
 
     def _key_release(self, event) -> None:
+        """记录按键释放并更新运动状态。
+
+        Args:
+            event: 浏览器或 ROS 派发的事件对象。
+
+        Returns:
+            无返回值。
+        """
         key = event.keysym.lower()
         if key in KEYS:
             with self.lock:
@@ -128,15 +202,39 @@ class WasdWindow:
             self._show_keys()
 
     def _focus_lost(self, _event) -> None:
+        """窗口失焦时清除按键状态并停止运动。
+
+        Args:
+            _event: 事件，作为窗口失焦时清除按键状态并停止运动所需的输入。
+
+        Returns:
+            无返回值。
+        """
         if self.root.focus_displayof() is None:
             self._clear_keys()
             self.stop_requested.set()
 
     def _clear_keys(self) -> None:
+        """清除所有按键状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         with self.lock:
             self.keys.clear()
 
     def _show_keys(self) -> None:
+        """更新界面中的按键状态显示。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         with self.lock:
             keys = set(self.keys)
             linear_speed, angular_speed = self._linear_speed, self._angular_speed
@@ -144,20 +242,52 @@ class WasdWindow:
         self._ui_status(f"按键: {' '.join(sorted(keys)) or '无'}；目标速度 {linear:.2f} m/s, {angular:.2f} rad/s")
 
     def _set_linear_speed(self, value: str) -> None:
+        """设置底盘线速度上限。
+
+        Args:
+            value: 要应用、比较或转换的输入值。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         with self.lock:
             self._linear_speed = float(value)
         self._show_keys()
 
     def _set_angular_speed(self, value: str) -> None:
+        """设置底盘角速度上限。
+
+        Args:
+            value: 要应用、比较或转换的输入值。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         with self.lock:
             self._angular_speed = float(value)
         self._show_keys()
 
     def _ui_status(self, value: str) -> None:
+        """界面状态。
+
+        Args:
+            value: 要应用、比较或转换的输入值。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         if not self.closing:
             self.ui_events.put((self.status_text, value))
 
     def _drain_ui_events(self) -> None:
+        """处理后台线程排入的界面事件。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         while True:
             try:
                 variable, value = self.ui_events.get_nowait()
@@ -168,6 +298,14 @@ class WasdWindow:
             self.root.after(50, self._drain_ui_events)
 
     def _worker_loop(self) -> None:
+        """在后台线程中持续处理设备命令。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         last_velocity = 0.0
         last_state = 0.0
         try:
@@ -223,6 +361,15 @@ class WasdWindow:
             self.worker_done.set()
 
     def _execute(self, command: str, args: tuple) -> None:
+        """执行当前设备或操作。
+
+        Args:
+            command: command，作为执行当前设备或操作所需的输入。 类型为 str。
+            args: 额外的位置参数集合。 类型为 tuple。
+
+        Returns:
+            无返回值。
+        """
         try:
             if command == "connect":
                 url, device_id, token = args
@@ -258,7 +405,14 @@ class WasdWindow:
             self._fault(f"{command or '操作'}失败：{exc}")
 
     def _prepare_reconnect(self) -> None:
-        """Stop and release the previous session before replacing its client."""
+        """Stop and release the previous session before replacing its client.
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._clear_keys()
         self.motion_enabled = False
         self.connected = False
@@ -274,6 +428,14 @@ class WasdWindow:
         self.client = None
 
     def _show_state(self, state: dict) -> None:
+        """显示状态。
+
+        Args:
+            state: 状态，作为显示状态所需的输入。 类型为 dict。
+
+        Returns:
+            无返回值。
+        """
         connected = bool(state.get("connected"))
         motion_enabled = bool(state.get("motion_enabled"))
         self.ui_events.put((self.state_text,
@@ -285,6 +447,14 @@ class WasdWindow:
         self.ui_events.put((self.velocity_text, text))
 
     def _emergency_stop(self, reason: str) -> None:
+        """发送紧急停止指令。
+
+        Args:
+            reason: 原因，作为发送紧急停止指令所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         self.motion_enabled = False
         self._clear_keys()
         client = self.client
@@ -298,15 +468,39 @@ class WasdWindow:
         self.ui_events.put((self.state_text, "连接状态：停止请求已发送 · 运动未使能"))
 
     def _fault(self, message: str) -> None:
+        """记录故障并更新界面状态。
+
+        Args:
+            message: 待处理的消息对象。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         self._emergency_stop(message)
         self._ui_status(message)
 
     def _close(self) -> None:
+        """关闭当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.closing = True
         self._clear_keys()
         self._poll_close()
 
     def _poll_close(self) -> None:
+        """检查关闭请求并停止后台轮询。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if self.worker_done.wait(0):
             self.root.destroy()
         else:
@@ -314,6 +508,14 @@ class WasdWindow:
 
 
 def main() -> None:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        无参数。
+
+    Returns:
+        无返回值。
+    """
     root = tk.Tk()
     WasdWindow(root)
     root.mainloop()

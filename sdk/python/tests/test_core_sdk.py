@@ -8,6 +8,14 @@ from embodied_nexus_client import CoreClient
 
 class CoreSdkTests(unittest.TestCase):
     def test_accessors_share_the_core_http_address_and_route_streams_by_device(self):
+        """验证accessorssharethecorehttp地址和routestreamsby设备。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         client = CoreClient("http://robot:8780", "token")
         base = client.base("base_lab")
         arm = client.arm("arm_lab")
@@ -23,6 +31,14 @@ class CoreSdkTests(unittest.TestCase):
         self.assertEqual(lidar.websocket_path, "/api/v1/lidars/lidar_lab/ws")
 
     def test_management_methods_use_core_paths(self):
+        """验证managementmethodsusecorepaths。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         client = CoreClient("http://robot:8780", "token")
         with patch.object(client, "_request", return_value={"success": True}) as request:
             client.start("arm_main")

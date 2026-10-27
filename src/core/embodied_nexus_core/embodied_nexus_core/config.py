@@ -41,6 +41,14 @@ _ENV = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 def default_config_path() -> Path:
+    """返回该设备的默认配置文件路径。
+
+    Args:
+        无参数。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 Path。
+    """
     try:
         from ament_index_python.packages import get_package_share_directory
         return Path(get_package_share_directory("embodied_nexus_core")) / "config" / "platform_mock.yaml"
@@ -49,6 +57,15 @@ def default_config_path() -> Path:
 
 
 def resolve_config_reference(reference: str, platform_path: Path) -> Path:
+    """解析配置reference。
+
+    Args:
+        reference: reference，作为解析配置reference所需的输入。 类型为 str。
+        platform_path: platform路径，作为解析配置reference所需的输入。 类型为 Path。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 Path。
+    """
     if not isinstance(reference, str) or not reference.strip():
         raise ValueError("device config must be a non-empty path")
     value = reference.strip()
@@ -73,6 +90,15 @@ def resolve_config_reference(reference: str, platform_path: Path) -> Path:
 
 
 def load_platform(path: str | Path | None = None, *, check_packages: bool = True) -> dict[str, Any]:
+    """加载platform。
+
+    Args:
+        path: 目标文件、资源或接口的路径。 类型为 str | Path | None。
+        check_packages: 检查packages，作为加载platform所需的输入。 类型为 bool。
+
+    Returns:
+        查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 dict[str, Any]。
+    """
     platform_path = Path(path or default_config_path()).expanduser().resolve()
     raw = yaml.safe_load(platform_path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict) or set(raw) - {"core", "devices", "visualization"} or not {"core", "devices"}.issubset(raw):
@@ -156,6 +182,14 @@ def load_platform(path: str | Path | None = None, *, check_packages: bool = True
 
 
 def _validate_ros_package(kind: str) -> None:
+    """验证rospackage。
+
+    Args:
+        kind: kind，作为验证rospackage所需的输入。 类型为 str。
+
+    Returns:
+        无返回值。
+    """
     package, launch_file = DEVICE_TYPES[kind][:2]
     try:
         from ament_index_python.packages import get_package_share_directory
@@ -167,6 +201,14 @@ def _validate_ros_package(kind: str) -> None:
 
 
 def public_platform(config: dict[str, Any]) -> dict[str, Any]:
+    """公开platform。
+
+    Args:
+        config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict[str, Any]。
+    """
     safe = copy.deepcopy(config)
     safe["core"].pop("auth_token_env", None)
     return safe

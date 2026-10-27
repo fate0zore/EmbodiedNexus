@@ -10,6 +10,14 @@ from embodied_nexus_sim_gazebo.sensor_relay import _merge_lidar_clouds, _transfo
 
 
 def cloud(points: list[tuple[float, float, float]]) -> PointCloud2:
+    """点云当前设备或操作。
+
+    Args:
+        points: points，作为点云当前设备或操作所需的输入。 类型为 list[tuple[float, float, float]]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 PointCloud2。
+    """
     message = PointCloud2()
     message.header.frame_id = "sensor_frame"
     message.height = 1
@@ -28,6 +36,14 @@ def cloud(points: list[tuple[float, float, float]]) -> PointCloud2:
 
 class SensorRelayTests(unittest.TestCase):
     def test_front_and_rear_clouds_transform_without_changing_sensor_height(self):
+        """验证front和rearclouds转换withoutchanging传感器height。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         front = _transform_lidar_cloud(cloud([(1.0, 0.0, 0.2)]), math.pi / 2)
         rear = _transform_lidar_cloud(cloud([(2.0, 0.0, 0.5)]), -math.pi / 2)
 
@@ -44,6 +60,14 @@ class SensorRelayTests(unittest.TestCase):
         self.assertAlmostEqual(points[1][2], 0.5, places=6)
 
     def test_transform_preserves_big_endian_layout_row_padding_and_invalid_points(self):
+        """验证转换preservesbigendianlayoutrowpadding和invalidpoints。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         message = cloud([(0, 0, 0), (0, 0, 0)])
         message.width, message.height = 1, 2
         message.point_step, message.row_step = 16, 20

@@ -27,6 +27,14 @@ from .controller import GripperController, MotionResult
 
 
 def _default_config_path() -> str:
+    """获取默认配置文件路径。
+
+    Args:
+        无参数。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 str。
+    """
     try:
         from ament_index_python.packages import get_package_share_directory
         return str(Path(get_package_share_directory("embodied_nexus_gripper")) / "config" / "ms42dc.yaml")
@@ -36,6 +44,14 @@ def _default_config_path() -> str:
 
 class GripperNode(Node):
     def __init__(self, config_path: str | None = None) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config_path: 配置文件路径，指向要加载的设备配置。 类型为 str | None。
+
+        Returns:
+            无返回值。
+        """
         overrides = [Parameter("config_file", value=config_path)] if config_path else None
         super().__init__("embodied_nexus_gripper", parameter_overrides=overrides)
         self.declare_parameter("config_file", _default_config_path())
@@ -80,20 +96,54 @@ class GripperNode(Node):
 
     @staticmethod
     def _json(value: Any) -> str:
+        """将输入值转换为可写入 JSON 的数据。
+
+        Args:
+            value: 要应用、比较或转换的输入值。 类型为 Any。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 str。
+        """
         return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
     def _get_info(self, _request, response):
+        """获取信息。
+
+        Args:
+            _request: 请求，作为获取信息所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         response.success = True
         response.error = ""
         response.descriptor_json = self._json(self.controller.descriptor())
         return response
 
     def _get_state(self, _request, response):
+        """获取状态。
+
+        Args:
+            _request: 请求，作为获取状态所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         self._publish_state()
         self._fill_state(response.state)
         return response
 
     def _fill_state(self, message: GripperState):
+        """将内部设备状态复制到 ROS 状态消息。
+
+        Args:
+            message: 待处理的消息对象。 类型为 GripperState。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         state = self.controller.state()
         message.header.stamp = self.get_clock().now().to_msg()
         message.device_id = state["device_id"]
@@ -122,16 +172,42 @@ class GripperNode(Node):
         return message
 
     def _publish_state(self) -> None:
+        """发布状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.controller.poll_once()
         self.state_pub.publish(self._fill_state(GripperState()))
 
     def _get_config(self, _request, response):
+        """读取设备配置并构造服务响应。
+
+        Args:
+            _request: 请求，作为读取设备配置并构造服务响应所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         response.success = True
         response.error = ""
         response.config_json = self._json(self.controller.configuration())
         return response
 
     def _validate_config(self, request, response):
+        """验证配置。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。
+        """
         try:
             patch = json.loads(request.patch_json)
             response.config_json = self._json(self.controller.validate_configuration(patch))
@@ -144,6 +220,15 @@ class GripperNode(Node):
         return response
 
     def _apply_config(self, request, response):
+        """应用配置。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             patch = json.loads(request.patch_json)
             response.config_json = self._json(self.controller.apply_configuration(patch, request.lease_id))
@@ -156,6 +241,15 @@ class GripperNode(Node):
         return response
 
     def _acquire_control(self, request, response):
+        """获取控制权。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.lease_id, response.expires_in_sec = self.controller.acquire_control(
                 request.owner, request.ttl_sec or None
@@ -170,6 +264,15 @@ class GripperNode(Node):
         return response
 
     def _renew_control(self, request, response):
+        """续租控制权。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.expires_in_sec = self.controller.renew_control(request.lease_id)
             response.success = True
@@ -181,6 +284,15 @@ class GripperNode(Node):
         return response
 
     def _release_control(self, request, response):
+        """释放控制权。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             self.controller.release_control(request.lease_id)
             response.success = True
@@ -191,6 +303,15 @@ class GripperNode(Node):
         return response
 
     def _set_motion_enabled(self, request, response):
+        """设置motionenabled。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             self.controller.set_motion_enabled(request.lease_id, request.enabled)
             response.success = True
@@ -201,6 +322,15 @@ class GripperNode(Node):
         return response
 
     def _stop(self, request, response):
+        """停止设备当前动作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         result = self.controller.stop(request.reason)
         response.success = result["success"]
         response.stop_sent = result["stop_sent"]
@@ -209,6 +339,14 @@ class GripperNode(Node):
         return response
 
     def _goal_callback(self, request):
+        """校验底盘运动目标并返回接受或拒绝结果。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if not request.client_operation_id:
             self.get_logger().warning("Rejecting MS42DC motion goal without a client_operation_id")
             return GoalResponse.REJECT
@@ -222,14 +360,38 @@ class GripperNode(Node):
             return GoalResponse.REJECT
 
     def _cancel_callback(self, goal_handle):
+        """取消callback。
+
+        Args:
+            goal_handle: goal处理，作为取消callback所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         self.controller.cancel_reserved_goal(goal_handle.request.client_operation_id)
         return CancelResponse.ACCEPT
 
     def _execute_move(self, goal_handle):
+        """执行运动。
+
+        Args:
+            goal_handle: goal处理，作为执行运动所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         request = goal_handle.request
         result = MoveGripper.Result()
 
         def publish(state: dict) -> None:
+            """发布当前设备或操作。
+
+            Args:
+                state: 状态，作为发布当前设备或操作所需的输入。 类型为 dict。
+
+            Returns:
+                无返回值。
+            """
             feedback = MoveGripper.Feedback()
             feedback.operation_id = str(request.client_operation_id)
             feedback.state = str(state["operation_state"])
@@ -267,6 +429,14 @@ class GripperNode(Node):
         return result
 
     def destroy_node(self):
+        """销毁节点。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             self.controller.shutdown()
         finally:
@@ -274,6 +444,14 @@ class GripperNode(Node):
 
 
 def main(argv=None) -> None:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        argv: argv，作为解析启动参数并运行程序入口所需的输入。
+
+    Returns:
+        无返回值。
+    """
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--config", default=None)
     args, ros_args = parser.parse_known_args(argv)

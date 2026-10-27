@@ -13,6 +13,14 @@ from embodied_nexus_sim_gazebo.clock_guard import ClockRewindLatch
 
 class ClockRewindLatchTests(unittest.TestCase):
     def test_backward_jump_latches_pause_across_subsequent_forward_time(self):
+        """验证backwardjumplatchespauseacrosssubsequentforward时间。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         guard = ClockRewindLatch()
         self.assertFalse(guard.observe(Time(sec=20)))
         self.assertFalse(guard.observe(Time(sec=20, nanosec=100_000_000)))

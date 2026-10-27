@@ -33,6 +33,14 @@ class BaseRosGateway(Node):
     """Authenticated HTTP/WebSocket facade; all device access stays in BaseNode."""
 
     def __init__(self, config_path: str | None = None) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config_path: 配置文件路径，指向要加载的设备配置。 类型为 str | None。
+
+        Returns:
+            无返回值。
+        """
         super().__init__("embodied_nexus_base_web")
         self.declare_parameter("config_file", config_path or default_config_path())
         self.declare_parameter("web.bind_host", "")
@@ -78,6 +86,16 @@ class BaseRosGateway(Node):
         self.get_logger().info(f"base Web API listening on {web['bind_host']}:{web['port']}")
 
     def _call(self, name: str, request: Any, timeout: float = 5.0):
+        """调用 ROS 服务并等待调用结果。
+
+        Args:
+            name: 名称，作为调用 ROS 服务并等待调用结果所需的输入。 类型为 str。
+            request: 封装调用输入字段的请求对象。 类型为 Any。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         client = self._service_clients[name]
         service_name = self._service_types[name][1]
         if not client.wait_for_service(timeout_sec=timeout):
@@ -94,6 +112,16 @@ class BaseRosGateway(Node):
 
     @staticmethod
     def _require(response, success: bool, error: str = ""):
+        """检查当前设备或操作。
+
+        Args:
+            response: 服务端或被调用操作返回的响应对象。
+            success: success，作为检查当前设备或操作所需的输入。 类型为 bool。
+            error: error，作为检查当前设备或操作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if not success:
             if "lease" in error.lower() or "held" in error.lower():
                 raise PermissionError(error)
@@ -105,11 +133,27 @@ class BaseRosGateway(Node):
         return response
 
     def info(self) -> dict:
+        """获取设备能力与静态信息。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         response = self._call("info", GetBaseInfo.Request())
         self._require(response, response.success, response.error)
         return json.loads(response.descriptor_json)
 
     def status(self) -> dict:
+        """获取服务当前运行状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self._state_lock:
             cached = dict(self._cached_state) if self._cached_state is not None else None
             age = time.monotonic() - self._cached_state_at
@@ -125,6 +169,14 @@ class BaseRosGateway(Node):
         return json.loads(response.state_json)
 
     def _on_state(self, message: String) -> None:
+        """处理状态事件。
+
+        Args:
+            message: 待处理的消息对象。 类型为 String。
+
+        Returns:
+            无返回值。
+        """
         try:
             state = json.loads(message.data)
         except (TypeError, ValueError):
@@ -134,11 +186,27 @@ class BaseRosGateway(Node):
             self._cached_state_at = time.monotonic()
 
     def get_config(self) -> dict:
+        """获取配置。
+
+        Args:
+            无参数。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 dict。
+        """
         response = self._call("config", GetBaseConfiguration.Request())
         self._require(response, response.success, response.error)
         return json.loads(response.config_json)
 
     def validate_config(self, patch: dict) -> dict:
+        """验证配置。
+
+        Args:
+            patch: patch，作为验证配置所需的输入。 类型为 dict。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。 返回类型为 dict。
+        """
         request = ValidateBaseConfiguration.Request()
         request.patch_json = json.dumps(patch, allow_nan=False)
         response = self._call("validate", request)
@@ -146,6 +214,15 @@ class BaseRosGateway(Node):
         return json.loads(response.config_json)
 
     def apply_config(self, lease_id: str, patch: dict) -> dict:
+        """应用配置。
+
+        Args:
+            lease_id: 租约标识符，作为应用配置所需的输入。 类型为 str。
+            patch: patch，作为应用配置所需的输入。 类型为 dict。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = ApplyBaseConfiguration.Request()
         request.lease_id = lease_id
         request.patch_json = json.dumps(patch, allow_nan=False)
@@ -154,6 +231,15 @@ class BaseRosGateway(Node):
         return json.loads(response.config_json)
 
     def acquire(self, owner: str, ttl_sec: float | None = None) -> dict:
+        """申请设备控制权。
+
+        Args:
+            owner: owner，作为申请设备控制权所需的输入。 类型为 str。
+            ttl_sec: ttlsec，作为申请设备控制权所需的输入。 类型为 float | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = AcquireBaseControl.Request()
         request.owner = owner
         request.ttl_sec = float(ttl_sec or 0.0)
@@ -162,6 +248,14 @@ class BaseRosGateway(Node):
         return {"lease_id": response.lease_id, "expires_in_sec": response.expires_in_sec}
 
     def renew(self, lease_id: str) -> dict:
+        """续租当前设备控制权。
+
+        Args:
+            lease_id: 租约标识符，作为续租当前设备控制权所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = RenewBaseControl.Request()
         request.lease_id = lease_id
         response = self._call("renew", request)
@@ -169,6 +263,14 @@ class BaseRosGateway(Node):
         return {"expires_in_sec": response.expires_in_sec}
 
     def release(self, lease_id: str) -> dict:
+        """释放当前设备控制租约。
+
+        Args:
+            lease_id: 租约标识符，作为释放当前设备控制租约所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = ReleaseBaseControl.Request()
         request.lease_id = lease_id
         response = self._call("release", request)
@@ -178,6 +280,15 @@ class BaseRosGateway(Node):
                 "error": response.error}
 
     def enable(self, lease_id: str, enabled: bool) -> dict:
+        """更新设备运动使能状态。
+
+        Args:
+            lease_id: 租约标识符，作为更新设备运动使能状态所需的输入。 类型为 str。
+            enabled: 表示对应功能是否启用的布尔值。 类型为 bool。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = SetBaseMotionEnabled.Request()
         request.lease_id, request.enabled = lease_id, bool(enabled)
         response = self._call("enable", request)
@@ -189,6 +300,16 @@ class BaseRosGateway(Node):
                 "error": response.error}
 
     def set_velocity(self, lease_id: str, linear_mps: float, angular_rps: float) -> dict:
+        """设置速度。
+
+        Args:
+            lease_id: 租约标识符，作为设置速度所需的输入。 类型为 str。
+            linear_mps: 线速度mps，作为设置速度所需的输入。 类型为 float。
+            angular_rps: 角速度rps，作为设置速度所需的输入。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = SetBaseVelocity.Request()
         request.lease_id = lease_id
         request.linear_mps = float(linear_mps)
@@ -198,6 +319,14 @@ class BaseRosGateway(Node):
         return {"accepted": True}
 
     def stop(self, reason: str) -> dict:
+        """停止设备当前动作。
+
+        Args:
+            reason: 原因，作为停止设备当前动作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = StopBase.Request()
         request.reason = str(reason)
         response = self._call("stop", request)
@@ -208,6 +337,14 @@ class BaseRosGateway(Node):
                 "error": response.error}
 
     def create_operation(self, values: dict[str, Any]) -> dict:
+        """创建操作。
+
+        Args:
+            values: 要应用、比较或转换的一组输入值。 类型为 dict[str, Any]。
+
+        Returns:
+            构造或创建完成的对象或资源。 返回类型为 dict。
+        """
         kind = values.get("type")
         if kind not in self.actions:
             raise ValueError("operation type must be distance or turn")
@@ -221,6 +358,15 @@ class BaseRosGateway(Node):
         return {"operation_id": operation_id, "state": "submitting"}
 
     def _run_operation(self, operation_id: str, values: dict[str, Any]) -> None:
+        """运行操作。
+
+        Args:
+            operation_id: 操作标识符，作为运行操作所需的输入。 类型为 str。
+            values: 要应用、比较或转换的一组输入值。 类型为 dict[str, Any]。
+
+        Returns:
+            无返回值。
+        """
         kind = values["type"]
         client = self.actions[kind]
         try:
@@ -287,6 +433,15 @@ class BaseRosGateway(Node):
 
     @staticmethod
     def _wait_future(future, timeout: float):
+        """等待异步服务调用完成或超时。
+
+        Args:
+            future: 异步服务调用返回的 Future 对象。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         done = threading.Event()
         future.add_done_callback(lambda _future: done.set())
         if not done.wait(timeout):
@@ -297,6 +452,15 @@ class BaseRosGateway(Node):
         return result
 
     def _operation_feedback(self, operation_id: str, wrapped) -> None:
+        """操作反馈。
+
+        Args:
+            operation_id: 操作标识符，作为操作反馈所需的输入。 类型为 str。
+            wrapped: wrapped，作为操作反馈所需的输入。
+
+        Returns:
+            无返回值。
+        """
         feedback = wrapped.feedback
         value = getattr(feedback, "progress_m", getattr(feedback, "progress_rad", 0.0))
         with self._operations_lock:
@@ -306,6 +470,14 @@ class BaseRosGateway(Node):
                 record["state"] = "running"
 
     def get_operation(self, operation_id: str) -> dict:
+        """获取操作。
+
+        Args:
+            operation_id: 操作标识符，作为获取操作所需的输入。 类型为 str。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 dict。
+        """
         with self._operations_lock:
             record = self._operations.get(operation_id)
             if record is None:
@@ -313,6 +485,14 @@ class BaseRosGateway(Node):
             return {key: value for key, value in record.items() if key != "goal_handle"}
 
     def cancel_operation(self, operation_id: str) -> dict:
+        """取消操作。
+
+        Args:
+            operation_id: 操作标识符，作为取消操作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self._operations_lock:
             record = self._operations.get(operation_id)
             if record is None:
@@ -331,12 +511,28 @@ class BaseRosGateway(Node):
             return self.get_operation(operation_id)
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.web.close()
         self._workers.shutdown(wait=False, cancel_futures=True)
         super().destroy_node()
 
 
 def main(args=None):
+    """解析启动参数并运行程序入口。
+
+    Args:
+        args: 额外的位置参数集合。
+
+    Returns:
+        无返回值。
+    """
     rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = BaseRosGateway()
     executor = MultiThreadedExecutor(num_threads=4)

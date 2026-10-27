@@ -17,6 +17,14 @@ class LidarFrame:
     data: bytes
 
     def points(self, limit: int | None = None) -> Iterator[dict[str, float | int]]:
+        """获取雷达点云数据。
+
+        Args:
+            limit: limit，作为执行 points 对应的处理流程所需的输入。 类型为 int | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Iterator[dict[str, float | int]]。
+        """
         if self.metadata.get("channel") != "points":
             raise ValueError("points() is available for PointCloud2 frames")
         if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int) or limit < 0):
@@ -53,6 +61,14 @@ class LidarFrame:
                 emitted += 1
 
     def scan(self) -> dict[str, Any]:
+        """扫描当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         if self.metadata.get("channel") != "scan":
             raise ValueError("scan() is available for LaserScan frames")
         n = int(self.metadata["count"])
@@ -67,6 +83,18 @@ class LidarClient:
 
     def __init__(self, base_url: str, token: str, device_id: str = "lidar_main", timeout: float = 5.0,
                  *, websocket_path: str = "/ws"):
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            base_url: 设备服务或 Core 服务的基础 HTTP URL。 类型为 str。
+            token: 用于身份验证的访问令牌。 类型为 str。
+            device_id: 设备标识符，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+            websocket_path: websocket路径，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.device_id = device_id
@@ -75,6 +103,16 @@ class LidarClient:
         self._prefix = f"/api/v1/lidars/{quote(device_id, safe='')}"
 
     def _request(self, method: str, suffix: str, body: dict[str, Any] | None = None) -> Any:
+        """向服务端发送 HTTP 请求并解析响应。
+
+        Args:
+            method: HTTP 请求方法，例如 GET 或 POST。 类型为 str。
+            suffix: suffix，作为向服务端发送 HTTP 请求并解析响应所需的输入。 类型为 str。
+            body: 随请求发送的 JSON 数据。 类型为 dict[str, Any] | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Any。
+        """
         data = json.dumps(body).encode("utf-8") if body is not None else None
         request = urllib.request.Request(
             f"{self.base_url}{self._prefix}/{suffix.lstrip('/')}",
@@ -92,24 +130,81 @@ class LidarClient:
             raise RuntimeError(f"lidar API returned HTTP {exc.code}: {detail}") from exc
 
     def info(self) -> dict[str, Any]:
+        """获取设备能力与静态信息。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         return self._request("GET", "info")
 
     def status(self) -> dict[str, Any]:
+        """获取服务当前运行状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         return self._request("GET", "status")
 
     def config(self) -> dict[str, Any]:
+        """获取当前配置。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         return self._request("GET", "config")
 
     def validate_config(self, patch: dict[str, Any]) -> dict[str, Any]:
+        """验证配置。
+
+        Args:
+            patch: patch，作为验证配置所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。 返回类型为 dict[str, Any]。
+        """
         return self._request("POST", "config/validate", patch)
 
     def apply_config(self, patch: dict[str, Any]) -> dict[str, Any]:
+        """应用配置。
+
+        Args:
+            patch: patch，作为应用配置所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         return self._request("PUT", "config", patch)
 
     def set_capture(self, capturing: bool) -> dict[str, Any]:
+        """设置采集。
+
+        Args:
+            capturing: capturing，作为设置采集所需的输入。 类型为 bool。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         return self._request("PUT", "capture", {"capturing": bool(capturing)})
 
     def acquire_control(self, owner: str = "python-client", ttl_sec: float | None = None) -> LidarLease:
+        """获取控制权。
+
+        Args:
+            owner: owner，作为获取控制权所需的输入。 类型为 str。
+            ttl_sec: ttlsec，作为获取控制权所需的输入。 类型为 float | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 LidarLease。
+        """
         body: dict[str, Any] = {"owner": owner}
         if ttl_sec is not None:
             body["ttl_sec"] = float(ttl_sec)
@@ -117,6 +212,14 @@ class LidarClient:
         return LidarLease(self, result["lease_id"], float(result["expires_in_sec"]))
 
     def stop_motor(self) -> dict[str, Any]:
+        """停止控制电机。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         return self._request("PUT", "motor", {"enabled": False})
 
     def subscribe(
@@ -127,6 +230,17 @@ class LidarClient:
         scan_fps: float = 10.0,
         point_stride: int = 1,
     ) -> Iterator[LidarFrame]:
+        """订阅相机数据流并依次产出元数据和二进制图像载荷。
+
+        Args:
+            streams: streams，作为订阅相机数据流并依次产出元数据和二进制图像载荷所需的输入。 类型为 tuple[str, ...]。
+            points_fps: pointsfps，作为订阅相机数据流并依次产出元数据和二进制图像载荷所需的输入。 类型为 float。
+            scan_fps: 扫描fps，作为订阅相机数据流并依次产出元数据和二进制图像载荷所需的输入。 类型为 float。
+            point_stride: 点stride，作为订阅相机数据流并依次产出元数据和二进制图像载荷所需的输入。 类型为 int。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Iterator[LidarFrame]。
+        """
         try:
             from websockets.sync.client import connect
         except ImportError as exc:
@@ -156,6 +270,16 @@ class LidarLease:
     """Auto-renewing motor-control lease."""
 
     def __init__(self, client: LidarClient, lease_id: str, ttl_sec: float):
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            client: 用于发送请求或查询状态的客户端实例。 类型为 LidarClient。
+            lease_id: 租约标识符，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str。
+            ttl_sec: ttlsec，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         self.client, self.lease_id, self.ttl_sec = client, lease_id, float(ttl_sec)
         self._stop_event = threading.Event()
         self._renew_error = ""
@@ -164,9 +288,25 @@ class LidarLease:
 
     @property
     def renew_error(self) -> str:
+        """续租error。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 str。
+        """
         return self._renew_error
 
     def _renew_loop(self) -> None:
+        """在后台周期性续租控制权。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         interval = max(min(self.ttl_sec / 3.0, 0.5), 0.05)
         while not self._stop_event.wait(interval):
             try:
@@ -176,17 +316,49 @@ class LidarLease:
                 self._renew_error = str(exc)
 
     def start_motor(self) -> dict[str, Any]:
+        """启动控制电机。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         return self.client._request("PUT", "motor", {"lease_id": self.lease_id, "enabled": True})
 
     def set_speed(self, speed_hz: int) -> dict[str, Any]:
+        """设置速度。
+
+        Args:
+            speed_hz: 目标雷达转速，单位为 Hz。 类型为 int。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         if speed_hz not in (5, 10, 20):
             raise ValueError("speed_hz must be one of 5, 10, or 20")
         return self.client._request("PUT", "motor/speed", {"lease_id": self.lease_id, "speed_hz": speed_hz})
 
     def stop_motor(self) -> dict[str, Any]:
+        """停止控制电机。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         return self.client.stop_motor()
 
     def release(self) -> dict[str, Any]:
+        """释放当前设备控制租约。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         if self._stop_event.is_set():
             return {"released": True}
         self._stop_event.set()
@@ -195,7 +367,25 @@ class LidarLease:
         return result
 
     def __enter__(self) -> LidarLease:
+        """进入上下文管理器并返回当前资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 LidarLease。
+        """
         return self
 
     def __exit__(self, exc_type, exc, traceback) -> None:
+        """退出上下文管理器并释放上下文资源。
+
+        Args:
+            exc_type: exc类型，作为退出上下文管理器并释放上下文资源所需的输入。
+            exc: 捕获到的异常对象。
+            traceback: traceback，作为退出上下文管理器并释放上下文资源所需的输入。
+
+        Returns:
+            无返回值。
+        """
         self.release()

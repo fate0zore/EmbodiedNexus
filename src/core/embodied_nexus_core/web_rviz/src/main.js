@@ -9,7 +9,17 @@ import { buildTfPoses, imagePixels, pointCloudBuffers } from "./ros-data.js";
 import { updatePointLayer } from "./point-layer.js";
 import "./style.css";
 
+/**
+ * 按元素 ID 获取 DOM 元素。
+ * @param {*} id - 页面元素或设备的标识符。
+ * @returns {*} 按元素 ID 获取 DOM 元素得到的数据或处理结果。
+ */
 const $ = (id) => document.getElementById(id);
+/**
+ * 在页面中显示运行错误信息。
+ * @param {*} error - 运行期间捕获的错误对象。
+ * @returns {*} 在页面中显示运行错误信息得到的数据或处理结果。
+ */
 function showRuntimeError(error) {
   const message = `页面脚本错误：${String(error?.message || error).slice(0, 220)}`;
   const label = $("connection-label");
@@ -69,6 +79,10 @@ let renderFrameId = 0;
 let lastRenderTime = Number.NEGATIVE_INFINITY;
 const renderIntervalMs = 1000 / 30;
 
+/**
+ * 请求渲染下一帧三维场景。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function requestRender() {
   if (!renderFrameId && !document.hidden && !pageLeaving) renderFrameId = requestAnimationFrame(animate);
 }
@@ -123,14 +137,28 @@ const resizeObserver = new ResizeObserver(() => {
 });
 resizeObserver.observe($("three-canvas"));
 
+/**
+ * 更新连接状态和对应显示文本。
+ * @param {*} online - 表示服务连接是否在线。
+ * @param {*} label - 连接状态对应的显示文本。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function setConnection(online, label) {
   const status = $("viewer-status");
   status.classList.toggle("is-online", online);
   $("connection-label").textContent = label;
 }
 
+/**
+ * 构造访问 Core API 所需的授权请求头。
+ * @returns {*} 构造访问 Core API 所需的授权请求头得到的数据或处理结果。
+ */
 function apiHeaders() { return { Authorization: `Bearer ${token}` }; }
 
+/**
+ * 读取 Core 与机器人模型信息。
+ * @returns {Promise<*>} 异步读取 Core 与机器人模型信息的结果。
+ */
 async function loadInfo() {
   const response = await fetch(apiUrl, { headers: apiHeaders(), cache: "no-store" });
   if (response.status === 401) { location.assign("/"); return null; }
@@ -138,6 +166,14 @@ async function loadInfo() {
   return response.json();
 }
 
+/**
+ * 更新选择框选项并按需保留当前值。
+ * @param {*} select - 需要更新的 HTML 选择框元素。
+ * @param {*} options - fetch 请求选项。
+ * @param {*} emptyLabel - 没有候选项时显示的占位文本。
+ * @param {*} keepValue - 是否尽可能保留原有选中值。
+ * @returns {*} 更新选择框选项并按需保留当前值得到的数据或处理结果。
+ */
 function replaceOptions(select, options, emptyLabel = "未选择", keepValue = true) {
   const previous = keepValue ? select.value : "";
   const signature = JSON.stringify([emptyLabel, options]);
@@ -148,16 +184,33 @@ function replaceOptions(select, options, emptyLabel = "未选择", keepValue = t
   if (previous && options.some((item) => item.name === previous)) select.value = previous;
 }
 
+/**
+ * 按条件从话题候选项中选择话题。
+ * @param {*} key - 话题配置项或字段的键。
+ * @param {*} predicate - 用于判断候选话题是否符合要求的函数。
+ * @returns {*} 按条件从话题候选项中选择话题得到的数据或处理结果。
+ */
 function chooseTopic(key, predicate) {
   if (manualTopics.has(key)) return;
   const found = topics.find((topic) => predicate(topic.name, topic.type));
   if (found) topicSelectors[key].value = found.name;
 }
 
+/**
+ * 根据显示预设选择固定坐标系。
+ * @param {*} preset - 当前可视化预设。
+ * @returns {*} 根据显示预设选择固定坐标系得到的数据或处理结果。
+ */
 function fixedFrameFor(preset) {
   return preset?.id === "gazebo_arachne" ? "base_link" : preset?.fixed_frame || "base_link";
 }
 
+/**
+ * 加载可用话题并更新配置选项。
+ * @param {*} preset - 当前可视化预设。
+ * @param {*} applyPreset - 是否将预设值应用到选择器。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function populateTopics(preset, applyPreset = false) {
   if (applyPreset) manualTopics.clear();
   for (const [key, select] of Object.entries(topicSelectors)) {
@@ -182,6 +235,11 @@ function populateTopics(preset, applyPreset = false) {
   if (applyPreset || !topicSelectors.depth.value) chooseTopic("depth", (name) => name === `${root}/camera/depth_image_raw` || name.endsWith("/cameras/camera_front/depth/image_raw"));
 }
 
+/**
+ * 返回指定话题支持的可视化选项。
+ * @param {*} topic - ROS 话题对象或名称。
+ * @returns {*} 返回指定话题支持的可视化选项得到的数据或处理结果。
+ */
 function optionsFor(topic) {
   const base = { op: "subscribe", topic: topic.name, type: topic.type, compression: "cbor", queue_length: 1 };
   const options = topic.type === "tf2_msgs/msg/TFMessage"
@@ -201,15 +259,30 @@ function optionsFor(topic) {
   return options;
 }
 
+/**
+ * 判断话题是否属于传感器数据。
+ * @param {*} name - 设备、状态或字段名称。
+ * @returns {*} 判断话题是否属于传感器数据得到的数据或处理结果。
+ */
 function isSensorTopic(name) {
   return ["sensor_msgs/msg/PointCloud2", "sensor_msgs/msg/LaserScan", "sensor_msgs/msg/Image"].includes(topics.find((topic) => topic.name === name)?.type);
 }
 
+/**
+ * 通过 WebSocket 连接发送消息。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @returns {*} 通过 WebSocket 连接发送消息得到的数据或处理结果。
+ */
 function send(message) {
   const socket = isSensorTopic(message.topic) ? sensorWs : ws;
   if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
 }
 
+/**
+ * 订阅指定 ROS 话题。
+ * @param {*} topicName - ROS 话题名称。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function subscribe(topicName) {
   const topic = topics.find((item) => item.name === topicName);
   const socket = isSensorTopic(topicName) ? sensorWs : ws;
@@ -222,6 +295,11 @@ function subscribe(topicName) {
   send({ ...optionsFor(topic), id });
 }
 
+/**
+ * 取消指定 ROS 话题的订阅。
+ * @param {*} topicName - ROS 话题名称。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function unsubscribe(topicName) {
   const id = selection.get(topicName);
   if (!id) return;
@@ -230,18 +308,32 @@ function unsubscribe(topicName) {
   latest.delete(topicName); preparedData.delete(topicName); pendingSensors.delete(topicName);
 }
 
+/**
+ * 列出当前启用的 ROS 话题名称。
+ * @returns {*} 列出当前启用的 ROS 话题名称得到的数据或处理结果。
+ */
 function activeTopicNames() {
   return [topicSelectors.description.value, $("lidar-toggle").checked ? topicSelectors.cloud.value : "",
     $("camera-cloud-toggle").checked ? topicSelectors.cameraCloud.value : "", $("lidar-toggle").checked ? topicSelectors.scan.value : "",
     topicSelectors.rgb.value, topicSelectors.depth.value, $("model-toggle").checked ? latest.get("selected-joints") : "", "/tf", "/tf_static"].filter(Boolean);
 }
 
+/**
+ * 根据当前配置同步 ROS 话题订阅。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function syncSubscriptions() {
   const active = new Set(activeTopicNames());
   for (const name of selection.keys()) if (!active.has(name)) unsubscribe(name);
   for (const name of active) subscribe(name);
 }
 
+/**
+ * 保存指定类别当前选择的话题。
+ * @param {*} key - 话题配置项或字段的键。
+ * @param {*} value - 需要转换或显示的输入值。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function setSelectedTopic(key, value) {
   const previous = latest.get(`selected-${key}`);
   if (previous === value) return;
@@ -257,6 +349,10 @@ function setSelectedTopic(key, value) {
   updateStatusPanel();
 }
 
+/**
+ * 断开 WebSocket 并清理连接状态。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function disconnect() {
   clearTimeout(reconnectTimer); clearTimeout(wsConnectTimer);
   reconnectTimer = null;
@@ -269,6 +365,11 @@ function disconnect() {
   pendingSensors.clear();
 }
 
+/**
+ * 处理 WebSocket 关闭事件并更新界面状态。
+ * @param {*} event - 浏览器派发的连接或输入事件。
+ * @returns {*} 处理 WebSocket 关闭事件并更新界面状态得到的数据或处理结果。
+ */
 function connectionClosed(event = {}) {
   disconnect();
   setConnection(false, event.code === 4401 ? "Core token 无效" : "ROS 连接中断");
@@ -278,10 +379,18 @@ function connectionClosed(event = {}) {
   reconnectDelay = Math.min(10000, reconnectDelay * 1.7);
 }
 
+/**
+ * 建立经过令牌授权的 WebSocket 连接。
+ * @returns {*} 建立经过令牌授权的 WebSocket 连接得到的数据或处理结果。
+ */
 function connect() {
   disconnect();
   if (document.hidden || pageLeaving) return;
   const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+  /**
+ * 处理open。
+ * @returns {*} 处理open得到的数据或处理结果。
+ */
   const open = () => new WebSocket(`${scheme}//${location.host}${apiUrl}/ws`, ["en-core-viz-v1", `bearer.${token}`]);
   ws = open(); sensorWs = open();
   wsConnectTimer = window.setTimeout(() => {
@@ -332,10 +441,25 @@ if (decoderWorker) {
   };
 }
 
+/**
+ * 向数据解码工作线程发送当前配置。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function configureWorker() { decoderWorker?.postMessage({ op: "configure", maxPoints, depthRange }); }
 
+/**
+ * 将 ROS 时间戳转换为秒数。
+ * @param {*} stamp - 供本函数将 ROS 时间戳转换为秒数使用的输入值。
+ * @returns {*} 将 ROS 时间戳转换为秒数得到的数据或处理结果。
+ */
 function stampSeconds(stamp = {}) { return Number(stamp.sec || 0) + Number(stamp.nanosec || 0) / 1e9; }
 
+/**
+ * 将动态或静态 TF 消息写入变换缓存。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @param {*} isStatic - 供本函数将动态或静态 TF 消息写入变换缓存使用的输入值。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function updateTf(message, isStatic) {
   const transforms = message.transforms || [];
   for (const entry of transforms) {
@@ -365,6 +489,10 @@ function updateTf(message, isStatic) {
   requestRender();
 }
 
+/**
+ * 刷新暂停状态下保留的可视化图层。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function refreshPausedLayers() {
   for (const layer of [...pausedLayers]) {
     if (layer === "scan") {
@@ -380,6 +508,11 @@ function refreshPausedLayers() {
   }
 }
 
+/**
+ * 筛选指定时间可用的 TF 变换边。
+ * @param {*} stampSec - 数据对应的 ROS 时间戳（秒）。
+ * @returns {*} 筛选指定时间可用的 TF 变换边得到的数据或处理结果。
+ */
 function transformEdges(stampSec) {
   const result = [...staticTf.values()];
   for (const values of dynamicTf.values()) {
@@ -393,6 +526,13 @@ function transformEdges(stampSec) {
   return result;
 }
 
+/**
+ * 查找两个坐标系之间的时序变换。
+ * @param {*} targetFrame - 查询或显示使用的目标坐标系。
+ * @param {*} sourceFrame - 查询变换时使用的源坐标系。
+ * @param {*} stampSec - 数据对应的 ROS 时间戳（秒）。
+ * @returns {*} 查找两个坐标系之间的时序变换得到的数据或处理结果。
+ */
 function lookupTransform(targetFrame, sourceFrame, stampSec = lastClock || Number.POSITIVE_INFINITY) {
   const key = `${targetFrame}\u0000${stampSec}`;
   if (!transformCache.has(key)) {
@@ -402,6 +542,10 @@ function lookupTransform(targetFrame, sourceFrame, stampSec = lastClock || Numbe
   return transformCache.get(key).get(sourceFrame.replace(/^\//, "")) || null;
 }
 
+/**
+ * 根据当前 TF 缓存更新坐标系选项。
+ * @returns {*} 根据当前 TF 缓存更新坐标系选项得到的数据或处理结果。
+ */
 function refreshFrameOptions() {
   const current = $("fixed-frame").value;
   const frames = new Set(observedSensorFrames);
@@ -418,6 +562,11 @@ function refreshFrameOptions() {
   $("frame-label").textContent = `固定坐标系：${$("fixed-frame").value}`;
 }
 
+/**
+ * 记录传感器消息使用的坐标系。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function rememberSensorFrame(message) {
   const frame = String(message.header?.frame_id || "").replace(/^\//, "");
   if (frame && !observedSensorFrames.has(frame)) {
@@ -427,6 +576,11 @@ function rememberSensorFrame(message) {
   return frame;
 }
 
+/**
+ * 获取或创建坐标系的轴向辅助对象。
+ * @param {*} frame - 坐标系名称或对应消息字段。
+ * @returns {*} 获取或创建坐标系的轴向辅助对象得到的数据或处理结果。
+ */
 function frameAxis(frame) {
   if (!rootAxes.has(frame)) {
     const helper = new THREE.AxesHelper(0.15);
@@ -435,6 +589,10 @@ function frameAxis(frame) {
   return rootAxes.get(frame);
 }
 
+/**
+ * 更新场景中的坐标系轴向标记。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function updateFrameAxes() {
   if (!$('tf-toggle').checked) { frameGroup.visible = false; return; }
   frameGroup.visible = true;
@@ -450,6 +608,10 @@ function updateFrameAxes() {
   for (const [frame, helper] of rootAxes) if (!frames.has(frame)) helper.visible = false;
 }
 
+/**
+ * 根据 TF 数据更新机器人模型位姿。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function updateModelPose() {
   if (!currentModel || !modelRootLink) return;
   const pose = lookupTransform($("fixed-frame").value, modelRootLink);
@@ -463,6 +625,11 @@ function updateModelPose() {
   $("model-state").textContent = `模型已加载 · 根链接 ${modelRootLink}`;
 }
 
+/**
+ * 解析 URDF 并加载机器人模型。
+ * @param {*} xml - URDF XML 文本。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function loadRobotDescription(xml) {
   if (xml === modelDescription) return;
   try {
@@ -489,6 +656,10 @@ function loadRobotDescription(xml) {
   }
 }
 
+/**
+ * 清除当前机器人模型和相关资源。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function clearModel() {
   if (currentModel) currentModel.traverse((object) => {
     object.geometry?.dispose();
@@ -503,6 +674,11 @@ function clearModel() {
   requestRender();
 }
 
+/**
+ * 将二进制 Blob 转换为 data URL。
+ * @param {*} blob - 需要转换为 URL 的二进制 Blob。
+ * @returns {*} 将二进制 Blob 转换为 data URL得到的数据或处理结果。
+ */
 function blobDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -512,6 +688,13 @@ function blobDataUrl(blob) {
   });
 }
 
+/**
+ * 通过授权接口加载机器人网格资源。
+ * @param {*} path - 接口请求路径。
+ * @param {*} manager - 用于跟踪网格资源的加载管理器。
+ * @param {*} done - 网格资源加载完成后的回调函数。
+ * @returns {Promise<*>} 异步通过授权接口加载机器人网格资源的结果。
+ */
 async function loadAuthorizedMesh(path, manager, done) {
   try {
     const url = new URL(path, location.href);
@@ -560,6 +743,11 @@ async function loadAuthorizedMesh(path, manager, done) {
   }
 }
 
+/**
+ * 根据关节状态消息更新机器人模型。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function updateJoints(message) {
   if (!currentModel) return;
   const positions = Object.fromEntries((message.name || []).map((name, index) => [name, message.position?.[index]]));
@@ -568,8 +756,21 @@ function updateJoints(message) {
   if (changed) requestRender();
 }
 
+/**
+ * 从 ROS 消息中读取时间戳（秒）。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @returns {*} 从 ROS 消息中读取时间戳（秒）得到的数据或处理结果。
+ */
 function stampFromMessage(message) { return stampSeconds(message.header?.stamp) || lastClock || Number.POSITIVE_INFINITY; }
 
+/**
+ * 替换指定类别的点云图层内容。
+ * @param {*} buffers - 点云顶点及其数量缓冲区。
+ * @param {*} frame - 坐标系名称或对应消息字段。
+ * @param {*} stampSec - 数据对应的 ROS 时间戳（秒）。
+ * @param {*} kind - 图层或传感器数据类别。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function replaceCloud(buffers, frame, stampSec, kind) {
   if (!buffers || !buffers.count) {
     removeGeometry(kind);
@@ -598,11 +799,23 @@ function replaceCloud(buffers, frame, stampSec, kind) {
   requestRender();
 }
 
+/**
+ * 处理点云消息并更新对应可视化图层。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @param {*} kind - 图层或传感器数据类别。
+ * @param {*} buffers - 点云顶点及其数量缓冲区。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function handleCloud(message, kind, buffers = pointCloudBuffers(message, maxPoints)) {
   rememberSensorFrame(message);
   replaceCloud(buffers, message.header?.frame_id || "", stampFromMessage(message), kind);
 }
 
+/**
+ * 处理 LaserScan 消息并更新扫描图层。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function handleScan(message) {
   rememberSensorFrame(message);
   const fixed = $("fixed-frame").value, stamp = stampFromMessage(message);
@@ -630,6 +843,14 @@ function handleScan(message) {
   requestRender();
 }
 
+/**
+ * 将图像消息绘制到指定画布。
+ * @param {*} canvas - 用于显示图像的 HTML 画布。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @param {*} stateId - 要更新的图像或状态类别标识符。
+ * @param {*} converted - 预先转换好的像素数据。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function showImage(canvas, message, stateId, converted = imagePixels(message, depthRange)) {
   if (!converted) { $(stateId).textContent = `不支持 ${message.encoding || "未知编码"}`; return; }
   if (canvas.width !== converted.width) canvas.width = converted.width;
@@ -638,6 +859,12 @@ function showImage(canvas, message, stateId, converted = imagePixels(message, de
   $(stateId).textContent = `${converted.width} × ${converted.height}`;
 }
 
+/**
+ * 根据 ROS 消息类型分发传感器数据处理。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @param {*} prepared - 工作线程预先处理好的消息数据。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function handleRosMessage(message, prepared = null) {
   if (message.op === "core_error") { $("scene-message").textContent = message.error || "ROS subscription error"; return; }
   if (message.op !== "publish") return;
@@ -656,6 +883,10 @@ function handleRosMessage(message, prepared = null) {
   if (topic !== "/tf" && topic !== "/tf_static") $("empty-state").hidden = true;
 }
 
+/**
+ * 刷新已缓存的传感器消息。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function flushSensors() {
   for (const topic of pendingSensors) {
     const message = latest.get(topic), prepared = preparedData.get(topic) || undefined;
@@ -669,6 +900,10 @@ function flushSensors() {
   pendingSensors.clear();
 }
 
+/**
+ * 更新机器人状态面板内容。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function updateStatusPanel() {
   const active = [...selection.keys()];
   const rows = active.map((name) => {
@@ -681,6 +916,10 @@ function updateStatusPanel() {
   $("data-status").innerHTML = rows.join("") || "<p>请选择需要查看的 ROS 话题。</p>";
 }
 
+/**
+ * 刷新传感器数据图层。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function refreshSensorLayers() {
   const lidarCloud = latest.get(topicSelectors.cloud.value);
   const cameraCloud = latest.get(topicSelectors.cameraCloud.value);
@@ -690,14 +929,30 @@ function refreshSensorLayers() {
   if (scan) handleScan(scan);
 }
 
+/**
+ * 转义文本中的 HTML 特殊字符。
+ * @param {*} value - 需要转换或显示的输入值。
+ * @returns {*} 转义文本中的 HTML 特殊字符得到的数据或处理结果。
+ */
 function escapeHtml(value) { return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]); }
 
+/**
+ * 设置场景图层的显示状态。
+ * @param {*} kind - 图层或传感器数据类别。
+ * @param {*} visible - 图层是否显示。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function setVisible(kind, visible) {
   const object = geometryObjects.get(kind);
   if (object) object.visible = visible;
   requestRender();
 }
 
+/**
+ * 从场景中移除指定几何对象。
+ * @param {*} kind - 图层或传感器数据类别。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function removeGeometry(kind) {
   const object = geometryObjects.get(kind);
   if (object) {
@@ -710,6 +965,12 @@ function removeGeometry(kind) {
   requestRender();
 }
 
+/**
+ * 设置点云图层的数据过期状态。
+ * @param {*} object - 需要更新的三维场景对象。
+ * @param {*} stale - 点云数据是否已过期。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function setPointLayerStale(object, stale) {
   if (!object || object.userData.stale === stale) return;
   object.userData.stale = stale;
@@ -720,6 +981,11 @@ function setPointLayerStale(object, stale) {
   requestRender();
 }
 
+/**
+ * 更新动画状态并渲染当前帧。
+ * @param {*} timestamp - 浏览器动画帧的时间戳。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 function animate(timestamp) {
   renderFrameId = 0;
   if (document.hidden || pageLeaving) return;
@@ -734,6 +1000,10 @@ function animate(timestamp) {
   renderer?.render(scene, camera);
 }
 
+/**
+ * 读取最新状态并刷新三维场景。
+ * @returns {Promise<*>} 异步读取最新状态并刷新三维场景的结果。
+ */
 async function refresh() {
   if (document.hidden || pageLeaving) return;
   try {
@@ -745,6 +1015,11 @@ async function refresh() {
     latest.set("presets", info.presets || []);
     if (!presetTouched && $("preset-select").value !== "gazebo_arachne" && topics.some((topic) => topic.name.startsWith("/sim/arachne/"))) {
       $("preset-select").value = "gazebo_arachne";
+      /**
+ * 处理simulationPreset。
+ * @param {*} info.presets || [] - 供本函数处理simulationPreset使用的输入值。
+ * @returns {*} 处理simulationPreset得到的数据或处理结果。
+ */
       const simulationPreset = (info.presets || []).find((item) => item.id === "gazebo_arachne");
       $("fixed-frame").value = fixedFrameFor(simulationPreset);
       $("frame-label").textContent = `固定坐标系：${$("fixed-frame").value}`;
@@ -754,6 +1029,11 @@ async function refresh() {
       $("scene-message").textContent = info.error || "rosbridge 不可用";
       setConnection(false, "可视化不可用");
     }
+    /**
+ * 处理preset。
+ * @param {*} info.presets || [] - 供本函数处理preset使用的输入值。
+ * @returns {*} 处理preset得到的数据或处理结果。
+ */
     const preset = (info.presets || []).find((item) => item.id === $("preset-select").value);
     populateTopics(preset);
     if (!$("fixed-frame").value) $("fixed-frame").value = fixedFrameFor(preset);

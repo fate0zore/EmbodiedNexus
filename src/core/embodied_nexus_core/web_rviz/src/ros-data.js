@@ -2,6 +2,14 @@ import * as THREE from "three";
 
 const FIELD_SIZE = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 4, 6: 4, 7: 4, 8: 8 };
 
+/**
+ * 按 ROS PointField 元数据从二进制视图读取字段值。
+ * @param {*} view - 用于读取消息字段的二进制 DataView。
+ * @param {*} offset - 字段在二进制缓冲区中的字节偏移量。
+ * @param {*} datatype - ROS PointField 字段的数据类型编号。
+ * @param {*} littleEndian - 指示多字节字段是否采用小端序。
+ * @returns {*} 按 ROS PointField 元数据从二进制视图读取字段值得到的数据或处理结果。
+ */
 function readField(view, offset, datatype, littleEndian) {
   switch (datatype) {
     case 1: return view.getInt8(offset);
@@ -16,6 +24,12 @@ function readField(view, offset, datatype, littleEndian) {
   }
 }
 
+/**
+ * 将 ROS 点云消息转换为三维渲染缓冲区。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @param {*} maximum - 允许保留或处理的最大点数。
+ * @returns {*} 将 ROS 点云消息转换为三维渲染缓冲区得到的数据或处理结果。
+ */
 export function pointCloudBuffers(message, maximum = 100000) {
   const fields = Object.fromEntries((message.fields || []).map((field) => [field.name, field]));
   if (!["x", "y", "z"].every((name) => fields[name] && FIELD_SIZE[fields[name].datatype])) return null;
@@ -50,12 +64,25 @@ export function pointCloudBuffers(message, maximum = 100000) {
   return { positions: positions.subarray(0, output * 3), colors: colors.subarray(0, output * 3), count: output };
 }
 
+/**
+ * 根据图像编码读取指定颜色通道。
+ * @param {*} data - 待解析、转换或发送的数据。
+ * @param {*} index - 颜色通道或字段索引。
+ * @param {*} encoding - ROS 图像编码名称。
+ * @returns {*} 根据图像编码读取指定颜色通道得到的数据或处理结果。
+ */
 function imageChannel(data, index, encoding) {
   if (encoding === "bgr8") return data[index + 2];
   if (encoding === "bgra8") return data[index + 2];
   return data[index];
 }
 
+/**
+ * 将 ROS 图像消息解码为可显示的像素数据。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @param {*} depthMax - 深度图像映射到显示强度的最大深度值。
+ * @returns {*} 将 ROS 图像消息解码为可显示的像素数据得到的数据或处理结果。
+ */
 export function imagePixels(message, depthMax = 6) {
   const width = Number(message.width), height = Number(message.height);
   const encoding = String(message.encoding || "").toLowerCase();
@@ -84,6 +111,11 @@ export function imagePixels(message, depthMax = 6) {
       let value = isFloat ? view.getFloat32(src, !message.is_bigendian) : view.getUint16(src, !message.is_bigendian) / 1000;
       if (!Number.isFinite(value) || value < minimum || value > maximum) value = 0;
       const t = value ? 1 - (value - minimum) / span : 0;
+      /**
+ * 处理dst。
+ * @param {*} row * width + col - 供本函数处理dst使用的输入值。
+ * @returns {*} 处理dst得到的数据或处理结果。
+ */
       const dst = (row * width + col) * 4;
       rgba[dst] = Math.round(255 * Math.min(1, 1.5 * t));
       rgba[dst + 1] = Math.round(255 * Math.max(0, 1 - Math.abs(t - 0.5) * 2));
@@ -93,6 +125,15 @@ export function imagePixels(message, depthMax = 6) {
   return { width, height, pixels: rgba };
 }
 
+/**
+ * 按时间戳从 TF 变换集合中选择有效变换。
+ * @param {*} transforms - 候选 TF 变换集合。
+ * @param {*} parent - 要追加信息的父 DOM 元素。
+ * @param {*} child - 变换的子坐标系名称。
+ * @param {*} stampSec - 数据对应的 ROS 时间戳（秒）。
+ * @param {*} maxAge - 变换允许的最大时间偏差，单位为秒。
+ * @returns {*} 按时间戳从 TF 变换集合中选择有效变换得到的数据或处理结果。
+ */
 export function selectTransform(transforms, parent, child, stampSec, maxAge = 1) {
   const matches = transforms.filter((item) => item.parent === parent && item.child === child && item.static);
   if (matches.length) return matches.at(-1);
@@ -101,6 +142,12 @@ export function selectTransform(transforms, parent, child, stampSec, maxAge = 1)
   return dynamic[0] && stampSec - dynamic[0].stamp <= maxAge ? dynamic[0] : null;
 }
 
+/**
+ * 从 TF 边集合构建坐标系位姿。
+ * @param {*} edges - 坐标系之间的 TF 变换边集合。
+ * @param {*} targetFrame - 查询或显示使用的目标坐标系。
+ * @returns {*} 从 TF 边集合构建坐标系位姿得到的数据或处理结果。
+ */
 export function buildTfPoses(edges, targetFrame) {
   const target = targetFrame.replace(/^\//, "");
   const graph = new Map();
@@ -127,6 +174,13 @@ export function buildTfPoses(edges, targetFrame) {
   return poses;
 }
 
+/**
+ * 查找源坐标系到目标坐标系的变换矩阵。
+ * @param {*} edges - 坐标系之间的 TF 变换边集合。
+ * @param {*} targetFrame - 查询或显示使用的目标坐标系。
+ * @param {*} sourceFrame - 查询变换时使用的源坐标系。
+ * @returns {*} 查找源坐标系到目标坐标系的变换矩阵得到的数据或处理结果。
+ */
 export function lookupTfMatrix(edges, targetFrame, sourceFrame) {
   return buildTfPoses(edges, targetFrame).get(sourceFrame.replace(/^\//, "")) || null;
 }

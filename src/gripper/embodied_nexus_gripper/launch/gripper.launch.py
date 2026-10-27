@@ -8,6 +8,14 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    """生成 ROS launch 启动描述。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     config_file = LaunchConfiguration("config_file")
     interface_mode = LaunchConfiguration("interface_mode")
     config_file = LaunchConfiguration("config_file")

@@ -39,6 +39,14 @@ PREFIX = "/embodied_nexus/lidars/lidar_main"
 
 class HardwareCheck:
     def __init__(self, node: Node):
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            node: 提供 ROS 参数、服务或话题接口的节点实例。 类型为 Node。
+
+        Returns:
+            无返回值。
+        """
         self.node = node
         self.clients = {
             "state": node.create_client(GetLidarState, f"{PREFIX}/get_state"),
@@ -61,9 +69,25 @@ class HardwareCheck:
         self.last_renew = 0.0
 
     def _on_cloud(self, message: PointCloud2) -> None:
+        """处理点云事件。
+
+        Args:
+            message: 待处理的消息对象。 类型为 PointCloud2。
+
+        Returns:
+            无返回值。
+        """
         self.cloud_samples.append((time.monotonic(), len(message.data)))
 
     def _on_difop(self, message: LslidarPacket) -> None:
+        """接收并记录雷达设备配置数据包。
+
+        Args:
+            message: 待处理的消息对象。 类型为 LslidarPacket。
+
+        Returns:
+            无返回值。
+        """
         self.difop_count += 1
         packet = bytes(message.data)
         try:
@@ -76,6 +100,16 @@ class HardwareCheck:
                                "decode_error": str(exc)}
 
     def call(self, key, request, timeout=5.0):
+        """调用当前设备或操作。
+
+        Args:
+            key: 按键，作为调用当前设备或操作所需的输入。
+            request: 封装调用输入字段的请求对象。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         client = self.clients[key]
         if not client.wait_for_service(timeout_sec=min(timeout, 2.0)):
             raise TimeoutError(f"lidar {key} service is unavailable")
@@ -91,12 +125,29 @@ class HardwareCheck:
         return response
 
     def state(self) -> dict:
+        """获取设备当前状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         response = self.call("state", GetLidarState.Request())
         if not response.success:
             raise RuntimeError(response.error)
         return json.loads(response.state_json)
 
     def motor(self, enabled: bool, *, lease=False) -> dict:
+        """启停雷达电机并返回服务结果。
+
+        Args:
+            enabled: 表示对应功能是否启用的布尔值。 类型为 bool。
+            lease: 设备控制租约对象。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = SetLidarMotor.Request()
         request.lease_id = self.lease_id if lease else ""
         request.enabled = enabled
@@ -107,6 +158,14 @@ class HardwareCheck:
         return result
 
     def renew_if_due(self) -> None:
+        """控制租约到期前续租。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if not self.lease_id or time.monotonic() - self.last_renew < 0.5:
             return
         request = RenewLidarControl.Request()
@@ -117,6 +176,14 @@ class HardwareCheck:
         self.last_renew = time.monotonic()
 
     def acquire(self) -> None:
+        """申请设备控制权。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         request = AcquireLidarControl.Request()
         request.owner = "c16-short-hardware-acceptance"
         request.ttl_sec = 2.0
@@ -127,6 +194,14 @@ class HardwareCheck:
         self.last_renew = time.monotonic()
 
     def set_speed(self, speed_hz: int) -> dict:
+        """设置速度。
+
+        Args:
+            speed_hz: 目标雷达转速，单位为 Hz。 类型为 int。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = SetLidarMotorSpeed.Request()
         request.lease_id = self.lease_id
         request.speed_hz = speed_hz
@@ -139,6 +214,15 @@ class HardwareCheck:
                 "error": response.error}
 
     def wait_for_speed(self, speed_hz: int, timeout=4.0) -> dict:
+        """等待雷达达到目标转速或超时。
+
+        Args:
+            speed_hz: 目标雷达转速，单位为 Hz。 类型为 int。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         deadline = time.monotonic() + timeout
         last = {}
         while time.monotonic() < deadline:
@@ -150,6 +234,14 @@ class HardwareCheck:
         raise TimeoutError(f"DIFOP readback did not confirm {speed_hz} Hz; last state={last}")
 
     def sample(self, seconds: float) -> dict:
+        """采集指定时长内的雷达状态样本。
+
+        Args:
+            seconds: 采集或等待的时长，单位为秒。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         start_time = time.monotonic()
         start_count = len(self.cloud_samples)
         deadline = start_time + seconds
@@ -173,6 +265,14 @@ class HardwareCheck:
         }
 
     def release(self) -> dict | None:
+        """释放当前设备控制租约。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict | None。
+        """
         if not self.lease_id:
             return None
         request = ReleaseLidarControl.Request()
@@ -184,6 +284,14 @@ class HardwareCheck:
 
 
 def main() -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--enable-motor-test", action="store_true",
                         help="enable the explicitly authorized short motor test")

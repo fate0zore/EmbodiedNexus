@@ -17,18 +17,83 @@ class ArmBackend(Protocol):
 
     connected: bool
 
-    def open(self) -> None: ...
-    def close(self) -> None: ...
-    def poll(self) -> dict[str, Any]: ...
-    def execute(self, method: str, params: list[Any] | None = None) -> Any: ...
-    def read_optional(self, suffix: str) -> Any: ...
-    def stop(self) -> bool: ...
+    def open(self) -> None:
+        """打开设备连接或目标资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
+        ...
+    def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
+        ...
+    def poll(self) -> dict[str, Any]:
+        """轮询当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
+        ...
+    def execute(self, method: str, params: list[Any] | None = None) -> Any:
+        """执行当前设备或操作。
+
+        Args:
+            method: HTTP 请求方法，例如 GET 或 POST。 类型为 str。
+            params: params，作为执行当前设备或操作所需的输入。 类型为 list[Any] | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Any。
+        """
+        ...
+    def read_optional(self, suffix: str) -> Any:
+        """读取可选项。
+
+        Args:
+            suffix: suffix，作为读取可选项所需的输入。 类型为 str。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 Any。
+        """
+        ...
+    def stop(self) -> bool:
+        """停止设备当前动作。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示停止设备当前动作是否成功或成立。
+        """
+        ...
 
 
 class AuboJsonRpc:
     """Synchronous Aubo JSON-RPC client that frames fragmented TCP responses."""
 
     def __init__(self, host: str, port: int, timeout: float) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            host: 目标主机名称或 IP 地址。 类型为 str。
+            port: 网络服务使用的端口号。 类型为 int。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         self.host, self.port, self.timeout = host, int(port), float(timeout)
         self.robot_name = "rob1"
         self._socket: socket.socket | None = None
@@ -39,6 +104,14 @@ class AuboJsonRpc:
         self._lock = threading.RLock()
 
     def connect(self) -> None:
+        """连接当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.close()
         self._socket = socket.create_connection((self.host, self.port), timeout=self.timeout)
         self._socket.settimeout(self.timeout)
@@ -47,6 +120,14 @@ class AuboJsonRpc:
             self.robot_name = str(names[0])
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         sock, self._socket = self._socket, None
         self._buffer = ""
         self._text_decoder.reset()
@@ -54,6 +135,15 @@ class AuboJsonRpc:
             sock.close()
 
     def call(self, method: str, params: list[Any] | None = None) -> Any:
+        """调用当前设备或操作。
+
+        Args:
+            method: HTTP 请求方法，例如 GET 或 POST。 类型为 str。
+            params: params，作为调用当前设备或操作所需的输入。 类型为 list[Any] | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Any。
+        """
         with self._lock:
             if self._socket is None:
                 raise ConnectionError("Aubo RPC is disconnected")
@@ -73,9 +163,26 @@ class AuboJsonRpc:
             return response.get("result")
 
     def robot_call(self, suffix: str, params: list[Any] | None = None) -> Any:
+        """通过机器人 RPC 接口调用指定方法并返回响应。
+
+        Args:
+            suffix: suffix，作为执行 robot_call 对应的处理流程所需的输入。 类型为 str。
+            params: params，作为执行 robot_call 对应的处理流程所需的输入。 类型为 list[Any] | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Any。
+        """
         return self.call(f"{self.robot_name}.{suffix}", params)
 
     def _read_response(self, request_id: int) -> dict[str, Any]:
+        """读取响应。
+
+        Args:
+            request_id: 请求标识符，作为读取响应所需的输入。 类型为 int。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 dict[str, Any]。
+        """
         deadline = time.monotonic() + self.timeout
         while True:
             stripped = self._buffer.lstrip()
@@ -103,6 +210,14 @@ class AuboJsonRpc:
 
 class MockBackend:
     def __init__(self, config: dict[str, Any]) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+
+        Returns:
+            无返回值。
+        """
         self.config = config
         self.connected = True
         self.enabled = False
@@ -118,13 +233,37 @@ class MockBackend:
         self.command_log: list[tuple[str, list[Any]]] = []
 
     def open(self) -> None:
+        """打开设备连接或目标资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         return
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.stop()
         self.connected = False
 
     def poll(self) -> dict[str, Any]:
+        """轮询当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         if self.config["mock"]["disconnect"]:
             self.connected = False
             raise ConnectionError("mock Aubo backend is disconnected")
@@ -149,6 +288,15 @@ class MockBackend:
                 "payload": None, "tcp_offset": None, "hardware_estop": self.safety.lower() in {"protectivestop", "emergency"}}
 
     def execute(self, method: str, params: list[Any] | None = None) -> Any:
+        """执行当前设备或操作。
+
+        Args:
+            method: HTTP 请求方法，例如 GET 或 POST。 类型为 str。
+            params: params，作为执行当前设备或操作所需的输入。 类型为 list[Any] | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Any。
+        """
         params = params or []
         self.command_log.append((method, list(params)))
         if self.config["mock"]["fail_command"] and method not in {"MotionControl.stopJoint"}:
@@ -207,9 +355,25 @@ class MockBackend:
         return 0
 
     def read_optional(self, _suffix: str) -> Any:
+        """读取可选项。
+
+        Args:
+            _suffix: suffix，作为读取可选项所需的输入。 类型为 str。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 Any。
+        """
         return None
 
     def stop(self) -> bool:
+        """停止设备当前动作。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示停止设备当前动作是否成功或成立。
+        """
         try:
             self.execute("MotionControl.stopJoint", [self.config["motion"]["stop_acceleration_rad_sec2"]])
             return True
@@ -223,6 +387,14 @@ class AuboBackend:
     TEACH_FILE = Path("/tmp/arachne_aubo_teach_mode")
 
     def __init__(self, config: dict[str, Any]) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+
+        Returns:
+            无返回值。
+        """
         self.config = config
         rpc = config["rpc"]
         self.rpc = AuboJsonRpc(rpc["host"], rpc["port"], rpc["timeout_sec"])
@@ -234,6 +406,14 @@ class AuboBackend:
         self.last_error = ""
 
     def _check_existing_owner(self) -> None:
+        """检查existingowner。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         proc = Path("/proc")
         if proc.is_dir():
             for entry in proc.iterdir():
@@ -249,6 +429,14 @@ class AuboBackend:
             raise RuntimeError("Arachne Aubo control marker exists; refusing to connect")
 
     def open(self) -> None:
+        """打开设备连接或目标资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._check_existing_owner()
         self.rpc.connect()
         self.connected = True
@@ -264,10 +452,26 @@ class AuboBackend:
         self.tcp_offset = self.read_optional("RobotConfig.getTcpOffset")
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.rpc.close()
         self.connected = False
 
     def poll(self) -> dict[str, Any]:
+        """轮询当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         if not self.connected:
             self.open()
         try:
@@ -288,6 +492,14 @@ class AuboBackend:
             raise
 
     def _read_teach_status(self) -> Any:
+        """读取示教状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 Any。
+        """
         method = self.config["teach"]["method"]
         suffix = {"freedrive": "RobotManage.isFreedriveEnabled",
                   "backdrive": "RobotManage.isBackdriveEnabled",
@@ -298,17 +510,42 @@ class AuboBackend:
             return f"unknown: {exc}"
 
     def execute(self, method: str, params: list[Any] | None = None) -> Any:
+        """执行当前设备或操作。
+
+        Args:
+            method: HTTP 请求方法，例如 GET 或 POST。 类型为 str。
+            params: params，作为执行当前设备或操作所需的输入。 类型为 list[Any] | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Any。
+        """
         if not self.connected:
             raise ConnectionError("Aubo RPC is disconnected")
         return self.rpc.robot_call(method, params)
 
     def read_optional(self, suffix: str) -> Any:
+        """读取可选项。
+
+        Args:
+            suffix: suffix，作为读取可选项所需的输入。 类型为 str。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 Any。
+        """
         try:
             return self.rpc.robot_call(suffix)
         except Exception:
             return None
 
     def stop(self) -> bool:
+        """停止设备当前动作。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示停止设备当前动作是否成功或成立。
+        """
         try:
             result = self.execute("MotionControl.stopJoint", [self.config["motion"]["stop_acceleration_rad_sec2"]])
             return result in (0, None)
@@ -318,6 +555,14 @@ class AuboBackend:
 
 
 def _six(values: Any) -> list[float]:
+    """校验并规范化六元素关节向量。
+
+    Args:
+        values: 要应用、比较或转换的一组输入值。 类型为 Any。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 list[float]。
+    """
     if not isinstance(values, (list, tuple)) or len(values) != 6:
         raise ValueError("Aubo returned an invalid six-joint vector")
     result = [float(value) for value in values]
@@ -327,6 +572,14 @@ def _six(values: Any) -> list[float]:
 
 
 def create_backend(config: dict[str, Any]):
+    """创建后端。
+
+    Args:
+        config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+
+    Returns:
+        构造或创建完成的对象或资源。
+    """
     if config["backend"] == "mock":
         return MockBackend(config)
     if config["backend"] == "aubo_jsonrpc":

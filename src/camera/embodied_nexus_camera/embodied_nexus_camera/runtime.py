@@ -17,6 +17,15 @@ from .web_server import CameraHub
 
 class CameraRuntime:
     def __init__(self, config: dict[str, Any], log) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+            log: log，作为初始化对象并保存构造参数或依赖所需的输入。
+
+        Returns:
+            无返回值。
+        """
         self.config = config
         self._log = log
         self.hub = CameraHub(config["camera_id"], float(config["streams"]["frame_stale_sec"]))
@@ -48,16 +57,49 @@ class CameraRuntime:
                     self._sessions[session_dir.name] = session_dir
 
     def log(self, level: str, message: str) -> None:
+        """构造并输出夹爪运行日志。
+
+        Args:
+            level: level，作为执行 log 对应的处理流程所需的输入。 类型为 str。
+            message: 待处理的消息对象。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         self._log(level, message)
 
     def update_color(self, image) -> None:
+        """更新color。
+
+        Args:
+            image: 图像，作为更新color所需的输入。
+
+        Returns:
+            无返回值。
+        """
         with self._lock:
             self._color = image
 
     def public_config(self) -> dict[str, Any]:
+        """公开配置。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         return public_config(self.config)
 
     def apply_config(self, patch: dict[str, Any]) -> dict[str, Any]:
+        """应用配置。
+
+        Args:
+            patch: patch，作为应用配置所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             self.config = apply_runtime_patch(self.config, patch)
             self.config["config_version"] = int(self.config.get("config_version", 1)) + 1
@@ -65,10 +107,26 @@ class CameraRuntime:
             return self.public_config()
 
     def validate_config_patch(self, patch: dict[str, Any]) -> dict[str, Any]:
+        """验证配置patch。
+
+        Args:
+            patch: patch，作为验证配置patch所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            布尔值，表示验证配置patch是否成功或成立。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             return public_config(apply_runtime_patch(self.config, patch))
 
     def calibration_summary(self) -> dict[str, Any]:
+        """生成相机标定结果的摘要信息。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         cal = self.calibration
         return {
             "version": cal.version,
@@ -88,6 +146,14 @@ class CameraRuntime:
 
     @staticmethod
     def _model_summary(model) -> dict[str, Any] | None:
+        """生成相机模型参数的摘要信息。
+
+        Args:
+            model: model，作为执行 _model_summary 对应的处理流程所需的输入。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any] | None。
+        """
         if model is None:
             return None
         return {
@@ -99,6 +165,14 @@ class CameraRuntime:
         }
 
     def start_calibration(self, request: dict[str, Any]) -> dict[str, Any]:
+        """启动calibration。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 dict[str, Any]。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         profile = self.config["calibration_session"]
         board_path = str(request.get("board_image_path") or profile["board_image_path"]).strip()
         if not board_path or not Path(board_path).expanduser().is_file():
@@ -121,6 +195,14 @@ class CameraRuntime:
         return metadata
 
     def capture_calibration(self, session_id: str) -> dict[str, Any]:
+        """采集calibration。
+
+        Args:
+            session_id: 会话标识符，作为采集calibration所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             session_dir = self._sessions.get(session_id)
             color = self._color.copy() if self._color is not None else None
@@ -139,6 +221,15 @@ class CameraRuntime:
         )
 
     def delete_calibration_sample(self, session_id: str, filename: str) -> dict[str, Any]:
+        """删除calibration采集样本。
+
+        Args:
+            session_id: 会话标识符，作为删除calibration采集样本所需的输入。 类型为 str。
+            filename: filename，作为删除calibration采集样本所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         if not re.fullmatch(r"frame_\d{4,}\.png", filename):
             raise ValueError("sample filename must be a camera calibration PNG basename")
         with self._lock:
@@ -159,6 +250,14 @@ class CameraRuntime:
         return {"deleted": filename, "remaining_samples": len(kept)}
 
     def solve_calibration(self, session_id: str) -> dict[str, Any]:
+        """启动相机标定求解并返回任务结果。
+
+        Args:
+            session_id: 会话标识符，作为执行 solve_calibration 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             session_dir = self._sessions.get(session_id)
             if session_dir is None:
@@ -175,6 +274,15 @@ class CameraRuntime:
         return {"session_id": session_id, "state": "solving"}
 
     def _solve_worker(self, session_id: str, session_dir: Path) -> None:
+        """在后台线程中执行相机标定求解。
+
+        Args:
+            session_id: 会话标识符，作为执行 _solve_worker 对应的处理流程所需的输入。 类型为 str。
+            session_dir: 会话dir，作为执行 _solve_worker 对应的处理流程所需的输入。 类型为 Path。
+
+        Returns:
+            无返回值。
+        """
         try:
             metadata = json.loads((session_dir / "session.json").read_text(encoding="utf-8"))
             profile = self.config["calibration_session"]
@@ -208,15 +316,41 @@ class CameraRuntime:
                 self._solving.discard(session_id)
 
     def _update_solve_progress(self, session_id: str, done: int, total: int) -> None:
+        """更新solveprogress。
+
+        Args:
+            session_id: 会话标识符，作为更新solveprogress所需的输入。 类型为 str。
+            done: 操作完成后调用的回调函数。 类型为 int。
+            total: total，作为更新solveprogress所需的输入。 类型为 int。
+
+        Returns:
+            无返回值。
+        """
         with self._lock:
             status = self._solve_status.setdefault(session_id, {})
             status.update({"state": "solving", "processed_frames": int(done), "total_frames": int(total), "progress": float(done / total) if total else 0.0})
 
     def calibration_solve_status(self, session_id: str) -> dict[str, Any]:
+        """查询标定求解状态。
+
+        Args:
+            session_id: 会话标识符，作为执行 calibration_solve_status 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             return dict(self._solve_status.get(session_id, {"state": "unknown", "processed_frames": 0, "total_frames": 0, "progress": 0.0}))
 
     def cancel_calibration_solve(self, session_id: str) -> bool:
+        """取消calibrationsolve。
+
+        Args:
+            session_id: 会话标识符，作为取消calibrationsolve所需的输入。 类型为 str。
+
+        Returns:
+            布尔值，表示取消calibrationsolve是否成功或成立。
+        """
         with self._lock:
             event = self._solve_events.get(session_id)
             if event is None or session_id not in self._solving:
@@ -225,6 +359,14 @@ class CameraRuntime:
             return True
 
     def result_for_session(self, session_id: str) -> dict[str, Any] | None:
+        """结果的会话。
+
+        Args:
+            session_id: 会话标识符，作为结果的会话所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any] | None。
+        """
         with self._lock:
             session_dir = self._sessions.get(session_id)
         if session_dir is None:
@@ -233,10 +375,26 @@ class CameraRuntime:
         return json.loads(candidates[-1].read_text(encoding="utf-8")) if candidates else None
 
     def _active_profile_path(self) -> Path:
+        """返回当前选中仿真性能配置文件的路径。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Path。
+        """
         config = self.config["calibration"]
         return Path(config.get("custom_file") or (Path(config["history_file"]).parent / "active_calibration.json")).expanduser()
 
     def calibration_history(self) -> list[dict[str, Any]]:
+        """列出已保存的相机标定历史记录。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 list[dict[str, Any]]。
+        """
         path = self._active_profile_path()
         if not path.is_file():
             return []
@@ -247,6 +405,14 @@ class CameraRuntime:
             return []
 
     def get_calibration_result(self, result_id: str) -> dict[str, Any] | None:
+        """获取calibration结果。
+
+        Args:
+            result_id: 结果标识符，作为获取calibration结果所需的输入。 类型为 str。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 dict[str, Any] | None。
+        """
         with self._lock:
             result = self._results.get(result_id)
         if result is not None:
@@ -259,6 +425,14 @@ class CameraRuntime:
         return None
 
     def apply_calibration(self, result_id: str) -> dict[str, Any]:
+        """应用calibration。
+
+        Args:
+            result_id: 结果标识符，作为应用calibration所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         candidate = self.get_calibration_result(result_id)
         if candidate is None:
             raise ValueError("unknown calibration result")

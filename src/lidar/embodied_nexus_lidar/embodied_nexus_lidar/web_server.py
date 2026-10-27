@@ -22,14 +22,38 @@ from .geometry import ScanFrame, downsample_cloud
 
 
 def _json(value: Any) -> str:
+    """将输入值转换为可写入 JSON 的数据。
+
+    Args:
+        value: 要应用、比较或转换的输入值。 类型为 Any。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 str。
+    """
     return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
 
 
 def _scan_payload(scan: ScanFrame) -> bytes:
+    """扫描payload。
+
+    Args:
+        scan: 扫描，作为扫描payload所需的输入。 类型为 ScanFrame。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 bytes。
+    """
     return struct.pack("<" + "f" * (len(scan.ranges) + len(scan.intensities)), *(scan.ranges + scan.intensities))
 
 
 def _error(exc: Exception) -> JSONResponse:
+    """将异常转换为统一的 HTTP 错误响应。
+
+    Args:
+        exc: 捕获到的异常对象。 类型为 Exception。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 JSONResponse。
+    """
     if isinstance(exc, KeyError):
         status = 404
     elif isinstance(exc, PermissionError):
@@ -46,14 +70,39 @@ def _error(exc: Exception) -> JSONResponse:
 
 
 def create_app(gateway: Any, token: str) -> Starlette:
+    """创建app。
+
+    Args:
+        gateway: gateway，作为创建app所需的输入。 类型为 Any。
+        token: 用于身份验证的访问令牌。 类型为 str。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 Starlette。
+    """
     if not token or not re.fullmatch(r"[A-Za-z0-9._~-]+", token):
         raise RuntimeError("Web mode requires a URL-safe token from the configured environment variable")
     base = f"/api/v1/lidars/{gateway.device_id}"
 
     def authorized(request: Request) -> bool:
+        """授权当前设备或操作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            布尔值，表示授权当前设备或操作是否成功或成立。
+        """
         return hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {token}")
 
     async def body_object(request: Request) -> dict[str, Any]:
+        """请求体对象。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         if int(request.headers.get("content-length", "0") or 0) > 1024 * 1024:
             raise ValueError("request body exceeds 1 MiB")
         value = await request.json()
@@ -62,6 +111,16 @@ def create_app(gateway: Any, token: str) -> Starlette:
         return value
 
     async def handle(request: Request, fn, *args):
+        """处理当前设备或操作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+            fn: fn，作为处理当前设备或操作所需的输入。
+            *args: 额外的位置参数集合。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if not authorized(request):
             return JSONResponse({"error": "unauthorized"}, status_code=401,
                                 headers={"WWW-Authenticate": "Bearer", "Cache-Control": "no-store"})
@@ -73,27 +132,75 @@ def create_app(gateway: Any, token: str) -> Starlette:
             return _error(exc)
 
     async def info(request: Request):
+        """获取设备能力与静态信息。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return await handle(request, gateway.info)
 
     async def status(request: Request):
+        """获取服务当前运行状态。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return await handle(request, gateway.status)
 
     async def config(request: Request):
+        """获取当前配置。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return await handle(request, gateway.get_config)
 
     async def validate_config(request: Request):
+        """验证配置。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。
+        """
         try:
             return await handle(request, gateway.validate_config, await body_object(request))
         except Exception as exc:
             return _error(exc)
 
     async def apply_config(request: Request):
+        """应用配置。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             return await handle(request, gateway.apply_config, await body_object(request))
         except Exception as exc:
             return _error(exc)
 
     async def capture(request: Request):
+        """采集当前设备或操作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             body = await body_object(request)
             capturing = body.get("capturing")
@@ -104,6 +211,14 @@ def create_app(gateway: Any, token: str) -> Starlette:
             return _error(exc)
 
     async def acquire(request: Request):
+        """申请设备控制权。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             body = await body_object(request)
             return await handle(request, gateway.acquire, body.get("owner", "python-client"), body.get("ttl_sec"))
@@ -111,6 +226,14 @@ def create_app(gateway: Any, token: str) -> Starlette:
             return _error(exc)
 
     async def renew(request: Request):
+        """续租当前设备控制权。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             body = await body_object(request)
             return await handle(request, gateway.renew, body.get("lease_id", ""))
@@ -118,6 +241,14 @@ def create_app(gateway: Any, token: str) -> Starlette:
             return _error(exc)
 
     async def release(request: Request):
+        """释放当前设备控制租约。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             body = await body_object(request)
             return await handle(request, gateway.release, body.get("lease_id", ""))
@@ -125,6 +256,14 @@ def create_app(gateway: Any, token: str) -> Starlette:
             return _error(exc)
 
     async def motor(request: Request):
+        """启停雷达电机并返回服务结果。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             body = await body_object(request)
             enabled = body.get("enabled")
@@ -135,6 +274,14 @@ def create_app(gateway: Any, token: str) -> Starlette:
             return _error(exc)
 
     async def speed(request: Request):
+        """速度当前设备或操作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。 类型为 Request。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             body = await body_object(request)
             speed_hz = body.get("speed_hz")
@@ -148,6 +295,14 @@ def create_app(gateway: Any, token: str) -> Starlette:
         encoding = "text"
 
         async def on_connect(self, websocket: WebSocket) -> None:
+            """处理连接事件。
+
+            Args:
+                websocket: websocket，作为处理连接事件所需的输入。 类型为 WebSocket。
+
+            Returns:
+                无返回值。
+            """
             offered = [part.strip() for part in websocket.headers.get("sec-websocket-protocol", "").split(",")]
             valid = ("en-lidar-v1" in offered and
                      any(hmac.compare_digest(part, f"bearer.{token}") for part in offered))
@@ -161,14 +316,40 @@ def create_app(gateway: Any, token: str) -> Starlette:
             await websocket.accept(subprotocol="en-lidar-v1")
 
         async def on_disconnect(self, websocket: WebSocket, close_code: int) -> None:
+            """处理断开连接事件。
+
+            Args:
+                websocket: websocket，作为处理断开连接事件所需的输入。 类型为 WebSocket。
+                close_code: 关闭code，作为处理断开连接事件所需的输入。 类型为 int。
+
+            Returns:
+                无返回值。
+            """
             if getattr(self, "_registered", False):
                 gateway.release_client()
                 self._registered = False
 
         async def on_receive(self, websocket: WebSocket, data: str) -> None:
+            """处理接收事件。
+
+            Args:
+                websocket: websocket，作为处理接收事件所需的输入。 类型为 WebSocket。
+                data: 待处理的原始数据或消息载荷。 类型为 str。
+
+            Returns:
+                无返回值。
+            """
             await websocket.close(code=1003)
 
         async def dispatch(self) -> None:
+            """分发当前设备或操作。
+
+            Args:
+                无参数。
+
+            Returns:
+                无返回值。
+            """
             websocket = WebSocket(self.scope, receive=self.receive, send=self.send)
             await self.on_connect(websocket)
             if websocket.application_state.name != "CONNECTED":
@@ -269,15 +450,42 @@ def create_app(gateway: Any, token: str) -> Starlette:
 
 class LidarWebServer:
     def __init__(self, gateway: Any, host: str, port: int, token: str) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            gateway: gateway，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 Any。
+            host: 目标主机名称或 IP 地址。 类型为 str。
+            port: 网络服务使用的端口号。 类型为 int。
+            token: 用于身份验证的访问令牌。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         self.app = create_app(gateway, token)
         self.server = uvicorn.Server(uvicorn.Config(self.app, host=host, port=port,
                                                      log_level="warning", access_log=False))
         self.thread = threading.Thread(target=self.server.run, name="embodied-nexus-lidar-web", daemon=True)
 
     def start(self) -> None:
+        """启动设备或后台任务。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.thread.start()
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.server.should_exit = True
         if self.thread.is_alive():
             self.thread.join(timeout=5.0)

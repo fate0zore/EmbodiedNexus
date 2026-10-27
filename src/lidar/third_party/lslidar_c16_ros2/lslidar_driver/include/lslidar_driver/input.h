@@ -54,11 +54,27 @@ namespace lslidar_driver {
  */
     class Input {
     public:
+        /**
+         * @brief 初始化网络或抓包输入基类并读取 ROS 配置。
+         * @param private_nh 用于读取驱动参数的 ROS 节点。
+         * @param port 接收雷达数据的 UDP 端口。
+         * @param packet_size 单个数据包的预期字节数。
+         * @return 无返回值。
+         */
         Input(rclcpp::Node* private_nh, uint16_t port, int packet_size);
 
+        /**
+         * @brief 销毁输入基类并完成基础资源清理。
+         * @return 无返回值。
+         */
         virtual ~Input() {
         }
 
+        /**
+         * @brief 从具体输入源读取一个雷达数据包；派生类负责实现读取方式。
+         * @param pkt 用于接收数据包的输出参数。
+         * @return 返回 0 表示读取成功，-1 表示输入结束，正数表示数据包不完整。
+         */
         virtual int getPacket(lslidar_msgs::msg::LslidarPacket::UniquePtr &pkt) = 0;
 
 
@@ -76,10 +92,26 @@ namespace lslidar_driver {
 /** @brief Live lslidar input from socket. */
     class InputSocket : public Input {
     public:
+        /**
+         * @brief 创建 UDP 套接字并准备接收在线雷达数据。
+         * @param private_nh 用于读取网络配置的 ROS 节点。
+         * @param port 接收数据的 UDP 端口。
+         * @param packet_size 数据包的预期字节数。
+         * @return 无返回值。
+         */
         InputSocket(rclcpp::Node*  private_nh, uint16_t port = MSOP_DATA_PORT_NUMBER,int packet_size = 1212);
 
+        /**
+         * @brief 关闭 UDP 套接字并释放网络资源。
+         * @return 无返回值。
+         */
         virtual ~InputSocket();
 
+        /**
+         * @brief 从 UDP 套接字读取一个雷达数据包。
+         * @param pkt 用于接收数据包的输出参数。
+         * @return 返回 0 表示读取成功，-1 表示输入结束，正数表示数据包不完整。
+         */
         virtual int getPacket(lslidar_msgs::msg::LslidarPacket::UniquePtr &pkt);
 
     private:
@@ -94,14 +126,32 @@ namespace lslidar_driver {
    */
     class InputPCAP : public Input {
     public:
+        /**
+         * @brief 打开 PCAP 文件并设置离线数据包读取节奏。
+         * @param private_nh 用于读取离线回放配置的 ROS 节点。
+         * @param port 数据流对应的端口号。
+         * @param packet_size 数据包的预期字节数。
+         * @param packet_rate 离线回放的预期数据包频率，单位为 Hz。
+         * @param filename 待读取的 PCAP 文件路径。
+         * @return 无返回值。
+         */
         InputPCAP(rclcpp::Node* private_nh, uint16_t port = MSOP_DATA_PORT_NUMBER, int packet_size = 1212, double packet_rate = 0.0,
                   std::string filename = "");
 
 //        InputPCAP(rclcpp::Node* private_nh, uint16_t port = MSOP_DATA_PORT_NUMBER, double packet_rate = 0.0,
 //                  std::string filename = "", bool read_once = false, bool read_fast = false, double repeat_delay = 0.0);
 
+        /**
+         * @brief 关闭 PCAP 文件并释放离线抓包资源。
+         * @return 无返回值。
+         */
         virtual ~InputPCAP();
 
+        /**
+         * @brief 从 PCAP 文件读取下一个雷达数据包。
+         * @param pkt 用于接收数据包的输出参数。
+         * @return 返回 0 表示读取成功，-1 表示文件结束，正数表示数据包不完整。
+         */
         virtual int getPacket(lslidar_msgs::msg::LslidarPacket::UniquePtr &pkt);
 
     private:

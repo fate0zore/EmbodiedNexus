@@ -31,6 +31,14 @@ from .web_server import ArmWebServer
 
 class ArmRosGateway(Node):
     def __init__(self, config_path: str | None = None) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config_path: 配置文件路径，指向要加载的设备配置。 类型为 str | None。
+
+        Returns:
+            无返回值。
+        """
         super().__init__("embodied_nexus_arm_web_gateway")
         self.declare_parameter("config_file", config_path or str(Path(__file__).resolve().parents[1] / "config" / "aubo_i5_mock.yaml"))
         self.declare_parameter("web.bind_host", "")
@@ -71,6 +79,14 @@ class ArmRosGateway(Node):
         self.web.start()
 
     def _on_state(self, message: String) -> None:
+        """处理状态事件。
+
+        Args:
+            message: 待处理的消息对象。 类型为 String。
+
+        Returns:
+            无返回值。
+        """
         try:
             with self._lock:
                 self._state = json.loads(message.data)
@@ -78,6 +94,16 @@ class ArmRosGateway(Node):
             return
 
     def _call(self, name: str, request: Any, timeout: float = 5.0):
+        """调用 ROS 服务并等待调用结果。
+
+        Args:
+            name: 名称，作为调用 ROS 服务并等待调用结果所需的输入。 类型为 str。
+            request: 封装调用输入字段的请求对象。 类型为 Any。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         client = self.service_clients[name]
         if not client.wait_for_service(timeout_sec=min(timeout, 3.0)):
             raise TimeoutError(f"arm ROS service {name} is unavailable")
@@ -90,6 +116,15 @@ class ArmRosGateway(Node):
 
     @staticmethod
     def _wait_future(future, timeout: float):
+        """等待异步服务调用完成或超时。
+
+        Args:
+            future: 异步服务调用返回的 Future 对象。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         done = threading.Event()
         future.add_done_callback(lambda _future: done.set())
         if not done.wait(timeout):
@@ -100,9 +135,25 @@ class ArmRosGateway(Node):
         return result
 
     def info(self):
+        """获取设备能力与静态信息。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return json.loads(self._call("info", GetArmInfo.Request()).descriptor_json)
 
     def status(self):
+        """获取服务当前运行状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         with self._lock:
             state = dict(self._state)
         if not state:
@@ -111,9 +162,25 @@ class ArmRosGateway(Node):
         return state
 
     def get_config(self):
+        """获取配置。
+
+        Args:
+            无参数。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         return json.loads(self._call("config", GetArmConfiguration.Request()).config_json)
 
     def validate_config(self, patch):
+        """验证配置。
+
+        Args:
+            patch: patch，作为验证配置所需的输入。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。
+        """
         req = ValidateArmConfiguration.Request()
         req.patch_json = json.dumps(patch, allow_nan=False)
         response = self.service_clients["validate"].call_async(req)
@@ -123,22 +190,56 @@ class ArmRosGateway(Node):
         return json.loads(result.config_json)
 
     def apply_config(self, lease_id, patch):
+        """应用配置。
+
+        Args:
+            lease_id: 租约标识符，作为应用配置所需的输入。
+            patch: patch，作为应用配置所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         req = ApplyArmConfiguration.Request()
         req.lease_id, req.patch_json = str(lease_id), json.dumps(patch, allow_nan=False)
         return json.loads(self._call("apply", req).config_json)
 
     def acquire(self, owner, ttl_sec=None):
+        """申请设备控制权。
+
+        Args:
+            owner: owner，作为申请设备控制权所需的输入。
+            ttl_sec: ttlsec，作为申请设备控制权所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         req = AcquireArmControl.Request()
         req.owner, req.ttl_sec = str(owner), float(ttl_sec or 0.0)
         result = self._call("acquire", req)
         return {"lease_id": result.lease_id, "expires_in_sec": result.expires_in_sec}
 
     def renew(self, lease_id):
+        """续租当前设备控制权。
+
+        Args:
+            lease_id: 租约标识符，作为续租当前设备控制权所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         req = RenewArmControl.Request()
         req.lease_id = str(lease_id)
         return {"expires_in_sec": self._call("renew", req).expires_in_sec}
 
     def release(self, lease_id):
+        """释放当前设备控制租约。
+
+        Args:
+            lease_id: 租约标识符，作为释放当前设备控制租约所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         req = ReleaseArmControl.Request()
         req.lease_id = str(lease_id)
         result = self._call("release", req)
@@ -147,12 +248,30 @@ class ArmRosGateway(Node):
                 "stationary_confirmed": result.stationary_confirmed}
 
     def enable(self, lease_id, enabled):
+        """更新设备运动使能状态。
+
+        Args:
+            lease_id: 租约标识符，作为更新设备运动使能状态所需的输入。
+            enabled: 表示对应功能是否启用的布尔值。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         req = SetArmMotionEnabled.Request()
         req.lease_id, req.enabled = str(lease_id), bool(enabled)
         result = self._call("enable", req)
         return {"enabled": result.enabled}
 
     def set_velocity(self, lease_id, velocity):
+        """设置速度。
+
+        Args:
+            lease_id: 租约标识符，作为设置速度所需的输入。
+            velocity: 速度，作为设置速度所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if not isinstance(velocity, (tuple, list)) or len(velocity) != 6:
             raise ValueError("velocity_rad_sec must contain six values")
         req = SetArmJointVelocity.Request()
@@ -165,18 +284,44 @@ class ArmRosGateway(Node):
                 "stationary_confirmed": result.stationary_confirmed}
 
     def lifecycle(self, lease_id, command):
+        """生命周期当前设备或操作。
+
+        Args:
+            lease_id: 租约标识符，作为生命周期当前设备或操作所需的输入。
+            command: command，作为生命周期当前设备或操作所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         req = SetArmLifecycle.Request()
         req.lease_id, req.command = str(lease_id), str(command)
         result = self._call("lifecycle", req, timeout=60.0)
         return {"operation_state": result.operation_state}
 
     def teach(self, lease_id, enabled):
+        """示教当前设备或操作。
+
+        Args:
+            lease_id: 租约标识符，作为示教当前设备或操作所需的输入。
+            enabled: 表示对应功能是否启用的布尔值。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         req = SetArmTeachMode.Request()
         req.lease_id, req.enabled = str(lease_id), bool(enabled)
         result = self._call("teach", req, timeout=6.0)
         return {"teach_state": result.teach_state}
 
     def stop(self, reason):
+        """停止设备当前动作。
+
+        Args:
+            reason: 原因，作为停止设备当前动作所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         req = StopArm.Request()
         req.reason = str(reason)
         result = self._call("stop", req, timeout=4.0)
@@ -186,6 +331,14 @@ class ArmRosGateway(Node):
                 "hardware_estop": result.hardware_estop}
 
     def create_operation(self, values: dict[str, Any]):
+        """创建操作。
+
+        Args:
+            values: 要应用、比较或转换的一组输入值。 类型为 dict[str, Any]。
+
+        Returns:
+            构造或创建完成的对象或资源。
+        """
         if values.get("type") != "move_joints":
             raise ValueError("operation type must be move_joints")
         target = values.get("positions_rad")
@@ -201,6 +354,15 @@ class ArmRosGateway(Node):
         return {"operation_id": operation_id, "state": "submitting"}
 
     def _run_operation(self, operation_id, values):
+        """运行操作。
+
+        Args:
+            operation_id: 操作标识符，作为运行操作所需的输入。
+            values: 要应用、比较或转换的一组输入值。
+
+        Returns:
+            无返回值。
+        """
         try:
             if not self.action.wait_for_server(timeout_sec=5.0):
                 raise TimeoutError("arm move_joints action is unavailable")
@@ -246,12 +408,29 @@ class ArmRosGateway(Node):
                                    "message": str(exc), "goal_handle": None})
 
     def _feedback(self, operation_id, wrapped):
+        """反馈当前设备或操作。
+
+        Args:
+            operation_id: 操作标识符，作为反馈当前设备或操作所需的输入。
+            wrapped: wrapped，作为反馈当前设备或操作所需的输入。
+
+        Returns:
+            无返回值。
+        """
         with self._lock:
             record = self._operations.get(operation_id)
             if record and record["state"] not in {"succeeded", "failed", "cancelled"}:
                 record.update({"state": "running", "progress": wrapped.feedback.max_error_rad})
 
     def get_operation(self, operation_id):
+        """获取操作。
+
+        Args:
+            operation_id: 操作标识符，作为获取操作所需的输入。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         with self._lock:
             record = self._operations.get(operation_id)
             if record is None:
@@ -259,6 +438,14 @@ class ArmRosGateway(Node):
             return {key: value for key, value in record.items() if key != "goal_handle"}
 
     def cancel_operation(self, operation_id):
+        """取消操作。
+
+        Args:
+            operation_id: 操作标识符，作为取消操作所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         with self._lock:
             record = self._operations.get(operation_id)
             if record is None:
@@ -274,6 +461,14 @@ class ArmRosGateway(Node):
             return self.get_operation(operation_id)
 
     def close(self):
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.web.close()
         with self._lock:
             handles = [record.get("goal_handle") for record in self._operations.values()
@@ -308,6 +503,14 @@ class ArmRosGateway(Node):
 
 
 def main(args=None):
+    """解析启动参数并运行程序入口。
+
+    Args:
+        args: 额外的位置参数集合。
+
+    Returns:
+        无返回值。
+    """
     rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = ArmRosGateway()
     executor = MultiThreadedExecutor(num_threads=6)

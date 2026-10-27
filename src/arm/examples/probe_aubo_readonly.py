@@ -11,6 +11,14 @@ from embodied_nexus_arm.config import load_config
 
 
 def main() -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config",

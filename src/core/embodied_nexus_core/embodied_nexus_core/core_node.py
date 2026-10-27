@@ -29,6 +29,14 @@ from .web_server import create_app
 
 class CoreNode(Node):
     def __init__(self, config_file: str | None = None):
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config_file: 配置文件，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str | None。
+
+        Returns:
+            无返回值。
+        """
         super().__init__("embodied_nexus_core")
         self.declare_parameter("config_file", config_file or str(default_config_path()))
         self.config_file = str(self.get_parameter("config_file").value)
@@ -81,10 +89,28 @@ class CoreNode(Node):
         self.get_logger().info(f"EmbodiedNexus core HTTP gateway listening on {core['bind_host']}:{core['port']}")
 
     def _get_status(self, _request, response):
+        """获取状态。
+
+        Args:
+            _request: 请求，作为获取状态所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         response.state_json = json.dumps(self.manager.status(), ensure_ascii=False, allow_nan=False)
         return response
 
     def _manage_device(self, request, response):
+        """管理设备。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             action, device_id = str(request.action), str(request.device_id)
             if action == "start":
@@ -105,6 +131,15 @@ class CoreNode(Node):
         return response
 
     def _manage_all(self, request, response):
+        """管理all。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             action = str(request.action)
             if action == "start_all":
@@ -133,6 +168,15 @@ class CoreNode(Node):
         return response
 
     def _validate_config(self, request, response):
+        """验证配置。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。
+        """
         path = str(request.config_file or self.config_file)
         try:
             checked = load_platform(path)
@@ -147,15 +191,39 @@ class CoreNode(Node):
         return response
 
     def _publish_status(self):
+        """发布状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         message = String()
         message.data = json.dumps(self.manager.status(), ensure_ascii=False, allow_nan=False,
                                   separators=(",", ":"))
         self.status_pub.publish(message)
 
     def request_shutdown(self):
+        """请求关闭。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._shutdown_requested.set()
 
     def shutdown_if_requested(self) -> bool:
+        """关闭是否requested。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示关闭是否requested是否成功或成立。
+        """
         if not self._shutdown_requested.is_set():
             return False
         with self._shutdown_guard:
@@ -175,6 +243,14 @@ class CoreNode(Node):
                 self._shutdown_in_progress = False
 
     def close(self):
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.web_server.should_exit = True
         if self.web_thread.is_alive():
             self.web_thread.join(timeout=3.0)
@@ -184,6 +260,14 @@ class CoreNode(Node):
 
 
 def main(argv=None) -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        argv: argv，作为解析启动参数并运行程序入口所需的输入。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     parser = argparse.ArgumentParser(description="Run the EmbodiedNexus core device manager")
     parser.add_argument("--config", default=None, help="platform YAML; defaults to platform_mock.yaml")
     args, ros_args = parser.parse_known_args(argv)

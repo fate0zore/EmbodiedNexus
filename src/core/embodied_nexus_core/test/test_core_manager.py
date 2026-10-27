@@ -21,24 +21,64 @@ class FakeProcess:
     next_pid = 1000
 
     def __init__(self):
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.pid = FakeProcess.next_pid
         FakeProcess.next_pid += 1
         self.returncode = None
         self.signals = []
 
     def poll(self):
+        """轮询当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return self.returncode
 
     def send_signal(self, value):
+        """发送signal。
+
+        Args:
+            value: 要应用、比较或转换的输入值。
+
+        Returns:
+            无返回值。
+        """
         self.signals.append(value)
 
     def wait(self, timeout=None):
+        """等待当前设备或操作。
+
+        Args:
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         self.returncode = 0
         return self.returncode
 
 
 class CoreManagerTests(unittest.TestCase):
     def setUp(self):
+        """为当前测试准备所需对象和资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.addCleanup(self.temp.cleanup)
@@ -46,6 +86,15 @@ class CoreManagerTests(unittest.TestCase):
         self.launch_arguments = []
 
     def make_platform(self, ids=("base_one", "base_two"), *, stop_timeout=0.05):
+        """生成platform。
+
+        Args:
+            ids: ids，作为生成platform所需的输入。
+            stop_timeout: 停止超时时间，作为生成platform所需的输入。
+
+        Returns:
+            构造或创建完成的对象或资源。
+        """
         devices = []
         for device_id in ids:
             config_path = self.root / f"{device_id}.yaml"
@@ -61,7 +110,27 @@ class CoreManagerTests(unittest.TestCase):
 
     def make_manager(self, *, ids=("base_one", "base_two"), fail_start=(),
                      stop_confirmed=True, stop_timeout=0.05):
+        """生成manager。
+
+        Args:
+            ids: ids，作为生成manager所需的输入。
+            fail_start: fail启动，作为生成manager所需的输入。
+            stop_confirmed: 停止confirmed，作为生成manager所需的输入。
+            stop_timeout: 停止超时时间，作为生成manager所需的输入。
+
+        Returns:
+            构造或创建完成的对象或资源。
+        """
         def popen(arguments, **_options):
+            """启动外部子进程。
+
+            Args:
+                arguments: arguments，作为执行 popen 对应的处理流程所需的输入。
+                **_options: 选项，作为执行 popen 对应的处理流程所需的输入。
+
+            Returns:
+                本次处理产生的结果值。
+            """
             self.launch_arguments.append(list(arguments))
             if any(device_id in arg for arg in arguments for device_id in fail_start):
                 raise OSError("mock launch failed")
@@ -73,6 +142,18 @@ class CoreManagerTests(unittest.TestCase):
                                 popen=popen, check_packages=False)
         self.addCleanup(manager.close_monitor)
         def http(item, suffix, *, method="GET", body=None, timeout=0.5):
+            """执行测试用 HTTP 请求并返回状态和响应体。
+
+            Args:
+                item: 条目，作为执行 http 对应的处理流程所需的输入。
+                suffix: suffix，作为执行 http 对应的处理流程所需的输入。
+                method: HTTP 请求方法，例如 GET 或 POST。
+                body: 随请求发送的 JSON 数据。
+                timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。
+
+            Returns:
+                本次处理产生的结果值。
+            """
             if method == "POST":
                 return 200, json.dumps({"success": True, "stop_sent": True,
                                         "zero_velocity_written": True,
@@ -83,6 +164,14 @@ class CoreManagerTests(unittest.TestCase):
         return manager
 
     def test_relative_paths_and_duplicate_ids_are_validated(self):
+        """验证relativepaths和duplicateidsarevalidated。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         platform_path = self.make_platform(ids=("base_one",))
         loaded = load_platform(platform_path, check_packages=False)
         self.assertEqual(Path(loaded["devices"][0]["config"]).name, "base_one.yaml")
@@ -93,6 +182,14 @@ class CoreManagerTests(unittest.TestCase):
             load_platform(platform_path, check_packages=False)
 
     def test_visualization_defaults_and_validation(self):
+        """验证visualizationdefaults和validation。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         platform_path = self.make_platform(ids=("base_one",))
         platform = load_platform(platform_path, check_packages=False)
         self.assertEqual(platform["visualization"]["port"], 9090)
@@ -104,6 +201,14 @@ class CoreManagerTests(unittest.TestCase):
             load_platform(platform_path, check_packages=False)
 
     def test_visualization_runtime_filters_topics_and_can_be_disabled(self):
+        """验证visualizationruntimefilterstopics和canbedisabled。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         settings = {"enabled": False, "port": 9090, "resource_packages": ["description"]}
         runtime = RosbridgeRuntime(settings, lambda: [], popen=lambda *_a, **_k: self.fail("disabled bridge started"))
         self.assertFalse(runtime.info()["available"])
@@ -124,16 +229,41 @@ class CoreManagerTests(unittest.TestCase):
         self.assertNotIn("sensor_msgs/msg/CompressedImage", SUPPORTED_TYPES)
 
     def test_rosbridge_explicit_qos_capability_tracks_subscribe_signature(self):
+        """验证rosbridgeexplicitqoscapabilitytracks订阅signature。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         rosbridge = types.ModuleType("rosbridge_library")
         capabilities = types.ModuleType("rosbridge_library.capabilities")
         subscribe = types.ModuleType("rosbridge_library.capabilities.subscribe")
 
         class SupportsQos:
             def subscribe(self, sid, qos=None):
+                """订阅相机数据流并依次产出元数据和二进制图像载荷。
+
+                Args:
+                    sid: sid，作为订阅相机数据流并依次产出元数据和二进制图像载荷所需的输入。
+                    qos: qos，作为订阅相机数据流并依次产出元数据和二进制图像载荷所需的输入。
+
+                Returns:
+                    无返回值。
+                """
                 pass
 
         class WithoutQos:
             def subscribe(self, sid):
+                """订阅相机数据流并依次产出元数据和二进制图像载荷。
+
+                Args:
+                    sid: sid，作为订阅相机数据流并依次产出元数据和二进制图像载荷所需的输入。
+
+                Returns:
+                    无返回值。
+                """
                 pass
 
         rosbridge.__path__ = []
@@ -151,6 +281,14 @@ class CoreManagerTests(unittest.TestCase):
             self.assertFalse(_explicit_qos_available())
 
     def test_visualization_runtime_closes_its_bridge_process(self):
+        """验证visualizationruntimeclosesitsbridge处理。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
         listener.listen()
@@ -171,6 +309,14 @@ class CoreManagerTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0)
 
     def test_bundled_mock_and_real_profiles_resolve_all_installed_package_resources(self):
+        """验证bundledmock和realprofiles解析allinstalledpackageresources。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         repo = Path(__file__).resolve().parents[4]
         packages = {
             f"embodied_nexus_{kind}": repo / "src" / kind / f"embodied_nexus_{kind}"
@@ -196,6 +342,14 @@ class CoreManagerTests(unittest.TestCase):
                     self.assertTrue(all(item["use_sim_time"] for item in loaded["devices"]))
 
     def test_package_config_reference_supports_symlink_install_resources(self):
+        """验证package配置referencesupportssymlinkinstallresources。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         source_config = self.root / "source" / "config.yaml"
         source_config.parent.mkdir()
         source_config.write_text(yaml.safe_dump({"device_id": "base_one"}), encoding="utf-8")
@@ -228,6 +382,14 @@ class CoreManagerTests(unittest.TestCase):
         self.assertTrue(loaded_config.is_file())
 
     def test_camera_launch_uses_its_single_node_without_web_node_override(self):
+        """验证相机启动usesitssingle节点withoutweb节点override。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         config_path = self.root / "camera.yaml"
         config_path.write_text(yaml.safe_dump({"camera_id": "camera_one"}), encoding="utf-8")
         platform_path = self.root / "platform.yaml"
@@ -237,6 +399,15 @@ class CoreManagerTests(unittest.TestCase):
         arguments_seen = []
 
         def popen(arguments, **_options):
+            """启动外部子进程。
+
+            Args:
+                arguments: arguments，作为执行 popen 对应的处理流程所需的输入。
+                **_options: 选项，作为执行 popen 对应的处理流程所需的输入。
+
+            Returns:
+                本次处理产生的结果值。
+            """
             arguments_seen.extend(arguments)
             process = FakeProcess()
             self.processes.append(process)
@@ -254,6 +425,14 @@ class CoreManagerTests(unittest.TestCase):
         self.assertFalse(any(argument.startswith("node_name_web:=") for argument in arguments_seen))
 
     def test_sanitized_instance_ids_get_distinct_ros_node_names(self):
+        """验证sanitizedinstanceids获取distinctros节点names。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         manager = self.make_manager(ids=("base-1", "base_1"))
         results = manager.start_all()
         self.assertTrue(all(result["success"] for result in results))
@@ -264,6 +443,14 @@ class CoreManagerTests(unittest.TestCase):
         self.assertNotEqual(names[0], names[1])
 
     def test_same_type_instances_start_and_shutdown_independently(self):
+        """验证same类型instances启动和关闭independently。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         manager = self.make_manager()
         results = manager.start_all()
         self.assertEqual([entry["device_id"] for entry in results], ["base_one", "base_two"])
@@ -274,6 +461,14 @@ class CoreManagerTests(unittest.TestCase):
         self.assertEqual(manager.get_device("base_two")["process_state"], "running")
 
     def test_unconfirmed_stop_retains_device_process(self):
+        """验证unconfirmed停止retains设备处理。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         manager = self.make_manager(stop_confirmed=False)
         manager.start("base_one")
         process = manager._items["base_one"]["process"]
@@ -284,11 +479,31 @@ class CoreManagerTests(unittest.TestCase):
         self.assertIsNone(process.returncode)
 
     def test_simulated_gripper_shutdown_waits_for_joint_feedback(self):
+        """验证simulated夹爪关闭waits的关节反馈。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         manager = object.__new__(DeviceManager)
         manager.platform = {"core": {"shutdown_timeout_sec": 0.5}}
         status_count = 0
 
         def request(_item, _suffix, *, method="GET", body=None, timeout=0.5):
+            """请求当前设备或操作。
+
+            Args:
+                _item: 条目，作为请求当前设备或操作所需的输入。
+                _suffix: suffix，作为请求当前设备或操作所需的输入。
+                method: HTTP 请求方法，例如 GET 或 POST。
+                body: 随请求发送的 JSON 数据。
+                timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。
+
+            Returns:
+                本次处理产生的结果值。
+            """
             nonlocal status_count
             if method == "POST":
                 payload = {"stop_sent": True, "hardware_stop_confirmed": False}
@@ -304,6 +519,14 @@ class CoreManagerTests(unittest.TestCase):
         self.assertTrue(response["feedback"]["stop_feedback_confirmed"])
 
     def test_conflicting_operation_is_rejected_without_waiting(self):
+        """验证conflicting操作isrejectedwithoutwaiting。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         manager = self.make_manager()
         lock = manager._operation_locks["base_one"]
         lock.acquire()
@@ -313,6 +536,14 @@ class CoreManagerTests(unittest.TestCase):
         self.assertEqual(self.processes, [])
 
     def test_repeated_start_and_shutdown_are_idempotent(self):
+        """验证repeated启动和关闭areidempotent。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         manager = self.make_manager()
         first = manager.start("base_one")
         second = manager.start("base_one")
@@ -326,6 +557,14 @@ class CoreManagerTests(unittest.TestCase):
         self.assertTrue(repeated["already_stopped"])
 
     def test_restart_does_not_start_after_stop_confirmation_failure(self):
+        """验证重启doesnot启动after停止confirmationfailure。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         manager = self.make_manager(stop_confirmed=False)
         manager.start("base_one")
         process = manager._items["base_one"]["process"]
@@ -336,10 +575,30 @@ class CoreManagerTests(unittest.TestCase):
         self.assertIsNone(process.returncode)
 
     def test_stop_feedback_deadline_includes_the_stop_request(self):
+        """验证停止反馈deadlineincludesthe停止请求。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         manager = self.make_manager(stop_confirmed=False, stop_timeout=0.6)
         manager.start("base_one")
 
         def slow_http(item, suffix, *, method="GET", body=None, timeout=0.5):
+            """模拟响应缓慢的 HTTP 服务。
+
+            Args:
+                item: 条目，作为执行 slow_http 对应的处理流程所需的输入。
+                suffix: suffix，作为执行 slow_http 对应的处理流程所需的输入。
+                method: HTTP 请求方法，例如 GET 或 POST。
+                body: 随请求发送的 JSON 数据。
+                timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。
+
+            Returns:
+                本次处理产生的结果值。
+            """
             time.sleep(0.35)
             if method == "POST":
                 payload = {"stop_sent": True, "zero_velocity_written": True,
@@ -356,6 +615,14 @@ class CoreManagerTests(unittest.TestCase):
         self.assertLess(elapsed, 0.9)
 
     def test_process_exit_reason_remains_visible_after_last_successful_probe(self):
+        """验证处理exit原因remainsvisibleafterlastsuccessfulprobe。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         manager = self.make_manager()
         manager.start("base_one")
         process = manager._items["base_one"]["process"]
@@ -366,6 +633,14 @@ class CoreManagerTests(unittest.TestCase):
         self.assertIn("exited with code 7", snapshot["last_error"])
 
     def test_batch_start_reports_partial_failure_without_rollback(self):
+        """验证batch启动reportspartialfailurewithoutrollback。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         manager = self.make_manager(fail_start=("base_two",))
         results = manager.start_all()
         by_id = {entry["device_id"]: entry for entry in results}

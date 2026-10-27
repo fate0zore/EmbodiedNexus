@@ -18,6 +18,11 @@
     failed: "启动失败",
     stop_blocked: "停止受阻",
   };
+  /**
+ * 按元素 ID 获取页面中的 DOM 元素。
+ * @param {*} id - 页面元素或设备的标识符。
+ * @returns {*} 按元素 ID 获取页面中的 DOM 元素得到的数据或处理结果。
+ */
   const byId = (id) => document.getElementById(id);
   const authView = byId("auth-view");
   const dashboard = byId("dashboard");
@@ -35,6 +40,11 @@
   let latestStatus = null;
   const deviceActionsInFlight = new Set();
 
+  /**
+ * 显示身份验证页面。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function showAuth(message = "") {
     if (refreshTimer) window.clearInterval(refreshTimer);
     refreshTimer = null;
@@ -45,11 +55,21 @@
     tokenInput.focus();
   }
 
+  /**
+ * 显示设备管理面板。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function showDashboard() {
     authView.hidden = true;
     dashboard.hidden = false;
   }
 
+  /**
+ * 更新连接状态和对应显示文本。
+ * @param {*} online - 表示服务连接是否在线。
+ * @param {*} label - 连接状态对应的显示文本。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function setConnection(online, label) {
     const pill = byId("connection-pill");
     pill.classList.toggle("is-online", online);
@@ -60,12 +80,24 @@
     byId("core-state-label").textContent = online ? "运行中" : "不可达";
   }
 
+  /**
+ * 显示带级别的提示消息。
+ * @param {*} message - 要发送或处理的消息内容。
+ * @param {*} kind - 图层或传感器数据类别。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function setNotice(message, kind = "info") {
     notice.textContent = message;
     notice.className = `notice${kind === "error" ? " is-error" : kind === "warning" ? " is-warning" : ""}`;
     notice.hidden = !message;
   }
 
+  /**
+ * 向 Core HTTP API 发送请求并解析响应。
+ * @param {*} path - 接口请求路径。
+ * @param {*} options - fetch 请求选项。
+ * @returns {Promise<*>} 异步向 Core HTTP API 发送请求并解析响应的结果。
+ */
   async function apiRequest(path, options = {}) {
     const headers = new Headers(options.headers || {});
     headers.set("Authorization", `Bearer ${token}`);
@@ -94,6 +126,13 @@
     return payload;
   }
 
+  /**
+ * 创建并配置一个 DOM 元素。
+ * @param {*} tag - 要创建的 HTML 标签名。
+ * @param {*} className - 添加到元素的 CSS 类名。
+ * @param {*} text - 元素或界面显示的文本。
+ * @returns {*} 创建并配置一个 DOM 元素得到的数据或处理结果。
+ */
   function element(tag, className, text) {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -101,16 +140,34 @@
     return node;
   }
 
+  /**
+ * 将设备状态值转换为界面可读文本。
+ * @param {*} value - 需要转换或显示的输入值。
+ * @returns {*} 将设备状态值转换为界面可读文本得到的数据或处理结果。
+ */
   function readableState(value) {
     return STATE_LABELS[value] || value || "未知";
   }
 
+  /**
+ * 将布尔值转换为界面可读文本。
+ * @param {*} value - 需要转换或显示的输入值。
+ * @returns {*} 将布尔值转换为界面可读文本得到的数据或处理结果。
+ */
   function readableBool(value) {
     if (value === true) return "是";
     if (value === false) return "否";
     return "未知";
   }
 
+  /**
+ * 向状态面板添加一项信息。
+ * @param {*} parent - 要追加信息的父 DOM 元素。
+ * @param {*} label - 连接状态对应的显示文本。
+ * @param {*} value - 需要转换或显示的输入值。
+ * @param {*} positive - 可选的正向状态标记。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function addFact(parent, label, value, positive = null) {
     const fact = element("div", "fact");
     fact.append(element("span", "fact-label", label));
@@ -121,6 +178,15 @@
     parent.append(fact);
   }
 
+  /**
+ * 创建带操作回调的界面按钮。
+ * @param {*} label - 连接状态对应的显示文本。
+ * @param {*} className - 添加到元素的 CSS 类名。
+ * @param {*} action - 按钮触发的管理操作。
+ * @param {*} deviceId - 目标设备的标识符。
+ * @param {*} commandDeviceType - 用于生成命令的设备类型。
+ * @returns {*} 创建带操作回调的界面按钮得到的数据或处理结果。
+ */
   function makeButton(label, className, action, deviceId = "", commandDeviceType = "") {
     const button = element("button", `button ${className}`, label);
     button.type = "button";
@@ -134,6 +200,11 @@
     return button;
   }
 
+  /**
+ * 渲染单个设备的状态与操作。
+ * @param {*} device - Core 返回的设备描述和状态对象。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function renderDevice(device) {
     const card = element("article", "device-card");
     const head = element("div", "device-head");
@@ -184,12 +255,22 @@
     return card;
   }
 
+  /**
+ * 将时间值格式化为界面显示文本。
+ * @param {*} value - 需要转换或显示的输入值。
+ * @returns {*} 将时间值格式化为界面显示文本得到的数据或处理结果。
+ */
   function formatTime(value) {
     if (!value) return "—";
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleTimeString();
   }
 
+  /**
+ * 渲染平台和设备总体状态。
+ * @param {*} status - Core 返回的平台状态对象。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function renderStatus(status) {
     latestStatus = status;
     setConnection(true, "Core 在线");
@@ -223,6 +304,10 @@
     }
   }
 
+  /**
+ * 获取最新 Core 状态并更新面板。
+ * @returns {Promise<*>} 异步获取最新 Core 状态并更新面板的结果。
+ */
   async function refreshStatus() {
     if (!token || refreshInFlight) return;
     refreshInFlight = true;
@@ -239,7 +324,17 @@
     }
   }
 
+  /**
+ * 从接口响应中提取操作失败原因。
+ * @param {*} payload - 接口响应体或消息载荷。
+ * @returns {*} 从接口响应中提取操作失败原因得到的数据或处理结果。
+ */
   function actionFailureMessage(payload) {
+    /**
+ * 处理failures。
+ * @param {*} payload?.results || [] - 供本函数处理failures使用的输入值。
+ * @returns {*} 处理failures得到的数据或处理结果。
+ */
     const failures = (payload?.results || []).filter((result) => !result.success);
     if (failures.length) {
       return failures.map((result) => `${result.device_id}: ${result.error || result.device?.last_error || "操作失败"}`).join("；");
@@ -247,6 +342,12 @@
     return payload?.error || "Core 未确认操作成功";
   }
 
+  /**
+ * 向指定设备发送单项管理操作。
+ * @param {*} deviceId - 目标设备的标识符。
+ * @param {*} action - 按钮触发的管理操作。
+ * @returns {Promise<*>} 异步向指定设备发送单项管理操作的结果。
+ */
   async function runDeviceAction(deviceId, action) {
     if (action === "shutdown" && !window.confirm(`关闭 ${deviceId} 服务？Core 会先请求安全停止，并等待反馈确认。`)) return;
     deviceActionsInFlight.add(deviceId);
@@ -266,6 +367,11 @@
     }
   }
 
+  /**
+ * 向多个设备发送批量管理操作。
+ * @param {*} action - 按钮触发的管理操作。
+ * @returns {Promise<*>} 异步向多个设备发送批量管理操作的结果。
+ */
   async function runBatchAction(action) {
     if (batchInFlight) return;
     if (action === "shutdown_all" && !window.confirm("关闭所有已配置设备服务？Core 会逐个请求安全停止；未确认停稳的服务可能保留运行。")) return;
@@ -289,6 +395,10 @@
     }
   }
 
+  /**
+ * 恢复渲染最近一次状态信息。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function renderLastStatus() {
     for (const button of document.querySelectorAll("button[data-focus-target]")) {
       const target = button.dataset.focusTarget;
@@ -298,6 +408,10 @@
     byId("shutdown-all-button").disabled = batchInFlight;
   }
 
+  /**
+ * 读取并显示平台配置。
+ * @returns {Promise<*>} 异步读取并显示平台配置的结果。
+ */
   async function openConfig() {
     const dialog = byId("config-dialog");
     const output = byId("config-output");
@@ -311,6 +425,10 @@
     }
   }
 
+  /**
+ * 加载可用命令目录。
+ * @returns {Promise<*>} 异步加载可用命令目录的结果。
+ */
   async function loadCommandCatalog() {
     if (commandCatalog) return commandCatalog;
     const response = await fetch("/commands.json", { cache: "no-store" });
@@ -319,6 +437,13 @@
     return commandCatalog;
   }
 
+  /**
+ * 更新选择框选项并按需保留当前值。
+ * @param {*} select - 需要更新的 HTML 选择框元素。
+ * @param {*} values - 可用选择值集合。
+ * @param {*} selectedValue - 当前应保持选中的值。
+ * @returns {*} 更新选择框选项并按需保留当前值得到的数据或处理结果。
+ */
   function replaceOptions(select, values, selectedValue = "") {
     select.replaceChildren();
     for (const item of values) {
@@ -330,6 +455,11 @@
     if (values.some((item) => item.value === selectedValue)) select.value = selectedValue;
   }
 
+  /**
+ * 从命令目录提取目标选项。
+ * @param {*} catalog - 命令目录数据。
+ * @returns {*} 从命令目录提取目标选项得到的数据或处理结果。
+ */
   function commandTargetValues(catalog) {
     return [
       { value: "core-mock", label: catalog.core.mock.label },
@@ -339,6 +469,11 @@
     ];
   }
 
+  /**
+ * 读取当前平台中的设备标识符。
+ * @param {*} catalog - 命令目录数据。
+ * @returns {*} 读取当前平台中的设备标识符得到的数据或处理结果。
+ */
   function currentDeviceIds(catalog) {
     const configured = Array.isArray(latestStatus?.devices) ? latestStatus.devices : [];
     const configuredIds = configured.filter((device) => device.id).map((device) => ({
@@ -354,17 +489,32 @@
     }));
   }
 
+  /**
+ * 读取当前选择的命令操作。
+ * @param {*} catalog - 命令目录数据。
+ * @returns {*} 读取当前选择的命令操作得到的数据或处理结果。
+ */
   function selectedCommandOperation(catalog) {
     return catalog.core.operations.find((operation) => operation.id === byId("command-operation").value)
       || catalog.core.operations[0];
   }
 
+  /**
+ * 读取当前选择的命令目标设备。
+ * @param {*} catalog - 命令目录数据。
+ * @returns {*} 读取当前选择的命令目标设备得到的数据或处理结果。
+ */
   function selectedCommandDevice(catalog) {
     const selectedId = byId("command-device").value;
     const active = Array.isArray(latestStatus?.devices) ? latestStatus.devices : [];
     return active.find((device) => device.id === selectedId)?.id || selectedId || "base_main";
   }
 
+  /**
+ * 根据命令目录和选择项构建命令文本。
+ * @param {*} catalog - 命令目录数据。
+ * @returns {*} 根据命令目录和选择项构建命令文本得到的数据或处理结果。
+ */
   function buildCommand(catalog) {
     const target = byId("command-target").value;
     if (target === "core-mock") return catalog.core.mock.commands.join("\n");
@@ -384,10 +534,20 @@
     return "未找到对应命令。";
   }
 
+  /**
+ * 为 PowerShell 命令安全转义参数文本。
+ * @param {*} value - 需要转换或显示的输入值。
+ * @returns {*} 为 PowerShell 命令安全转义参数文本得到的数据或处理结果。
+ */
   function quotePowerShell(value) {
     return `'${value.replace(/'/g, "''")}'`;
   }
 
+  /**
+ * 渲染命令说明和调用预览。
+ * @param {*} catalog - 命令目录数据。
+ * @returns {*} 渲染命令说明和调用预览得到的数据或处理结果。
+ */
   function renderCommandOutput(catalog) {
     const target = byId("command-target").value;
     const command = buildCommand(catalog);
@@ -434,6 +594,11 @@
     byId("command-copy-status").textContent = "命令只会复制到剪贴板，不会执行。";
   }
 
+  /**
+ * 按当前目录更新命令选择器。
+ * @param {*} preferredTarget - 刷新选择器时优先保留的设备目标。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function refreshCommandSelectors(preferredTarget = "") {
     const catalog = commandCatalog;
     const targetSelect = byId("command-target");
@@ -458,6 +623,11 @@
     renderCommandOutput(catalog);
   }
 
+  /**
+ * 打开所选设备类型的命令参考。
+ * @param {*} deviceType - 设备类型名称。
+ * @returns {Promise<*>} 异步打开所选设备类型的命令参考的结果。
+ */
   async function openCommandReference(deviceType = "") {
     const dialog = byId("command-dialog");
     dialog.showModal();
@@ -471,6 +641,10 @@
     }
   }
 
+  /**
+ * 将当前命令文本复制到剪贴板。
+ * @returns {Promise<*>} 异步将当前命令文本复制到剪贴板的结果。
+ */
   async function copyCommand() {
     const text = byId("command-output").textContent;
     try {

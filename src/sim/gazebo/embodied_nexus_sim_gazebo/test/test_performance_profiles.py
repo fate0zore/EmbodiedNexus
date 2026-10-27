@@ -22,6 +22,14 @@ spec.loader.exec_module(gazebo_launch)
 
 class PerformanceProfileTests(unittest.TestCase):
     def test_profiles_set_sensor_resolution_and_rate_without_changing_scan_coverage(self):
+        """验证profiles设置传感器resolution和ratewithoutchanging扫描coverage。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         for profile, width, height, rate in (("balanced", 320, 240, 5), ("full", 640, 480, 10)):
             with self.subTest(profile=profile):
                 robot = ET.fromstring(gazebo_launch._inject_fortress_plugins('<robot name="test"/>', "/controllers.yaml", profile))
@@ -36,6 +44,14 @@ class PerformanceProfileTests(unittest.TestCase):
                 self.assertTrue(all(sensor.findtext("lidar/scan/vertical/samples") == "16" for sensor in lidars))
 
     def test_camera_intrinsics_match_balanced_resolution(self):
+        """验证相机intrinsicsmatchbalancedresolution。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         rclpy.init()
         node = SimCameraInfo("color", "/test", 320, 240, 5)
         try:
@@ -52,6 +68,14 @@ class PerformanceProfileTests(unittest.TestCase):
             rclpy.shutdown()
 
     def test_optical_mount_uses_active_config_and_factory_rgbd_baseline(self):
+        """验证opticalmountusesactive配置和factoryrgbdbaseline。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         geometry = camera_geometry(640, 480)
         color = geometry["color"]["pose"] @ CAMERA_FROM_OPTICAL
         depth = geometry["depth"]["pose"] @ CAMERA_FROM_OPTICAL
@@ -64,6 +88,14 @@ class PerformanceProfileTests(unittest.TestCase):
         self.assertEqual(geometry["calibration"]["streams"]["color"]["distortion"], [0.0] * 5)
 
     def test_gazebo_projection_and_camera_info_use_the_same_distinct_intrinsics(self):
+        """验证gazeboprojection和相机信息usethesamedistinctintrinsics。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         robot = ET.fromstring(gazebo_launch._inject_fortress_plugins('<robot name="test"/>', "/controllers.yaml"))
         color = robot.find(".//sensor[@type='camera']/camera/lens/intrinsics")
         depth = robot.find(".//sensor[@type='depth_camera']/camera/lens/intrinsics")

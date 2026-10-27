@@ -11,6 +11,15 @@ from sensor_msgs.msg import Image, PointCloud2, PointField
 
 
 def _transform_lidar_cloud(message: PointCloud2, yaw_rad: float) -> PointCloud2:
+    """转换雷达点云。
+
+    Args:
+        message: 待处理的消息对象。 类型为 PointCloud2。
+        yaw_rad: yawrad，作为转换雷达点云所需的输入。 类型为 float。
+
+    Returns:
+        转换、格式化或编码后的数据。 返回类型为 PointCloud2。
+    """
     offsets = {field.name: field.offset for field in message.fields}
     if not {"x", "y", "z"}.issubset(offsets):
         raise ValueError("simulated lidar cloud must include x, y and z fields")
@@ -36,6 +45,15 @@ def _transform_lidar_cloud(message: PointCloud2, yaw_rad: float) -> PointCloud2:
 
 
 def _merge_lidar_clouds(front: PointCloud2, rear: PointCloud2) -> PointCloud2:
+    """合并雷达clouds。
+
+    Args:
+        front: front，作为合并雷达clouds所需的输入。 类型为 PointCloud2。
+        rear: rear，作为合并雷达clouds所需的输入。 类型为 PointCloud2。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 PointCloud2。
+    """
     if (front.height != rear.height or front.point_step != rear.point_step or
             front.fields != rear.fields or front.is_bigendian != rear.is_bigendian):
         raise ValueError("front and rear simulated lidar cloud layouts must match")
@@ -68,6 +86,14 @@ class SimSensorRelay(Node):
     """Normalize simulated sensor frame IDs at the Gazebo-specific boundary."""
 
     def __init__(self, namespace: str = "/sim/arachne") -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            namespace: namespace，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         super().__init__("sim_sensor_relay", parameter_overrides=[
             rclpy.parameter.Parameter("use_sim_time", value=True),
         ])
@@ -93,6 +119,16 @@ class SimSensorRelay(Node):
         )
 
     def _cloud(self, half: str, yaw_rad: float, message: PointCloud2) -> None:
+        """点云当前设备或操作。
+
+        Args:
+            half: half，作为点云当前设备或操作所需的输入。 类型为 str。
+            yaw_rad: yawrad，作为点云当前设备或操作所需的输入。 类型为 float。
+            message: 待处理的消息对象。 类型为 PointCloud2。
+
+        Returns:
+            无返回值。
+        """
         try:
             self._lidar_clouds[half] = _transform_lidar_cloud(message, yaw_rad)
             self._lidar_received[half] = time.monotonic()
@@ -110,15 +146,39 @@ class SimSensorRelay(Node):
             self.get_logger().warning(f"simulated lidar cloud relay failed: {exc}")
 
     def _color(self, message: Image) -> None:
+        """将彩色图像消息转发到对应 ROS 话题。
+
+        Args:
+            message: 待处理的消息对象。 类型为 Image。
+
+        Returns:
+            无返回值。
+        """
         message.header.frame_id = "camera_color_optical_frame"
         self._color_pub.publish(message)
 
     def _depth(self, message: Image) -> None:
+        """将深度图像消息转发到对应 ROS 话题。
+
+        Args:
+            message: 待处理的消息对象。 类型为 Image。
+
+        Returns:
+            无返回值。
+        """
         message.header.frame_id = "camera_depth_optical_frame"
         self._depth_pub.publish(message)
 
 
 def main(argv=None) -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        argv: argv，作为解析启动参数并运行程序入口所需的输入。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     rclpy.init(args=argv)
     node = SimSensorRelay()
     try:

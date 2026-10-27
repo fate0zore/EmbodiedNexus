@@ -12,6 +12,14 @@ from embodied_nexus_arm.config import load_config
 
 
 def _read_request(conn):
+    """读取请求。
+
+    Args:
+        conn: conn，作为读取请求所需的输入。
+
+    Returns:
+        查询或读取到的数据；未找到时的处理方式由实现决定。
+    """
     data = bytearray()
     decoder = json.JSONDecoder()
     while True:
@@ -27,6 +35,17 @@ def _read_request(conn):
 
 
 def _send_response(conn, request, result=None, error=None):
+    """发送响应。
+
+    Args:
+        conn: conn，作为发送响应所需的输入。
+        request: 封装调用输入字段的请求对象。
+        result: 前序操作产生、供本函数继续处理的结果。
+        error: error，作为发送响应所需的输入。
+
+    Returns:
+        无返回值。
+    """
     response = {"jsonrpc": "2.0", "id": request["id"]}
     response["error" if error is not None else "result"] = error if error is not None else result
     conn.sendall(json.dumps(response, ensure_ascii=False).encode("utf-8"))
@@ -34,12 +53,28 @@ def _send_response(conn, request, result=None, error=None):
 
 class RpcTests(unittest.TestCase):
     def test_fragmented_and_sequential_json_rpc_responses(self):
+        """验证fragmented和sequentialJSONrpcresponses。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         server = socket.socket()
         server.bind(("127.0.0.1", 0))
         server.listen(1)
         port = server.getsockname()[1]
 
         def serve():
+            """提供服务当前设备或操作。
+
+            Args:
+                无参数。
+
+            Returns:
+                无返回值。
+            """
             conn, _ = server.accept()
             with conn:
                 for result in (["rob1"], {"note": "机械臂", "joints": [1, 2, 3, 4, 5, 6]}):
@@ -67,12 +102,28 @@ class RpcTests(unittest.TestCase):
             worker.join(timeout=1.0)
 
     def test_json_rpc_errors_and_timeouts(self):
+        """验证JSONrpcerrors和timeouts。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         error_server = socket.socket()
         error_server.bind(("127.0.0.1", 0))
         error_server.listen(1)
         error_port = error_server.getsockname()[1]
 
         def serve_error():
+            """提供服务error。
+
+            Args:
+                无参数。
+
+            Returns:
+                无返回值。
+            """
             conn, _ = error_server.accept()
             with conn:
                 first = _read_request(conn)
@@ -98,6 +149,14 @@ class RpcTests(unittest.TestCase):
         timeout_port = timeout_server.getsockname()[1]
 
         def serve_timeout():
+            """提供服务超时时间。
+
+            Args:
+                无参数。
+
+            Returns:
+                无返回值。
+            """
             conn, _ = timeout_server.accept()
             with conn:
                 _send_response(conn, _read_request(conn), result=["rob1"])
@@ -117,6 +176,14 @@ class RpcTests(unittest.TestCase):
             worker.join(timeout=1.0)
 
     def test_aubo_backend_reads_state_using_a_fake_rpc_controller(self):
+        """验证aubo后端reads状态usingafakerpccontroller。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         server = socket.socket()
         server.bind(("127.0.0.1", 0))
         server.listen(1)
@@ -138,6 +205,14 @@ class RpcTests(unittest.TestCase):
         worker_errors = []
 
         def serve():
+            """提供服务当前设备或操作。
+
+            Args:
+                无参数。
+
+            Returns:
+                无返回值。
+            """
             try:
                 conn, _ = server.accept()
                 with conn:
@@ -172,6 +247,14 @@ class RpcTests(unittest.TestCase):
         self.assertEqual(worker_errors, [])
 
     def test_joint_vectors_reject_nonfinite_or_wrong_length(self):
+        """验证关节vectors拒绝nonfiniteorwronglength。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.assertEqual(_six([0] * 6), [0.0] * 6)
         with self.assertRaises(ValueError):
             _six([0] * 5)

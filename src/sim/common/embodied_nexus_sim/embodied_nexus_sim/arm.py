@@ -17,6 +17,14 @@ class Ros2SimArmBackend:
     capabilities = ("joint_state", "move_joints", "joint_velocity", "power", "stop")
 
     def __init__(self, config: dict) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict。
+
+        Returns:
+            无返回值。
+        """
         self.config = config
         options = config["backend_options"]
         validate_options(options, {"namespace", "joint_states_topic", "arm_trajectory_topic"})
@@ -37,6 +45,14 @@ class Ros2SimArmBackend:
         self._clock_jump_pending = False
 
     def open(self) -> None:
+        """打开设备连接或目标资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._ros = SimRosNode(self.config["device_id"], "arm")
         self._publisher = self._ros.node.create_publisher(JointTrajectory, self.command_topic, 10)
         self._subscription = self._ros.node.create_subscription(JointState, self.state_topic, self._on_state, 10)
@@ -46,6 +62,14 @@ class Ros2SimArmBackend:
         self.connected = True
 
     def _on_state(self, msg: JointState) -> None:
+        """处理状态事件。
+
+        Args:
+            msg: 待处理的消息对象。 类型为 JointState。
+
+        Returns:
+            无返回值。
+        """
         by_name = {name: index for index, name in enumerate(msg.name)}
         if any(name not in by_name for name in self.joints):
             return
@@ -65,6 +89,14 @@ class Ros2SimArmBackend:
             self._receipt = time.monotonic()
 
     def _fresh(self):
+        """判断缓存的传感器样本是否仍在有效时间内。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         with self._lock:
             if self._sample is None or time.monotonic() - self._receipt > float(self.config["feedback"]["stale_sec"]):
                 raise TimeoutError("simulated joint state is missing or stale")
@@ -72,6 +104,14 @@ class Ros2SimArmBackend:
         return sample
 
     def poll(self):
+        """轮询当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         with self._lock:
             clock_jump, self._clock_jump_pending = self._clock_jump_pending, False
         if clock_jump:
@@ -88,6 +128,15 @@ class Ros2SimArmBackend:
         return sample
 
     def _publish(self, positions, duration: float) -> None:
+        """发布当前设备或操作。
+
+        Args:
+            positions: positions，作为发布当前设备或操作所需的输入。
+            duration: duration，作为发布当前设备或操作所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         values = finite_values(positions, 6, "joint target")
         message = JointTrajectory()
         message.header.stamp = self._ros.node.get_clock().now().to_msg()
@@ -99,6 +148,15 @@ class Ros2SimArmBackend:
         self._publisher.publish(message)
 
     def execute(self, method: str, params: list | None = None):
+        """执行当前设备或操作。
+
+        Args:
+            method: HTTP 请求方法，例如 GET 或 POST。 类型为 str。
+            params: params，作为执行当前设备或操作所需的输入。 类型为 list | None。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         params = params or []
         if method == "MotionControl.setServoMode":
             self._servo = bool(params[0])
@@ -139,9 +197,25 @@ class Ros2SimArmBackend:
         raise NotImplementedError(f"Aubo operation {method} is not supported by simulation")
 
     def read_optional(self, _suffix: str):
+        """读取可选项。
+
+        Args:
+            _suffix: suffix，作为读取可选项所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         return None
 
     def stop(self) -> bool:
+        """停止设备当前动作。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示停止设备当前动作是否成功或成立。
+        """
         try:
             self._publish(self._fresh()["positions_rad"], 0.05)
             self._servo = False
@@ -150,6 +224,14 @@ class Ros2SimArmBackend:
             return False
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.stop()
         self.connected = False
         if hasattr(self, "_ros"):

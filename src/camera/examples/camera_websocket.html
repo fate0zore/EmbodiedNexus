@@ -8,6 +8,11 @@
 <img id="frame" alt="RGB camera preview" style="max-width: 100%; image-rendering: auto">
 <script>
 const status = document.querySelector('#status');
+/**
+ * 更新示例页面上的连接状态文本。
+ * @param {*} value - 需要转换或显示的输入值。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
 const setStatus = value => { if (status) status.textContent = value; };
 document.querySelector('#connect').onclick = () => {
   const base = document.querySelector('#url').value;

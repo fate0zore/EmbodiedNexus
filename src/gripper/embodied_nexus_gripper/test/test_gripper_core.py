@@ -21,6 +21,14 @@ CONFIG = Path(__file__).resolve().parents[1] / "config" / "ms42dc_mock.yaml"
 
 class MS42DCProtocolTests(unittest.TestCase):
     def test_motion_frame_direction_and_checksum(self):
+        """验证motion坐标系direction和checksum。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         closing = build_motion_frame(device_id=1, mode=2, direction=1, sub_divide=32,
                                      angle_tenths=19656, speed_tenths=150)
         opening = build_motion_frame(device_id=1, mode=2, direction=0, sub_divide=32,
@@ -32,10 +40,26 @@ class MS42DCProtocolTests(unittest.TestCase):
         self.assertEqual(build_state_request_frame(1)[0], 0x7B)
 
     def test_feedback_keeps_unsigned_32_bit_angle(self):
+        """验证反馈keepsunsigned32bit角度。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         expected = Feedback(device_id=1, reached=1, speed_raw=12, angle_raw=0xF1234567)
         self.assertEqual(parse_feedback_frame(build_feedback_frame(expected), 1), expected)
 
     def test_short_bad_checksum_and_wrong_id_are_rejected(self):
+        """验证shortbadchecksum和wrong标识符arerejected。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         with self.assertRaises(ProtocolError):
             parse_feedback_frame(b"123", 1)
         valid = bytearray(build_feedback_frame(Feedback(1, 1, 0, 4)))
@@ -48,12 +72,29 @@ class MS42DCProtocolTests(unittest.TestCase):
 
 class GripperControllerTests(unittest.TestCase):
     def test_simulator_profile_keeps_motor_feedback_explicitly_simulated(self):
+        """验证simulatorprofilekeeps控制电机反馈explicitlysimulated。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         config = load_config(Path(__file__).resolve().parents[1] / "config" / "ms42dc_sim.yaml")
         self.assertEqual(config["backend"], "ros2_sim")
         self.assertEqual(config["backend_options"]["finger_travel_rad"], 0.6)
         self.assertTrue(config["feedback"]["confirmed"])
 
     def make_controller(self, duration=0.06, timeout=1.0):
+        """生成controller。
+
+        Args:
+            duration: duration，作为生成controller所需的输入。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。
+
+        Returns:
+            构造或创建完成的对象或资源。
+        """
         config = load_config(CONFIG)
         config["mock"]["move_duration_sec"] = duration
         config["control"]["operation_timeout_sec"] = timeout
@@ -63,6 +104,14 @@ class GripperControllerTests(unittest.TestCase):
         return controller, backend
 
     def test_motion_requires_lease_enable_and_fresh_transition(self):
+        """验证motionrequires租约启用和freshtransition。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         controller, _ = self.make_controller()
         with self.assertRaises(PermissionError):
             controller.move("missing", "close")
@@ -76,6 +125,14 @@ class GripperControllerTests(unittest.TestCase):
         controller.shutdown()
 
     def test_action_goal_reservation_rejects_concurrent_motion(self):
+        """验证动作goalreservationrejectsconcurrentmotion。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         controller, _ = self.make_controller()
         lease_id, _ = controller.acquire_control("test")
         controller.set_motion_enabled(lease_id, True)
@@ -87,6 +144,14 @@ class GripperControllerTests(unittest.TestCase):
         controller.shutdown()
 
     def test_nonfinite_angle_is_rejected(self):
+        """验证nonfinite角度isrejected。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         controller, _ = self.make_controller()
         lease_id, _ = controller.acquire_control("test")
         controller.set_motion_enabled(lease_id, True)
@@ -95,6 +160,14 @@ class GripperControllerTests(unittest.TestCase):
         controller.shutdown()
 
     def test_configuration_updates_are_atomic_and_versioned(self):
+        """验证配置updatesareatomic和versioned。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         controller, backend = self.make_controller()
         lease_id, _ = controller.acquire_control("test")
         with self.assertRaisesRegex(ValueError, "requires restart"):
@@ -109,6 +182,14 @@ class GripperControllerTests(unittest.TestCase):
         controller.shutdown()
 
     def test_unknown_configuration_fields_are_rejected(self):
+        """验证未知项配置fieldsarerejected。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         config = load_config(CONFIG)
         config["serial"]["silently_ignored"] = True
         with self.assertRaisesRegex(ValueError, "unknown configuration field"):
@@ -119,6 +200,14 @@ class GripperControllerTests(unittest.TestCase):
             validate_config(config)
 
     def test_control_conflict_and_lease_expiration_disable_motion(self):
+        """验证控制权conflict和租约expiration禁用motion。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         controller, _ = self.make_controller()
         lease_id, _ = controller.acquire_control("first", 0.12)
         with self.assertRaisesRegex(RuntimeError, "already held"):
@@ -131,6 +220,14 @@ class GripperControllerTests(unittest.TestCase):
         controller.shutdown()
 
     def test_disconnect_drops_lease_and_requires_new_control(self):
+        """验证断开连接drops租约和requiresnew控制权。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         controller, backend = self.make_controller()
         lease_id, _ = controller.acquire_control("test")
         controller.set_motion_enabled(lease_id, True)
@@ -144,6 +241,14 @@ class GripperControllerTests(unittest.TestCase):
         controller.shutdown()
 
     def test_timeout_requests_stop_and_reports_confirmation(self):
+        """验证超时时间requests停止和reportsconfirmation。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         controller, backend = self.make_controller(duration=0.5, timeout=0.12)
         lease_id, _ = controller.acquire_control("test")
         controller.set_motion_enabled(lease_id, True)
@@ -155,6 +260,14 @@ class GripperControllerTests(unittest.TestCase):
         controller.shutdown()
 
     def test_feedback_loss_times_out_and_stop_failure_is_visible(self):
+        """验证反馈losstimesout和停止failureisvisible。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         controller, backend = self.make_controller(duration=0.5, timeout=0.12)
         lease_id, _ = controller.acquire_control("test")
         controller.set_motion_enabled(lease_id, True)
@@ -167,6 +280,14 @@ class GripperControllerTests(unittest.TestCase):
         controller.shutdown()
 
     def test_external_stop_cancels_active_operation(self):
+        """验证external停止cancelsactive操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         controller, _ = self.make_controller(duration=0.5, timeout=1.5)
         lease_id, _ = controller.acquire_control("test")
         controller.set_motion_enabled(lease_id, True)

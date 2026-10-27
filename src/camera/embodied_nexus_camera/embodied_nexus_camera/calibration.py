@@ -27,6 +27,14 @@ class CameraModel:
 
     @property
     def cv_distortion(self) -> np.ndarray:
+        """返回 OpenCV 格式的相机畸变系数。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 np.ndarray。
+        """
         values = self.distortion
         if self.distortion_model in {"plumb_bob", "brown_conrady"}:
             if len(values) not in (4, 5):
@@ -42,12 +50,29 @@ class CameraModel:
 
     @property
     def matrix(self) -> np.ndarray:
+        """返回相机内参矩阵。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 np.ndarray。
+        """
         return np.asarray(
             [[self.fx, 0.0, self.cx], [0.0, self.fy, self.cy], [0.0, 0.0, 1.0]],
             dtype=np.float64,
         )
 
     def scaled(self, width: int, height: int) -> "CameraModel":
+        """按目标分辨率缩放相机标定参数。
+
+        Args:
+            width: width，作为执行 scaled 对应的处理流程所需的输入。 类型为 int。
+            height: height，作为执行 scaled 对应的处理流程所需的输入。 类型为 int。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 'CameraModel'。
+        """
         if width == self.width and height == self.height:
             return self
         if width <= 0 or height <= 0 or abs(width / height - self.width / self.height) > 1e-6:
@@ -79,6 +104,14 @@ class RgbdCalibration:
 
     @property
     def usable_for_color_cloud(self) -> bool:
+        """检查当前标定是否适用于彩色点云生成。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示执行 usable_for_color_cloud 对应的处理流程是否成功或成立。
+        """
         return bool(
             self.color
             and self.depth
@@ -89,6 +122,14 @@ class RgbdCalibration:
 
 
 def _model_from_entry(entry: dict[str, Any]) -> CameraModel:
+    """从配置条目创建相机标定模型。
+
+    Args:
+        entry: 条目，作为执行 _model_from_entry 对应的处理流程所需的输入。 类型为 dict[str, Any]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 CameraModel。
+    """
     size = entry.get("image_size") or entry.get("resolution")
     intrinsic = entry.get("intrinsic") or entry
     distortion = entry.get("distortion") or entry.get("distortion_coefficients") or []
@@ -123,6 +164,20 @@ def load_calibration(
     depth_scale_m: float = 0.001, extrinsic_unit: str = "mm",
     allow_resolution_scaling: bool = False,
 ) -> RgbdCalibration:
+    """加载calibration。
+
+    Args:
+        factory_file: factory文件，作为加载calibration所需的输入。 类型为 str。
+        custom_file: custom文件，作为加载calibration所需的输入。 类型为 str。
+        color_size: colorsize，作为加载calibration所需的输入。 类型为 tuple[int, int]。
+        depth_size: depthsize，作为加载calibration所需的输入。 类型为 tuple[int, int]。
+        depth_scale_m: depthscalem，作为加载calibration所需的输入。 类型为 float。
+        extrinsic_unit: extrinsicunit，作为加载calibration所需的输入。 类型为 str。
+        allow_resolution_scaling: allowresolutionscaling，作为加载calibration所需的输入。 类型为 bool。
+
+    Returns:
+        查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 RgbdCalibration。
+    """
     path = custom_file or factory_file
     data: dict[str, Any] = {}
     source = "default"
@@ -137,6 +192,16 @@ def load_calibration(
     depth = _model_from_entry(streams["depth"]) if "depth" in streams else None
 
     def match_resolution(model: CameraModel | None, name: str, size: tuple[int, int]) -> CameraModel | None:
+        """查找分辨率与输入图像匹配的相机模型。
+
+        Args:
+            model: model，作为执行 match_resolution 对应的处理流程所需的输入。 类型为 CameraModel | None。
+            name: 名称，作为执行 match_resolution 对应的处理流程所需的输入。 类型为 str。
+            size: size，作为执行 match_resolution 对应的处理流程所需的输入。 类型为 tuple[int, int]。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 CameraModel | None。
+        """
         if model is None or (model.width, model.height) == size:
             return model
         if not allow_resolution_scaling:
@@ -167,6 +232,16 @@ def load_calibration(
 
 
 def camera_info_dict(model: CameraModel, frame_id: str, stamp_sec: float) -> dict[str, Any]:
+    """相机信息dict。
+
+    Args:
+        model: model，作为相机信息dict所需的输入。 类型为 CameraModel。
+        frame_id: 坐标系标识符，作为相机信息dict所需的输入。 类型为 str。
+        stamp_sec: 时间戳sec，作为相机信息dict所需的输入。 类型为 float。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict[str, Any]。
+    """
     d = model.cv_distortion.tolist()
     return {
         "width": model.width,
@@ -183,6 +258,16 @@ def camera_info_dict(model: CameraModel, frame_id: str, stamp_sec: float) -> dic
 
 
 def capture_intrinsic_sample(image: np.ndarray, session_dir: Path, metadata: dict[str, Any]) -> dict[str, Any]:
+    """采集intrinsic采集样本。
+
+    Args:
+        image: 图像，作为采集intrinsic采集样本所需的输入。 类型为 np.ndarray。
+        session_dir: 会话dir，作为采集intrinsic采集样本所需的输入。 类型为 Path。
+        metadata: metadata，作为采集intrinsic采集样本所需的输入。 类型为 dict[str, Any]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict[str, Any]。
+    """
     session_dir.mkdir(parents=True, exist_ok=True)
     indices = [int(match.group(1)) for path in session_dir.glob("frame_*.png") if (match := re.fullmatch(r"frame_(\d+)\.png", path.name))]
     index = max(indices, default=0) + 1
@@ -198,6 +283,15 @@ def capture_intrinsic_sample(image: np.ndarray, session_dir: Path, metadata: dic
 
 
 def inspect_apriltag_sample(image: np.ndarray, board_image_path: str) -> dict[str, Any]:
+    """检测采集图像中的 AprilTag 标定板并提取样本信息。
+
+    Args:
+        image: 图像，作为执行 inspect_apriltag_sample 对应的处理流程所需的输入。 类型为 np.ndarray。
+        board_image_path: board图像路径，作为执行 inspect_apriltag_sample 对应的处理流程所需的输入。 类型为 str。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict[str, Any]。
+    """
     try:
         from pupil_apriltags import Detector
     except ImportError as exc:
@@ -227,7 +321,22 @@ def solve_rgb_intrinsics(
     max_outlier_px: float = 2.0, progress_callback=None,
     cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
-    """Solve an RGB camera model from captured AprilTag board images."""
+    """Solve an RGB camera model from captured AprilTag board images.
+
+    Args:
+        session_dir: 会话dir，作为根据采集到的 AprilTag 标定板图像求解 RGB 相机内参所需的输入。 类型为 Path。
+        board_image_path: board图像路径，作为根据采集到的 AprilTag 标定板图像求解 RGB 相机内参所需的输入。 类型为 str。
+        board_width_m: boardwidthm，作为根据采集到的 AprilTag 标定板图像求解 RGB 相机内参所需的输入。 类型为 float。
+        board_height_m: boardheightm，作为根据采集到的 AprilTag 标定板图像求解 RGB 相机内参所需的输入。 类型为 float。
+        min_frames: minframes，作为根据采集到的 AprilTag 标定板图像求解 RGB 相机内参所需的输入。 类型为 int。
+        max_rms_px: maxrmspx，作为根据采集到的 AprilTag 标定板图像求解 RGB 相机内参所需的输入。 类型为 float。
+        max_outlier_px: maxoutlierpx，作为根据采集到的 AprilTag 标定板图像求解 RGB 相机内参所需的输入。 类型为 float。
+        progress_callback: progresscallback，作为根据采集到的 AprilTag 标定板图像求解 RGB 相机内参所需的输入。
+        cancel_event: 取消事件，作为根据采集到的 AprilTag 标定板图像求解 RGB 相机内参所需的输入。 类型为 threading.Event | None。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict[str, Any]。
+    """
     try:
         from pupil_apriltags import Detector
     except ImportError as exc:
@@ -341,6 +450,15 @@ def solve_rgb_intrinsics(
 
 
 def apply_rgb_candidate(candidate: dict[str, Any], profile_file: Path) -> None:
+    """应用rgbcandidate。
+
+    Args:
+        candidate: candidate，作为应用rgbcandidate所需的输入。 类型为 dict[str, Any]。
+        profile_file: profile文件，作为应用rgbcandidate所需的输入。 类型为 Path。
+
+    Returns:
+        无返回值。
+    """
     if not candidate.get("accepted"):
         raise ValueError("candidate did not meet configured quality thresholds")
     existing: dict[str, Any] = {}

@@ -11,6 +11,14 @@ from .config import config_json, load_config
 
 
 def check_driver_available(config: dict) -> None:
+    """检查driveravailable。
+
+    Args:
+        config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict。
+
+    Returns:
+        无返回值。
+    """
     if os.name != "posix":
         raise RuntimeError("the C16 UDP driver requires the Ubuntu/Linux ROS 2 runtime")
     current_pid = os.getpid()
@@ -42,6 +50,14 @@ def check_driver_available(config: dict) -> None:
 
 
 def main(argv=None) -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        argv: argv，作为解析启动参数并运行程序入口所需的输入。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     parser = argparse.ArgumentParser(description="Validate and inspect C16 lidar configuration")
     parser.add_argument("--config", default=None)
     parser.add_argument("--show-config", action="store_true")

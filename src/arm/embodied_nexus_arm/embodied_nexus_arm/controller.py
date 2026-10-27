@@ -17,6 +17,15 @@ class ArmController:
     """ROS-independent Aubo lifecycle, state and motion policy."""
 
     def __init__(self, config: dict[str, Any], backend=None) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+            backend: 后端，作为初始化对象并保存构造参数或依赖所需的输入。
+
+        Returns:
+            无返回值。
+        """
         self.config = copy.deepcopy(config)
         self.backend = backend or create_backend(config)
         self.lock = threading.RLock()
@@ -44,6 +53,14 @@ class ArmController:
         self.tcp_offset = self.backend.read_optional("RobotConfig.getTcpOffset")
 
     def info(self) -> dict[str, Any]:
+        """获取设备能力与静态信息。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         capabilities = ["joint_state", "move_joints", "joint_velocity", "power", "teach_mode", "stop"]
         if hasattr(self.backend, "capabilities"):
             capabilities = list(self.backend.capabilities)
@@ -54,6 +71,14 @@ class ArmController:
                 "units": {"position": "rad", "velocity": "rad/s", "acceleration": "rad/s^2"}}
 
     def state(self) -> dict[str, Any]:
+        """获取设备当前状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self.lock:
             now = time.monotonic()
             wall_now = time.time()
@@ -93,10 +118,26 @@ class ArmController:
                     "joint_limits_valid": self._effective_limits() is not None}
 
     def configuration(self) -> dict[str, Any]:
+        """获取当前设备配置。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self.lock:
             return copy.deepcopy(self.config)
 
     def validate_configuration(self, patch: dict[str, Any]) -> dict[str, Any]:
+        """验证配置。
+
+        Args:
+            patch: patch，作为验证配置所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。 返回类型为 dict[str, Any]。
+        """
         if not isinstance(patch, dict):
             raise ValueError("configuration patch must be a mapping")
         if set(patch) - {"motion"} or ("motion" in patch and set(patch["motion"]) - {"max_speed_rad_sec"}):
@@ -109,6 +150,15 @@ class ArmController:
         return candidate
 
     def apply_configuration(self, patch: dict[str, Any], lease_id: str) -> dict[str, Any]:
+        """应用配置。
+
+        Args:
+            patch: patch，作为应用配置所需的输入。 类型为 dict[str, Any]。
+            lease_id: 租约标识符，作为应用配置所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self.lock:
             self._require_lease(lease_id)
             if self.active_operation or self.teach_enabled or self.motion_enabled:
@@ -119,6 +169,15 @@ class ArmController:
             return self.configuration()
 
     def acquire_control(self, owner: str, ttl_sec: float | None = None) -> tuple[str, float]:
+        """获取控制权。
+
+        Args:
+            owner: owner，作为获取控制权所需的输入。 类型为 str。
+            ttl_sec: ttlsec，作为获取控制权所需的输入。 类型为 float | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 tuple[str, float]。
+        """
         with self.lock:
             self._expire_lease_locked()
             if self.lease_id:
@@ -135,12 +194,28 @@ class ArmController:
             return self.lease_id, ttl
 
     def renew_control(self, lease_id: str) -> float:
+        """续租控制权。
+
+        Args:
+            lease_id: 租约标识符，作为续租控制权所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 float。
+        """
         with self.lock:
             self._require_lease(lease_id)
             self.lease_deadline = time.monotonic() + self.lease_ttl
             return self.lease_ttl
 
     def release_control(self, lease_id: str) -> dict[str, Any]:
+        """释放控制权。
+
+        Args:
+            lease_id: 租约标识符，作为释放控制权所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self.lock:
             self._require_lease(lease_id)
         result = self.stop("control lease released")
@@ -150,6 +225,15 @@ class ArmController:
         return result
 
     def enable_motion(self, lease_id: str, enabled: bool) -> dict[str, Any]:
+        """启用motion。
+
+        Args:
+            lease_id: 租约标识符，作为启用motion所需的输入。 类型为 str。
+            enabled: 表示对应功能是否启用的布尔值。 类型为 bool。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self.lock:
             self._require_lease(lease_id)
             if not enabled:
@@ -177,6 +261,15 @@ class ArmController:
         return {"enabled": True}
 
     def set_joint_velocity(self, lease_id: str, values: list[float]) -> dict[str, Any]:
+        """设置关节速度。
+
+        Args:
+            lease_id: 租约标识符，作为设置关节速度所需的输入。 类型为 str。
+            values: 要应用、比较或转换的一组输入值。 类型为 list[float]。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         velocity = self._validate_vector(values, "velocity_rad_sec")
         limit = float(self.config["motion"]["max_speed_rad_sec"])
         if any(abs(value) > limit for value in velocity):
@@ -245,6 +338,20 @@ class ArmController:
     def move_joints(self, lease_id: str, positions: list[float], speed: float = 0.0,
                     acceleration: float = 0.0, timeout: float = 0.0,
                     cancel_requested=None, feedback=None) -> dict[str, Any]:
+        """运动joints。
+
+        Args:
+            lease_id: 租约标识符，作为运动joints所需的输入。 类型为 str。
+            positions: positions，作为运动joints所需的输入。 类型为 list[float]。
+            speed: 速度，作为运动joints所需的输入。 类型为 float。
+            acceleration: acceleration，作为运动joints所需的输入。 类型为 float。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+            cancel_requested: 取消requested，作为运动joints所需的输入。
+            feedback: 反馈，作为运动joints所需的输入。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         target = self._validate_vector(positions, "positions_rad")
         state = self.state()
         if not state["feedback_valid"]:
@@ -356,6 +463,15 @@ class ArmController:
                         abs(float(v)) <= 0.01 for v in velocities)
 
     def set_lifecycle(self, lease_id: str, command: str) -> dict[str, Any]:
+        """设置生命周期。
+
+        Args:
+            lease_id: 租约标识符，作为设置生命周期所需的输入。 类型为 str。
+            command: command，作为设置生命周期所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         if command not in {"power_on", "startup", "power_off"}:
             raise ValueError("command must be power_on, startup or power_off")
         with self.lock:
@@ -402,9 +518,25 @@ class ArmController:
                 self.operation_state = "idle"
 
     def _power_on(self):
+        """启动机械臂并等待控制模式就绪。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return self.backend.execute("RobotManage.poweron")
 
     def _wait_for_mode(self, expected: set[str]) -> None:
+        """等待机械臂进入指定控制模式。
+
+        Args:
+            expected: expected，作为等待机械臂进入指定控制模式所需的输入。 类型为 set[str]。
+
+        Returns:
+            无返回值。
+        """
         deadline = time.monotonic() + max(45.0, float(self.config["motion"]["operation_timeout_sec"]))
         while time.monotonic() < deadline:
             if self.cancel_event.is_set():
@@ -416,6 +548,14 @@ class ArmController:
         raise TimeoutError(f"Aubo did not reach mode {sorted(expected)} (last={self.feedback.get('mode')})")
 
     def _power_off(self):
+        """关闭机械臂驱动并停止运动。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         error = None
         for method in ("RobotManage.poweroff", "RobotManage.powerOff"):
             try:
@@ -425,6 +565,15 @@ class ArmController:
         raise RuntimeError(f"Aubo power_off RPC unavailable: {error}")
 
     def set_teach_mode(self, lease_id: str, enabled: bool) -> dict[str, Any]:
+        """设置示教mode。
+
+        Args:
+            lease_id: 租约标识符，作为设置示教mode所需的输入。 类型为 str。
+            enabled: 表示对应功能是否启用的布尔值。 类型为 bool。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self.lock:
             self._require_lease(lease_id)
             if self.active_operation not in {"", "teach"}:
@@ -450,6 +599,14 @@ class ArmController:
         return {"success": True, "teach_state": "enabled" if enabled else "disabled"}
 
     def stop(self, reason: str = "stop requested") -> dict[str, Any]:
+        """停止设备当前动作。
+
+        Args:
+            reason: 原因，作为停止设备当前动作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self.lock:
             self.stop_requested = True
             self.cancel_event.set()
@@ -486,7 +643,14 @@ class ArmController:
                 "reason": str(reason), "error": "" if accepted else getattr(self.backend, "last_error", "stop failed")}
 
     def _leave_servo_mode(self) -> None:
-        """Stop once when changing from streaming servo targets to moveJoint."""
+        """Stop once when changing from streaming servo targets to moveJoint.
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if not self.backend.stop():
             raise RuntimeError("Aubo did not confirm stop before leaving servo mode")
         result = self.backend.execute("MotionControl.setServoMode", [False])
@@ -497,7 +661,14 @@ class ArmController:
             self.velocity_command_time = 0.0
 
     def _halt_velocity_stream(self) -> bool:
-        """Halt a zero-velocity command while keeping the lease enabled."""
+        """Halt a zero-velocity command while keeping the lease enabled.
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示在速度流结束时发送零速度指令是否成功或成立。
+        """
         accepted = bool(self.backend.stop())
         if self.servo_mode_active:
             try:
@@ -512,6 +683,14 @@ class ArmController:
         return accepted
 
     def poll_once(self) -> None:
+        """读取并验证一条新样本，更新设备状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         try:
             feedback = self.backend.poll()
             with self.lock:
@@ -535,6 +714,14 @@ class ArmController:
                 self.backend.stop()
 
     def tick(self) -> None:
+        """更新当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         expired = False
         watchdog = False
         with self.lock:
@@ -567,6 +754,14 @@ class ArmController:
         self.poll_once()
 
     def shutdown(self) -> None:
+        """关闭当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         should_stop = self.motion_enabled or bool(self.active_operation) or self.teach_enabled
         self.motion_enabled = False
         self.cancel_event.set()
@@ -582,6 +777,14 @@ class ArmController:
         self.backend.close()
 
     def _require_motion_ready(self, lease_id: str) -> None:
+        """检查运动就绪。
+
+        Args:
+            lease_id: 租约标识符，作为检查运动就绪所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         with self.lock:
             self._require_lease(lease_id)
             if not self.motion_enabled:
@@ -591,6 +794,14 @@ class ArmController:
             raise RuntimeError("Aubo mode, safety or feedback no longer permits motion")
 
     def _send_teach(self, enabled: bool) -> Any:
+        """发送示教。
+
+        Args:
+            enabled: 表示对应功能是否启用的布尔值。 类型为 bool。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Any。
+        """
         method = self.config["teach"]["method"]
         if method == "handguide":
             return self.backend.execute("RobotManage.handguideMode", [[], []]) if enabled else self.backend.execute("RobotManage.exitHandguideMode")
@@ -598,10 +809,26 @@ class ArmController:
 
     @staticmethod
     def _safe_state(state: dict[str, Any]) -> bool:
+        """筛选并返回可安全公开的机械臂状态字段。
+
+        Args:
+            state: 状态，作为执行 _safe_state 对应的处理流程所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            布尔值，表示执行 _safe_state 对应的处理流程是否成功或成立。
+        """
         return (str(state.get("mode", "")).lower() == "running" and
                 str(state.get("safety_mode", "")).lower() in SAFE_MODES)
 
     def _effective_limits(self):
+        """根据设备和配置计算当前有效的关节速度限制。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         local_min = [float(v) for v in self.config["joints"]["min_rad"]]
         local_max = [float(v) for v in self.config["joints"]["max_rad"]]
         if isinstance(self.backend, AuboBackend):
@@ -614,6 +841,15 @@ class ArmController:
 
     @staticmethod
     def _validate_vector(values: list[float], label: str) -> list[float]:
+        """验证vector。
+
+        Args:
+            values: 要应用、比较或转换的一组输入值。 类型为 list[float]。
+            label: label，作为验证vector所需的输入。 类型为 str。
+
+        Returns:
+            布尔值，表示验证vector是否成功或成立。 返回类型为 list[float]。
+        """
         if isinstance(values, (str, bytes)):
             raise ValueError(f"{label} must contain six values")
         try:
@@ -627,16 +863,40 @@ class ArmController:
         return result
 
     def _require_lease(self, lease_id: str) -> None:
+        """确认请求持有有效的控制租约。
+
+        Args:
+            lease_id: 租约标识符，作为确认请求持有有效的控制租约所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         self._expire_lease_locked()
         if not lease_id or lease_id != self.lease_id:
             raise PermissionError("valid arm control lease is required")
 
     def _expire_lease_locked(self) -> None:
+        """在锁保护下检查并过期控制租约。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if self.lease_id and time.monotonic() >= self.lease_deadline:
             self._clear_lease_locked()
             self.motion_enabled = False
             self.cancel_event.set()
 
     def _clear_lease_locked(self) -> None:
+        """在锁保护下清除控制租约。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.lease_id = self.lease_owner = ""
         self.lease_deadline = self.lease_ttl = 0.0

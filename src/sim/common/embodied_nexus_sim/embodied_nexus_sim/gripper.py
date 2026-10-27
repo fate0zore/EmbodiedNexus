@@ -19,6 +19,14 @@ class Ros2SimGripperBackend:
     feedback_is_simulated = True
 
     def __init__(self, config: dict) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict。
+
+        Returns:
+            无返回值。
+        """
         self.config = config
         options = config["backend_options"]
         validate_options(options, {"namespace", "joint_states_topic", "gripper_trajectory_topic",
@@ -44,6 +52,14 @@ class Ros2SimGripperBackend:
         self._clock_jump_pending = False
 
     def open(self) -> None:
+        """打开设备连接或目标资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._ros = SimRosNode(self.config["device_id"], "gripper")
         self._publisher = self._ros.node.create_publisher(JointTrajectory, self.command_topic, 10)
         self._subscription = self._ros.node.create_subscription(JointState, self.state_topic, self._on_state, 10)
@@ -53,6 +69,14 @@ class Ros2SimGripperBackend:
         self.opened = True
 
     def _on_state(self, msg: JointState) -> None:
+        """处理状态事件。
+
+        Args:
+            msg: 待处理的消息对象。 类型为 JointState。
+
+        Returns:
+            无返回值。
+        """
         by_name = {name: index for index, name in enumerate(msg.name)}
         if any(name not in by_name for name in self.joints):
             return
@@ -68,12 +92,28 @@ class Ros2SimGripperBackend:
             self._receipt = time.monotonic()
 
     def _state(self):
+        """构造设备状态响应。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         with self._lock:
             if self._sample is None or time.monotonic() - self._receipt > float(self.config["feedback"]["stale_sec"]):
                 raise TimeoutError("simulated gripper joint feedback is missing or stale")
             return self._sample
 
     def _feedback(self) -> Feedback:
+        """反馈当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Feedback。
+        """
         positions, velocities = self._state()
         closed = max(0.0, min(1.0, (positions[0] - positions[1]) / (2.0 * self.travel_rad)))
         raw_max = int(self.config["motion"]["close_angle_tenths"])
@@ -84,6 +124,14 @@ class Ros2SimGripperBackend:
                         speed_raw=max(0, round(speed * 1000.0)), angle_raw=angle)
 
     def read_feedback(self):
+        """读取反馈。
+
+        Args:
+            无参数。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         if not self.opened:
             raise OSError("simulated gripper is disconnected")
         with self._lock:
@@ -93,6 +141,15 @@ class Ros2SimGripperBackend:
         return self._feedback()
 
     def _publish(self, positions, duration: float) -> None:
+        """发布当前设备或操作。
+
+        Args:
+            positions: positions，作为发布当前设备或操作所需的输入。
+            duration: duration，作为发布当前设备或操作所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         message = JointTrajectory()
         message.header.stamp = self._ros.node.get_clock().now().to_msg()
         message.joint_names = self.joints
@@ -103,6 +160,16 @@ class Ros2SimGripperBackend:
         self._publisher.publish(message)
 
     def command(self, direction: int, angle_tenths: int, speed_tenths: int) -> None:
+        """执行或转发设备控制命令。
+
+        Args:
+            direction: direction，作为执行 command 对应的处理流程所需的输入。 类型为 int。
+            angle_tenths: 角度tenths，作为执行 command 对应的处理流程所需的输入。 类型为 int。
+            speed_tenths: 速度tenths，作为执行 command 对应的处理流程所需的输入。 类型为 int。
+
+        Returns:
+            无返回值。
+        """
         if not self.opened:
             raise OSError("simulated gripper is disconnected")
         current, _ = self._state()
@@ -114,10 +181,26 @@ class Ros2SimGripperBackend:
         self._publish([target, -target], max(0.15, actual_delta / speed))
 
     def stop(self) -> None:
+        """停止设备当前动作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         current, _ = self._state()
         self._publish(current, 0.05)
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if self.opened:
             try:
                 self.stop()

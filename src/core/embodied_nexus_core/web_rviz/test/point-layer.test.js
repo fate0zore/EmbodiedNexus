@@ -19,6 +19,11 @@ test("point layers reuse GPU storage and keep coordinates in their ROS frame", (
 });
 
 test("point storage grows only when required and releases the old geometry", () => {
+  /**
+ * 创建指定点数的测试缓冲区集合。
+ * @param {*} count - 缓冲区需要容纳的点数。
+ * @returns {*} 创建指定点数的测试缓冲区集合得到的数据或处理结果。
+ */
   const buffers = (count) => ({ positions: new Float32Array(count * 3), count });
   const layer = updatePointLayer(null, buffers(1), new THREE.Matrix4(), 0.03, 0xffac62);
   const old = layer.geometry;

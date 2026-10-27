@@ -29,6 +29,14 @@ from .controller import BaseController, relative_distance_progress, unwrapped_ya
 
 
 def default_config_path() -> str:
+    """返回该设备的默认配置文件路径。
+
+    Args:
+        无参数。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 str。
+    """
     try:
         from ament_index_python.packages import get_package_share_directory
         return str(Path(get_package_share_directory("embodied_nexus_base")) / "config" / "scout_mock.yaml")
@@ -38,6 +46,14 @@ def default_config_path() -> str:
 
 class BaseNode(Node):
     def __init__(self, config_path: str | None = None) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config_path: 配置文件路径，指向要加载的设备配置。 类型为 str | None。
+
+        Returns:
+            无返回值。
+        """
         super().__init__("embodied_nexus_base")
         self.declare_parameter("config_file", config_path or default_config_path())
         self.declare_parameter("interface_mode", "")
@@ -79,15 +95,42 @@ class BaseNode(Node):
 
     @staticmethod
     def _json(value) -> str:
+        """将输入值转换为可写入 JSON 的数据。
+
+        Args:
+            value: 要应用、比较或转换的输入值。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 str。
+        """
         return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
 
     @staticmethod
     def _ok(response, success=True, error=""):
+        """构造表示操作成功的响应。
+
+        Args:
+            response: 服务端或被调用操作返回的响应对象。
+            success: success，作为构造表示操作成功的响应所需的输入。
+            error: error，作为构造表示操作成功的响应所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         response.success = success
         response.error = error
         return response
 
     def _info(self, _request, response):
+        """构造设备信息响应。
+
+        Args:
+            _request: 请求，作为构造设备信息响应所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.descriptor_json = self._json(self.controller.info())
             return self._ok(response)
@@ -95,6 +138,15 @@ class BaseNode(Node):
             return self._ok(response, False, str(exc))
 
     def _state(self, _request, response):
+        """构造设备状态响应。
+
+        Args:
+            _request: 请求，作为构造设备状态响应所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.state_json = self._json(self.controller.state())
             return self._ok(response)
@@ -102,6 +154,15 @@ class BaseNode(Node):
             return self._ok(response, False, str(exc))
 
     def _get_config(self, _request, response):
+        """读取设备配置并构造服务响应。
+
+        Args:
+            _request: 请求，作为读取设备配置并构造服务响应所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         try:
             response.config_json = self._json(self.controller.configuration())
             return self._ok(response)
@@ -109,6 +170,15 @@ class BaseNode(Node):
             return self._ok(response, False, str(exc))
 
     def _validate(self, request, response):
+        """验证当前设备或操作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             candidate = self.controller.validate_configuration(json.loads(request.patch_json))
             response.valid = True
@@ -120,6 +190,15 @@ class BaseNode(Node):
         return response
 
     def _apply(self, request, response):
+        """应用当前设备或操作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.config_json = self._json(self.controller.apply_configuration(
                 json.loads(request.patch_json), request.lease_id))
@@ -128,6 +207,15 @@ class BaseNode(Node):
             return self._ok(response, False, str(exc))
 
     def _acquire(self, request, response):
+        """申请设备控制权。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.lease_id, response.expires_in_sec = self.controller.acquire_control(
                 request.owner, request.ttl_sec or None)
@@ -136,6 +224,15 @@ class BaseNode(Node):
             return self._ok(response, False, str(exc))
 
     def _renew(self, request, response):
+        """续租当前设备控制权。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.expires_in_sec = self.controller.renew_control(request.lease_id)
             return self._ok(response)
@@ -143,6 +240,15 @@ class BaseNode(Node):
             return self._ok(response, False, str(exc))
 
     def _release(self, request, response):
+        """释放当前设备控制租约。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             result = self.controller.release_control(request.lease_id)
             response.stop_sent = result["stop_requested"]
@@ -152,6 +258,15 @@ class BaseNode(Node):
             return self._ok(response, False, str(exc))
 
     def _enable(self, request, response):
+        """更新设备运动使能状态。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             result = self.controller.enable_motion(request.lease_id, request.enabled)
             response.enabled = result["enabled"]
@@ -165,6 +280,15 @@ class BaseNode(Node):
             return self._ok(response, False, str(exc))
 
     def _velocity(self, request, response):
+        """更新设备速度指令。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             self.controller.set_velocity(request.lease_id, request.linear_mps, request.angular_rps)
             return self._ok(response)
@@ -172,6 +296,15 @@ class BaseNode(Node):
             return self._ok(response, False, str(exc))
 
     def _stop(self, request, response):
+        """停止设备当前动作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             result = self.controller.stop(request.reason or "stop requested")
             response.stop_requested = result["stop_requested"]
@@ -183,6 +316,14 @@ class BaseNode(Node):
             return self._ok(response, False, str(exc))
 
     def _distance_goal(self, request):
+        """处理底盘距离运动动作的目标请求。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             distance = self.controller._finite(request.distance_m, "distance_m")
             speed = self.controller._finite(request.speed_mps, "speed_mps")
@@ -196,6 +337,14 @@ class BaseNode(Node):
             return GoalResponse.REJECT
 
     def _turn_goal(self, request):
+        """处理底盘转向动作的目标请求。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             angle = self.controller._finite(request.angle_rad, "angle_rad")
             speed = self.controller._finite(request.speed_rps, "speed_rps")
@@ -210,9 +359,25 @@ class BaseNode(Node):
 
     @staticmethod
     def _cancel_action(_goal_handle):
+        """取消动作。
+
+        Args:
+            _goal_handle: goal处理，作为取消动作所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return CancelResponse.ACCEPT
 
     def _move_distance(self, goal_handle):
+        """运动distance。
+
+        Args:
+            goal_handle: goal处理，作为运动distance所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         request = goal_handle.request
         result = MoveBaseDistance.Result()
         operation_id = ""
@@ -276,6 +441,14 @@ class BaseNode(Node):
         return result
 
     def _turn_relative(self, goal_handle):
+        """执行底盘相对转向动作并检查完成状态。
+
+        Args:
+            goal_handle: goal处理，作为执行 _turn_relative 对应的处理流程所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         request = goal_handle.request
         result = TurnBaseRelative.Result()
         operation_id = ""
@@ -343,6 +516,14 @@ class BaseNode(Node):
         return result
 
     def _tick(self):
+        """执行一次周期性状态更新。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.controller.tick()
         state = self.controller.state()
         message = BaseState()
@@ -392,6 +573,14 @@ class BaseNode(Node):
             self.tf_broadcaster.sendTransform(transform)
 
     def destroy_node(self):
+        """销毁节点。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             self.controller.shutdown()
         finally:
@@ -401,6 +590,14 @@ class BaseNode(Node):
 
 
 def main(args=None):
+    """解析启动参数并运行程序入口。
+
+    Args:
+        args: 额外的位置参数集合。
+
+    Returns:
+        无返回值。
+    """
     rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = BaseNode()
     executor = MultiThreadedExecutor(num_threads=6)

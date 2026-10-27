@@ -19,6 +19,14 @@ class Feedback:
 
 
 def xor_checksum(values: Iterable[int]) -> int:
+    """计算协议数据的异或校验值。
+
+    Args:
+        values: 要应用、比较或转换的一组输入值。 类型为 Iterable[int]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     result = 0
     for value in values:
         result ^= int(value) & 0xFF
@@ -29,6 +37,19 @@ def build_motion_frame(
     *, device_id: int, mode: int, direction: int, sub_divide: int,
     angle_tenths: int, speed_tenths: int,
 ) -> bytes:
+    """构建motion坐标系。
+
+    Args:
+        device_id: 设备标识符，作为构建motion坐标系所需的输入。 类型为 int。
+        mode: mode，作为构建motion坐标系所需的输入。 类型为 int。
+        direction: direction，作为构建motion坐标系所需的输入。 类型为 int。
+        sub_divide: subdivide，作为构建motion坐标系所需的输入。 类型为 int。
+        angle_tenths: 角度tenths，作为构建motion坐标系所需的输入。 类型为 int。
+        speed_tenths: 速度tenths，作为构建motion坐标系所需的输入。 类型为 int。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 bytes。
+    """
     values = (device_id, mode, direction, sub_divide)
     if any(not 0 <= int(value) <= 255 for value in values):
         raise ValueError("device_id, mode, direction and sub_divide must fit in one byte")
@@ -43,6 +64,14 @@ def build_motion_frame(
 
 
 def build_state_request_frame(device_id: int) -> bytes:
+    """构建状态请求坐标系。
+
+    Args:
+        device_id: 设备标识符，作为构建状态请求坐标系所需的输入。 类型为 int。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 bytes。
+    """
     if not 0 <= int(device_id) <= 255:
         raise ValueError("device_id must fit in one byte")
     payload = [0x7B, int(device_id), 0, 0, 0, 0, 0, 0, 0]
@@ -50,6 +79,15 @@ def build_state_request_frame(device_id: int) -> bytes:
 
 
 def parse_feedback_frame(frame: bytes, expected_device_id: int) -> Feedback:
+    """解析反馈坐标系。
+
+    Args:
+        frame: 坐标系，作为解析反馈坐标系所需的输入。 类型为 bytes。
+        expected_device_id: expected设备标识符，作为解析反馈坐标系所需的输入。 类型为 int。
+
+    Returns:
+        解析或解码后的结构化数据。 返回类型为 Feedback。
+    """
     if len(frame) != 9:
         raise ProtocolError(f"feedback must contain 9 bytes; received {len(frame)}")
     actual_checksum = xor_checksum(frame[:8])
@@ -69,7 +107,14 @@ def parse_feedback_frame(frame: bytes, expected_device_id: int) -> Feedback:
 
 
 def build_feedback_frame(feedback: Feedback) -> bytes:
-    """Build a response frame for tests and the deterministic mock backend."""
+    """Build a response frame for tests and the deterministic mock backend.
+
+    Args:
+        feedback: 反馈，作为构造供测试与 mock 后端使用的夹爪反馈帧所需的输入。 类型为 Feedback。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 bytes。
+    """
     if not 0 <= feedback.angle_raw <= 0xFFFFFFFF:
         raise ValueError("angle_raw must fit in 32 bits")
     payload = [feedback.device_id, feedback.reached,

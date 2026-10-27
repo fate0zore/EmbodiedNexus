@@ -14,6 +14,14 @@ class Ros2SimBaseBackend:
     """Scout backend using standard simulated velocity and odometry topics."""
 
     def __init__(self, config: dict) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict。
+
+        Returns:
+            无返回值。
+        """
         self.config = config
         options = config["backend_options"]
         validate_options(options, {"namespace", "cmd_vel_topic", "odom_topic"})
@@ -36,6 +44,14 @@ class Ros2SimBaseBackend:
         self._clock_recovery_thread_lock = threading.Lock()
 
     def open(self) -> None:
+        """打开设备连接或目标资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._ros = SimRosNode(self.config["device_id"], "base")
         self._publisher = self._ros.node.create_publisher(TwistStamped, self.command_topic, 10)
         self._subscription = self._ros.node.create_subscription(Odometry, self.odom_topic, self._on_odom, 10)
@@ -45,6 +61,14 @@ class Ros2SimBaseBackend:
         self.connected = True
 
     def _on_odom(self, msg: Odometry) -> None:
+        """处理odom事件。
+
+        Args:
+            msg: 待处理的消息对象。 类型为 Odometry。
+
+        Returns:
+            无返回值。
+        """
         start_recovery = False
         with self._lock:
             clock_jump = self._stamp_guard.observe(msg.header.stamp)
@@ -76,6 +100,14 @@ class Ros2SimBaseBackend:
                     self._clock_recovery_thread.start()
 
     def _keep_zero_after_clock_jump(self) -> None:
+        """检测仿真时钟回跳并保持底盘零速度。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         while not self._clock_recovery_event.wait(0.1):
             try:
                 self.stop()
@@ -83,9 +115,26 @@ class Ros2SimBaseBackend:
                 pass
 
     def request_control_mode(self) -> None:
+        """请求控制权mode。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.enabled = True
 
     def set_velocity(self, linear: float, angular: float) -> None:
+        """设置速度。
+
+        Args:
+            linear: 线速度，作为设置速度所需的输入。 类型为 float。
+            angular: 角速度，作为设置速度所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         linear = float(linear)
         angular = float(angular)
         if not self.connected and (linear != 0.0 or angular != 0.0):
@@ -98,9 +147,25 @@ class Ros2SimBaseBackend:
         self._publisher.publish(message)
 
     def stop(self) -> None:
+        """停止设备当前动作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.set_velocity(0.0, 0.0)
 
     def poll(self):
+        """轮询当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         with self._lock:
             clock_jump, self._clock_jump_pending = self._clock_jump_pending, False
             msg, age = self._odom, time.monotonic() - self._receipt if self._receipt else float("inf")
@@ -119,6 +184,14 @@ class Ros2SimBaseBackend:
         return system, motion, True, ""
 
     def read_odometry(self):
+        """读取odometry。
+
+        Args:
+            无参数。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         with self._lock:
             msg, receipt = self._odom, self._receipt
             stale = float(self.config["feedback"]["stale_sec"])
@@ -130,6 +203,14 @@ class Ros2SimBaseBackend:
                     "stamp_sec": float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9}
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._clock_recovery_event.set()
         recovery_thread = self._clock_recovery_thread
         if recovery_thread is not None and recovery_thread is not threading.current_thread():

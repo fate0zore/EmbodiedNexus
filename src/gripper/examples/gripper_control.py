@@ -7,6 +7,14 @@ from embodied_nexus_client import GripperClient
 
 
 def main() -> None:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        无参数。
+
+    Returns:
+        无返回值。
+    """
     parser = argparse.ArgumentParser(description="Run a bounded MS42DC open/close/relative command")
     parser.add_argument("--url", required=True, help="robot base URL, e.g. http://robot-host:8776")
     parser.add_argument("--device-id", default="gripper_main")

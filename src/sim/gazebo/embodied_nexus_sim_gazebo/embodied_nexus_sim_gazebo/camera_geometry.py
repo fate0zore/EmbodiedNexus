@@ -16,6 +16,15 @@ CAMERA_FROM_OPTICAL = np.array([[0., 0., 1., 0.], [-1., 0., 0., 0.],
 
 
 def camera_geometry(width: int, height: int) -> dict:
+    """相机几何数据。
+
+    Args:
+        width: width，作为相机几何数据所需的输入。 类型为 int。
+        height: height，作为相机几何数据所需的输入。 类型为 int。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict。
+    """
     camera_share = Path(get_package_share_directory("embodied_nexus_camera"))
     description_share = Path(get_package_share_directory("embodied_nexus_sim_description"))
     factory = json.loads((camera_share / "config/gemini335_factory_calibration.json").read_text())
@@ -47,6 +56,14 @@ def camera_geometry(width: int, height: int) -> dict:
 
 
 def pose_xyz_rpy(matrix: np.ndarray) -> tuple[list[float], list[float]]:
+    """位姿xyzrpy。
+
+    Args:
+        matrix: matrix，作为位姿xyzrpy所需的输入。 类型为 np.ndarray。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 tuple[list[float], list[float]]。
+    """
     pitch = math.atan2(-matrix[2, 0], math.hypot(matrix[0, 0], matrix[1, 0]))
     if abs(math.cos(pitch)) < 1e-8:
         roll, yaw = 0.0, math.atan2(-matrix[0, 1], matrix[1, 1])

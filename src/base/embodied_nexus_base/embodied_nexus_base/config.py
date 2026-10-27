@@ -41,6 +41,15 @@ _ENV_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """合并当前设备或操作。
+
+    Args:
+        base: 底盘，作为合并当前设备或操作所需的输入。 类型为 dict[str, Any]。
+        override: override，作为合并当前设备或操作所需的输入。 类型为 dict[str, Any]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict[str, Any]。
+    """
     result = copy.deepcopy(base)
     for key, value in override.items():
         if isinstance(value, dict) and isinstance(result.get(key), dict):
@@ -51,6 +60,14 @@ def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
+    """加载配置。
+
+    Args:
+        path: 目标文件、资源或接口的路径。 类型为 str | Path | None。
+
+    Returns:
+        查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 dict[str, Any]。
+    """
     config = copy.deepcopy(DEFAULT_CONFIG)
     if path:
         loaded = yaml.safe_load(Path(path).expanduser().read_text(encoding="utf-8")) or {}
@@ -62,6 +79,14 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
 
 
 def validate_config(config: dict[str, Any]) -> None:
+    """验证配置。
+
+    Args:
+        config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+
+    Returns:
+        无返回值。
+    """
     _reject_unknown(config, DEFAULT_CONFIG)
     if not isinstance(config.get("device_id"), str) or not _ID_RE.fullmatch(config["device_id"]):
         raise ValueError("device_id must contain only letters, digits, '_' or '-'")
@@ -114,6 +139,16 @@ def validate_config(config: dict[str, Any]) -> None:
 
 
 def _reject_unknown(value: dict[str, Any], schema: dict[str, Any], prefix: str = "") -> None:
+    """拒绝配置中的未知字段。
+
+    Args:
+        value: 要应用、比较或转换的输入值。 类型为 dict[str, Any]。
+        schema: schema，作为拒绝配置中的未知字段所需的输入。 类型为 dict[str, Any]。
+        prefix: prefix，作为拒绝配置中的未知字段所需的输入。 类型为 str。
+
+    Returns:
+        无返回值。
+    """
     unknown = sorted(set(value) - set(schema))
     if unknown:
         label = f"{prefix}." if prefix else ""
@@ -125,6 +160,15 @@ def _reject_unknown(value: dict[str, Any], schema: dict[str, Any], prefix: str =
 
 
 def validate_patch(config: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    """验证patch。
+
+    Args:
+        config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+        patch: patch，作为验证patch所需的输入。 类型为 dict[str, Any]。
+
+    Returns:
+        布尔值，表示验证patch是否成功或成立。 返回类型为 dict[str, Any]。
+    """
     if not isinstance(patch, dict):
         raise ValueError("configuration patch must be a mapping")
     candidate = _merge(config, patch)
@@ -141,6 +185,16 @@ def validate_patch(config: dict[str, Any], patch: dict[str, Any]) -> dict[str, A
 
 
 def _leaf_paths(before: dict, after: dict, prefix: str = "") -> set[str]:
+    """递归比较配置并收集发生变化的叶节点路径。
+
+    Args:
+        before: before，作为执行 _leaf_paths 对应的处理流程所需的输入。 类型为 dict。
+        after: after，作为执行 _leaf_paths 对应的处理流程所需的输入。 类型为 dict。
+        prefix: prefix，作为执行 _leaf_paths 对应的处理流程所需的输入。 类型为 str。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 set[str]。
+    """
     changed: set[str] = set()
     for key in before.keys() | after.keys():
         path = f"{prefix}.{key}" if prefix else key
@@ -153,14 +207,39 @@ def _leaf_paths(before: dict, after: dict, prefix: str = "") -> set[str]:
 
 
 def _get(value: dict, path: str):
+    """获取当前设备或操作。
+
+    Args:
+        value: 要应用、比较或转换的输入值。 类型为 dict。
+        path: 目标文件、资源或接口的路径。 类型为 str。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     for part in path.split("."):
         value = value[part]
     return value
 
 
 def public_config(config: dict[str, Any]) -> dict[str, Any]:
+    """公开配置。
+
+    Args:
+        config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict[str, Any]。
+    """
     return copy.deepcopy(config)
 
 
 def config_json(config: dict[str, Any]) -> str:
+    """配置JSON。
+
+    Args:
+        config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 str。
+    """
     return json.dumps(public_config(config), ensure_ascii=False, allow_nan=False, indent=2)

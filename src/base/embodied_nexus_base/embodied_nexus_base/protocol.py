@@ -31,6 +31,17 @@ class ScoutFeedback:
 
 def encode_config(can_bitrate: int, frame_type: str = "standard", protocol: str = "variable",
                   mode: str = "normal") -> bytes:
+    """编码配置。
+
+    Args:
+        can_bitrate: canbitrate，作为编码配置所需的输入。 类型为 int。
+        frame_type: 坐标系类型，作为编码配置所需的输入。 类型为 str。
+        protocol: 协议，作为编码配置所需的输入。 类型为 str。
+        mode: mode，作为编码配置所需的输入。 类型为 str。
+
+    Returns:
+        转换、格式化或编码后的数据。 返回类型为 bytes。
+    """
     try:
         values = (PROTOCOL_CONFIG_CODES[protocol], CAN_BITRATE_CODES[can_bitrate],
                   FRAME_TYPE_CODES[frame_type], MODE_CODES[mode])
@@ -43,6 +54,16 @@ def encode_config(can_bitrate: int, frame_type: str = "standard", protocol: str 
 
 
 def encode_variable_frame(can_id: int, data: bytes, frame_type: str = "standard") -> bytes:
+    """编码variable坐标系。
+
+    Args:
+        can_id: can标识符，作为编码variable坐标系所需的输入。 类型为 int。
+        data: 待处理的原始数据或消息载荷。 类型为 bytes。
+        frame_type: 坐标系类型，作为编码variable坐标系所需的输入。 类型为 str。
+
+    Returns:
+        转换、格式化或编码后的数据。 返回类型为 bytes。
+    """
     if frame_type not in FRAME_TYPE_CODES:
         raise ValueError(f"unsupported CAN frame type: {frame_type}")
     if len(data) > 8:
@@ -55,7 +76,14 @@ def encode_variable_frame(can_id: int, data: bytes, frame_type: str = "standard"
 
 
 def decode_variable_frames(stream: bytes) -> tuple[list[CanFrame], bytes]:
-    """Decode complete Waveshare USB-CAN-A variable frames and keep a partial tail."""
+    """Decode complete Waveshare USB-CAN-A variable frames and keep a partial tail.
+
+    Args:
+        stream: 数据流，作为解码完整的 Waveshare 可变长度 CAN 帧并保留未完整尾段所需的输入。 类型为 bytes。
+
+    Returns:
+        解析或解码后的结构化数据。 返回类型为 tuple[list[CanFrame], bytes]。
+    """
     frames: list[CanFrame] = []
     index = 0
     while index < len(stream):
@@ -91,15 +119,39 @@ def decode_variable_frames(stream: bytes) -> tuple[list[CanFrame], bytes]:
 
 
 def int16_to_bytes(value: int) -> bytes:
+    """将有符号 16 位整数编码为协议字节序列。
+
+    Args:
+        value: 要应用、比较或转换的输入值。 类型为 int。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 bytes。
+    """
     value = max(-32768, min(32767, int(value)))
     return value.to_bytes(2, "big", signed=True)
 
 
 def int16_from_bytes(data: bytes) -> int:
+    """按协议字节序列解码有符号 16 位整数。
+
+    Args:
+        data: 待处理的原始数据或消息载荷。 类型为 bytes。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     return int.from_bytes(data, "big", signed=True)
 
 
 def decode_scout_frames(frames: list[CanFrame]) -> ScoutFeedback:
+    """解码scoutframes。
+
+    Args:
+        frames: frames，作为解码scoutframes所需的输入。 类型为 list[CanFrame]。
+
+    Returns:
+        解析或解码后的结构化数据。 返回类型为 ScoutFeedback。
+    """
     system = motion = None
     for frame in frames:
         if frame.can_id == SCOUT_SYSTEM_STATE_ID and len(frame.data) >= 8:

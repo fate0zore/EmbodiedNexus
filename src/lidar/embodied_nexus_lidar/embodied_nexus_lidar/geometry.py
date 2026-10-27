@@ -26,6 +26,14 @@ class CloudFrame:
 
     @property
     def point_count(self) -> int:
+        """点count。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 int。
+        """
         return self.width * self.height
 
 
@@ -45,6 +53,14 @@ class ScanFrame:
 
 
 def cloud_from_ros(message: Any) -> CloudFrame:
+    """点云fromros。
+
+    Args:
+        message: 待处理的消息对象。 类型为 Any。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 CloudFrame。
+    """
     return CloudFrame(
         stamp_sec=float(message.header.stamp.sec) + float(message.header.stamp.nanosec) * 1e-9,
         frame_id=str(message.header.frame_id), width=int(message.width), height=int(message.height),
@@ -56,6 +72,15 @@ def cloud_from_ros(message: Any) -> CloudFrame:
 
 
 def cloud_to_ros(frame: CloudFrame, message: Any) -> Any:
+    """点云toros。
+
+    Args:
+        frame: 坐标系，作为点云toros所需的输入。 类型为 CloudFrame。
+        message: 待处理的消息对象。 类型为 Any。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 Any。
+    """
     stamp_sec = math.floor(frame.stamp_sec)
     stamp_nanosec = round((frame.stamp_sec - stamp_sec) * 1e9)
     if stamp_nanosec >= 1_000_000_000:
@@ -81,6 +106,14 @@ def cloud_to_ros(frame: CloudFrame, message: Any) -> Any:
 
 
 def array_bytes(data: bytes):
+    """将数组或消息序列化为字节串。
+
+    Args:
+        data: 待处理的原始数据或消息载荷。 类型为 bytes。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     from array import array
     result = array("B")
     result.frombytes(data)
@@ -88,6 +121,14 @@ def array_bytes(data: bytes):
 
 
 def _xyz_layout(frame: CloudFrame) -> tuple[dict[str, dict[str, int]], str]:
+    """查找 PointCloud2 中 XYZ 字段的偏移和类型。
+
+    Args:
+        frame: 坐标系，作为执行 _xyz_layout 对应的处理流程所需的输入。 类型为 CloudFrame。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 tuple[dict[str, dict[str, int]], str]。
+    """
     if frame.point_step <= 0 or frame.width < 0 or frame.height < 0 or frame.row_step < frame.width * frame.point_step:
         raise ValueError("PointCloud2 dimensions and strides are invalid")
     if len(frame.data) < frame.row_step * frame.height:
@@ -108,6 +149,14 @@ def _xyz_layout(frame: CloudFrame) -> tuple[dict[str, dict[str, int]], str]:
 
 
 def iter_points(frame: CloudFrame) -> Iterator[dict[str, float]]:
+    """按点解析点云中的 XYZ 数值。
+
+    Args:
+        frame: 坐标系，作为执行 iter_points 对应的处理流程所需的输入。 类型为 CloudFrame。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 Iterator[dict[str, float]]。
+    """
     fields, endian = _xyz_layout(frame)
     for row in range(frame.height):
         base = row * frame.row_step
@@ -121,6 +170,16 @@ def iter_points(frame: CloudFrame) -> Iterator[dict[str, float]]:
 
 
 def make_scan(frame: CloudFrame, config: dict[str, Any], scan_time: float = 0.0) -> ScanFrame:
+    """生成扫描。
+
+    Args:
+        frame: 坐标系，作为生成扫描所需的输入。 类型为 CloudFrame。
+        config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+        scan_time: 扫描时间，作为生成扫描所需的输入。 类型为 float。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 ScanFrame。
+    """
     fields, endian = _xyz_layout(frame)
     del fields, endian
     cfg = config["scan"]
@@ -167,10 +226,27 @@ def make_scan(frame: CloudFrame, config: dict[str, Any], scan_time: float = 0.0)
 
 
 def scan_payload(scan: ScanFrame) -> bytes:
+    """扫描payload。
+
+    Args:
+        scan: 扫描，作为扫描payload所需的输入。 类型为 ScanFrame。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 bytes。
+    """
     return struct.pack("<" + "f" * len(scan.ranges), *scan.ranges)
 
 
 def downsample_cloud(frame: CloudFrame, stride: int) -> CloudFrame:
+    """按目标数量对点云进行下采样。
+
+    Args:
+        frame: 坐标系，作为执行 downsample_cloud 对应的处理流程所需的输入。 类型为 CloudFrame。
+        stride: stride，作为执行 downsample_cloud 对应的处理流程所需的输入。 类型为 int。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 CloudFrame。
+    """
     if stride <= 1 or frame.point_count == 0:
         return frame
     _xyz_layout(frame)
@@ -191,6 +267,15 @@ def downsample_cloud(frame: CloudFrame, stride: int) -> CloudFrame:
 
 
 def filter_cloud(frame: CloudFrame, config: dict[str, Any]) -> CloudFrame:
+    """筛选点云。
+
+    Args:
+        frame: 坐标系，作为筛选点云所需的输入。 类型为 CloudFrame。
+        config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 CloudFrame。
+    """
     fields, endian = _xyz_layout(frame)
     selected = []
     for row in range(frame.height):
@@ -215,6 +300,17 @@ def filter_cloud(frame: CloudFrame, config: dict[str, Any]) -> CloudFrame:
 
 
 def transform_cloud(frame: CloudFrame, translation: tuple[float, float, float], quaternion: tuple[float, float, float, float], target_frame: str) -> CloudFrame:
+    """转换点云。
+
+    Args:
+        frame: 坐标系，作为转换点云所需的输入。 类型为 CloudFrame。
+        translation: translation，作为转换点云所需的输入。 类型为 tuple[float, float, float]。
+        quaternion: quaternion，作为转换点云所需的输入。 类型为 tuple[float, float, float, float]。
+        target_frame: 目标坐标系，作为转换点云所需的输入。 类型为 str。
+
+    Returns:
+        转换、格式化或编码后的数据。 返回类型为 CloudFrame。
+    """
     result = copy.copy(frame)
     result.data = bytes(frame.data)
     result.frame_id = target_frame

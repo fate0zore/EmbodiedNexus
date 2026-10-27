@@ -17,6 +17,14 @@ class StreamHub:
     """One latest cloud and scan per device; web clients never accumulate queues."""
 
     def __init__(self) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._lock = threading.RLock()
         self._changed = threading.Condition(self._lock)
         self._frames: dict[str, tuple[int, Any, float]] = {}
@@ -24,6 +32,15 @@ class StreamHub:
         self._dropped = 0
 
     def publish(self, channel: str, frame: Any) -> int:
+        """发布当前设备或操作。
+
+        Args:
+            channel: channel，作为发布当前设备或操作所需的输入。 类型为 str。
+            frame: 坐标系，作为发布当前设备或操作所需的输入。 类型为 Any。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 int。
+        """
         with self._changed:
             seq = self._seq.get(channel, 0) + 1
             self._seq[channel] = seq
@@ -34,10 +51,27 @@ class StreamHub:
             return seq
 
     def latest(self, channel: str):
+        """返回指定数据通道的最新样本。
+
+        Args:
+            channel: channel，作为执行 latest 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         with self._lock:
             return self._frames.get(channel)
 
     def wait_after(self, sequences: dict[str, int], timeout: float):
+        """等待after。
+
+        Args:
+            sequences: sequences，作为等待after所需的输入。 类型为 dict[str, int]。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         with self._changed:
             self._changed.wait_for(
                 lambda: any(seq > sequences.get(channel, 0) for channel, (seq, _, _) in self._frames.items()),
@@ -51,12 +85,28 @@ class StreamHub:
             return ready
 
     def dropped(self) -> int:
+        """返回订阅期间累计丢弃的数据帧数量。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 int。
+        """
         with self._lock:
             return self._dropped
 
 
 class LidarRuntime:
     def __init__(self, config: dict[str, Any]) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+
+        Returns:
+            无返回值。
+        """
         self.config = copy.deepcopy(config)
         self.hub = StreamHub()
         self._lock = threading.RLock()
@@ -90,6 +140,14 @@ class LidarRuntime:
         # Serialize input frames, but never hold the shared control lock while
         # walking the PointCloud2 buffer. Config is replaced atomically by
         # apply_config; retry if a new runtime config lands mid-processing.
+        """接收并缓存新的点云数据帧。
+
+        Args:
+            frame: 坐标系，作为执行 ingest_cloud 对应的处理流程所需的输入。 类型为 CloudFrame。
+
+        Returns:
+            布尔值，表示执行 ingest_cloud 对应的处理流程是否成功或成立。
+        """
         with self._cloud_processing_lock:
             while True:
                 with self._lock:
@@ -120,18 +178,50 @@ class LidarRuntime:
                     return True
 
     def latest_scan(self) -> ScanFrame | None:
+        """返回最近一帧 LaserScan 数据。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 ScanFrame | None。
+        """
         with self._lock:
             return self._scan
 
     def latest_cloud(self) -> CloudFrame | None:
+        """返回最近一帧点云数据。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 CloudFrame | None。
+        """
         with self._lock:
             return self._cloud
 
     def set_error(self, message: str) -> None:
+        """设置error。
+
+        Args:
+            message: 待处理的消息对象。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         with self._lock:
             self._last_error = str(message)
 
     def ingest_difop(self, packet: bytes | bytearray | list[int]) -> None:
+        """接收并缓存雷达 DIFOP 配置数据包。
+
+        Args:
+            packet: 数据包，作为执行 ingest_difop 对应的处理流程所需的输入。 类型为 bytes | bytearray | list[int]。
+
+        Returns:
+            无返回值。
+        """
         raw = bytes(packet)
         status = inspect_difop(raw)
         del status
@@ -141,6 +231,14 @@ class LidarRuntime:
             self._last_error = ""
 
     def set_capture(self, enabled: bool) -> bool:
+        """设置采集。
+
+        Args:
+            enabled: 表示对应功能是否启用的布尔值。 类型为 bool。
+
+        Returns:
+            布尔值，表示设置采集是否成功或成立。
+        """
         with self._lock:
             self._capturing = bool(enabled)
             if enabled:
@@ -148,10 +246,26 @@ class LidarRuntime:
             return self._capturing
 
     def validate_config(self, patch: dict[str, Any]) -> dict[str, Any]:
+        """验证配置。
+
+        Args:
+            patch: patch，作为验证配置所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             return validate_patch(self.config, patch)
 
     def apply_config(self, patch: dict[str, Any]) -> dict[str, Any]:
+        """应用配置。
+
+        Args:
+            patch: patch，作为应用配置所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             self.config = validate_patch(self.config, patch)
             self._config_version += 1
@@ -160,12 +274,28 @@ class LidarRuntime:
             return self.configuration()
 
     def configuration(self) -> dict[str, Any]:
+        """获取当前设备配置。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             result = public_config(self.config)
             result["config_version"] = self._config_version
             return result
 
     def descriptor(self) -> dict[str, Any]:
+        """获取雷达点云流描述信息。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         backend = self.config["backend"]
         capabilities = ["read_pointcloud", "read_laserscan", "start_capture", "stop_capture", "configure_filters"]
         if backend in {"c16", "mock"}:
@@ -181,6 +311,14 @@ class LidarRuntime:
         }
 
     def _fresh_difop_locked(self) -> bytes:
+        """在锁保护下读取仍然有效的 DIFOP 数据。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 bytes。
+        """
         age = time.monotonic() - self._difop_received if self._difop_received else math.inf
         if not self._difop or age > float(self.config["control"]["difop_stale_sec"]):
             raise RuntimeError(f"fresh DIFOP data unavailable (age={age:.3f}s)")
@@ -189,6 +327,14 @@ class LidarRuntime:
 
     @staticmethod
     def _mock_difop() -> bytes:
+        """创建用于 mock 后端的 DIFOP 数据包。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 bytes。
+        """
         packet = bytearray(1206)
         packet[:4] = b"\xA5\xFF\x00\x5A"
         packet[8:10] = b"\x02\x58"
@@ -196,11 +342,27 @@ class LidarRuntime:
         return bytes(packet)
 
     def _require_lease_locked(self, lease_id: str) -> None:
+        """检查租约锁保护。
+
+        Args:
+            lease_id: 租约标识符，作为检查租约锁保护所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         self._expire_lease_locked()
         if not self._lease_id or not lease_id or lease_id != self._lease_id:
             raise PermissionError("a valid lidar control lease is required")
 
     def _send_packet_locked(self, packet: bytes) -> None:
+        """发送数据包锁保护。
+
+        Args:
+            packet: 数据包，作为发送数据包锁保护所需的输入。 类型为 bytes。
+
+        Returns:
+            无返回值。
+        """
         if self.config["backend"] == "mock":
             if self.config["mock"]["fail_command"]:
                 raise OSError("mock injected lidar command failure")
@@ -214,6 +376,15 @@ class LidarRuntime:
             raise OSError(f"short lidar UDP send: {sent}/{len(packet)} bytes")
 
     def set_motor(self, lease_id: str, enabled: bool) -> dict[str, Any]:
+        """设置控制电机。
+
+        Args:
+            lease_id: 租约标识符，作为设置控制电机所需的输入。 类型为 str。
+            enabled: 表示对应功能是否启用的布尔值。 类型为 bool。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             if self.config["backend"] not in {"c16", "mock"}:
                 raise RuntimeError("motor control is unsupported by backend=ros2_topics")
@@ -233,6 +404,15 @@ class LidarRuntime:
                     "motor_state": self._motor_state, "error": ""}
 
     def set_motor_speed(self, lease_id: str, speed_hz: int) -> dict[str, Any]:
+        """设置控制电机速度。
+
+        Args:
+            lease_id: 租约标识符，作为设置控制电机速度所需的输入。 类型为 str。
+            speed_hz: 目标雷达转速，单位为 Hz。 类型为 int。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             if self.config["backend"] not in {"c16", "mock"}:
                 raise RuntimeError("motor control is unsupported by backend=ros2_topics")
@@ -251,6 +431,15 @@ class LidarRuntime:
                     "actual_speed_hz": actual["speed_hz"] or 0, "error": ""}
 
     def acquire(self, owner: str, ttl_sec: float | None = None) -> tuple[str, float]:
+        """申请设备控制权。
+
+        Args:
+            owner: owner，作为申请设备控制权所需的输入。 类型为 str。
+            ttl_sec: ttlsec，作为申请设备控制权所需的输入。 类型为 float | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 tuple[str, float]。
+        """
         owner = str(owner).strip()
         if not owner:
             raise ValueError("control owner must not be empty")
@@ -270,12 +459,28 @@ class LidarRuntime:
             return self._lease_id, ttl
 
     def renew(self, lease_id: str) -> float:
+        """续租当前设备控制权。
+
+        Args:
+            lease_id: 租约标识符，作为续租当前设备控制权所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 float。
+        """
         with self._lock:
             self._require_lease_locked(lease_id)
             self._lease_deadline = time.monotonic() + self._lease_ttl
             return self._lease_ttl
 
     def _stop_locked(self) -> bool:
+        """停止加锁状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示停止加锁状态是否成功或成立。
+        """
         if self.config["backend"] == "ros2_topics":
             return False
         if self.config["backend"] == "mock":
@@ -296,6 +501,14 @@ class LidarRuntime:
             return False
 
     def release(self, lease_id: str) -> bool:
+        """释放当前设备控制租约。
+
+        Args:
+            lease_id: 租约标识符，作为释放当前设备控制租约所需的输入。 类型为 str。
+
+        Returns:
+            布尔值，表示释放当前设备控制租约是否成功或成立。
+        """
         with self._lock:
             self._require_lease_locked(lease_id)
             sent = self._stop_locked()
@@ -303,19 +516,51 @@ class LidarRuntime:
             return sent
 
     def stop(self) -> bool:
+        """停止设备当前动作。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示停止设备当前动作是否成功或成立。
+        """
         with self._lock:
             return self._stop_locked()
 
     def _clear_lease_locked(self) -> None:
+        """在锁保护下清除控制租约。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._lease_id = self._lease_owner = ""
         self._lease_deadline = self._lease_ttl = 0.0
 
     def _expire_lease_locked(self) -> None:
+        """在锁保护下检查并过期控制租约。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if self._lease_id and time.monotonic() >= self._lease_deadline:
             self._stop_locked()
             self._clear_lease_locked()
 
     def tick(self) -> None:
+        """更新当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         with self._lock:
             self._expire_lease_locked()
             if self.config["backend"] == "mock":
@@ -325,6 +570,14 @@ class LidarRuntime:
                     self._last_error = ""
 
     def actual_motor_speed(self) -> dict[str, Any]:
+        """根据雷达时间戳估算当前电机转速。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             if self.config["backend"] == "mock":
                 return {"known": True, "speed_hz": self._motor_speed_hz}
@@ -336,6 +589,14 @@ class LidarRuntime:
                 return {"known": False, "speed_hz": None}
 
     def state(self) -> dict[str, Any]:
+        """获取设备当前状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             self._expire_lease_locked()
             now = time.monotonic()
@@ -376,6 +637,14 @@ class LidarRuntime:
             }
 
     def shutdown(self) -> bool:
+        """关闭当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示关闭当前设备或操作是否成功或成立。
+        """
         with self._lock:
             if self._shutdown:
                 return True
@@ -386,6 +655,15 @@ class LidarRuntime:
 
 
 def mock_cloud(stamp_sec: float, frame_id: str = "lidar_link") -> CloudFrame:
+    """按给定时间戳创建模拟雷达点云。
+
+    Args:
+        stamp_sec: 时间戳sec，作为执行 mock_cloud 对应的处理流程所需的输入。 类型为 float。
+        frame_id: 坐标系标识符，作为执行 mock_cloud 对应的处理流程所需的输入。 类型为 str。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 CloudFrame。
+    """
     import struct
     point_step = 32
     fields = [

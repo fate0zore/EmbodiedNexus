@@ -36,6 +36,14 @@ from .web_server import CameraWebServer
 
 
 def _share_config() -> str:
+    """生成可通过 ROS 服务共享的相机配置副本。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 str。
+    """
     try:
         from ament_index_python.packages import get_package_share_directory
 
@@ -45,10 +53,26 @@ def _share_config() -> str:
 
 
 def _stamp_seconds(stamp) -> float:
+    """时间戳seconds。
+
+    Args:
+        stamp: 时间戳，作为时间戳seconds所需的输入。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 float。
+    """
     return float(stamp.sec) + float(stamp.nanosec) * 1e-9
 
 
 def _ros_stamp(stamp_sec: float):
+    """将秒数转换为 ROS 时间戳。
+
+    Args:
+        stamp_sec: 时间戳sec，作为执行 _ros_stamp 对应的处理流程所需的输入。 类型为 float。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     from builtin_interfaces.msg import Time
 
     msg = Time()
@@ -58,6 +82,17 @@ def _ros_stamp(stamp_sec: float):
 
 
 def _read_pipe_exact(stream, size: int, stop: threading.Event, timeout_sec: float) -> bytearray | None:
+    """读取pipeexact。
+
+    Args:
+        stream: 数据流，作为读取pipeexact所需的输入。
+        size: size，作为读取pipeexact所需的输入。 类型为 int。
+        stop: 停止，作为读取pipeexact所需的输入。 类型为 threading.Event。
+        timeout_sec: 本次调用的最长等待时长，单位为秒。 类型为 float。
+
+    Returns:
+        查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 bytearray | None。
+    """
     deadline = time.monotonic() + timeout_sec
     raw = bytearray()
     while len(raw) < size and not stop.is_set():
@@ -75,6 +110,17 @@ def _read_pipe_exact(stream, size: int, stop: threading.Event, timeout_sec: floa
 
 
 def _image_message(array: np.ndarray, encoding: str, frame_id: str, stamp_sec: float) -> Image:
+    """图像消息。
+
+    Args:
+        array: array，作为图像消息所需的输入。 类型为 np.ndarray。
+        encoding: encoding，作为图像消息所需的输入。 类型为 str。
+        frame_id: 坐标系标识符，作为图像消息所需的输入。 类型为 str。
+        stamp_sec: 时间戳sec，作为图像消息所需的输入。 类型为 float。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 Image。
+    """
     msg = Image()
     msg.header.stamp = _ros_stamp(stamp_sec)
     msg.header.frame_id = frame_id
@@ -88,6 +134,14 @@ def _image_message(array: np.ndarray, encoding: str, frame_id: str, stamp_sec: f
 
 
 def _ros_byte_array(payload: np.ndarray | bytes) -> byte_array:
+    """将图像数组或字节串转换为 ROS 字节数组。
+
+    Args:
+        payload: 消息载荷或接口响应内容。 类型为 np.ndarray | bytes。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 byte_array。
+    """
     result = byte_array("B")
     if isinstance(payload, np.ndarray):
         result.frombytes(memoryview(np.ascontiguousarray(payload)).cast("B"))
@@ -97,6 +151,14 @@ def _ros_byte_array(payload: np.ndarray | bytes) -> byte_array:
 
 
 def _array_from_image(msg: Image) -> tuple[np.ndarray, str]:
+    """将 ROS 图像消息转换为 NumPy 数组。
+
+    Args:
+        msg: 待处理的消息对象。 类型为 Image。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 tuple[np.ndarray, str]。
+    """
     enc = msg.encoding.lower()
     if enc == "bgr8":
         return np.frombuffer(msg.data, np.uint8).reshape(msg.height, msg.width, 3).copy(), "bgr8"
@@ -115,6 +177,17 @@ def _array_from_image(msg: Image) -> tuple[np.ndarray, str]:
 
 
 def _quaternion_matrix(x: float, y: float, z: float, w: float) -> np.ndarray:
+    """根据四元数生成 3D 旋转矩阵。
+
+    Args:
+        x: x，作为执行 _quaternion_matrix 对应的处理流程所需的输入。 类型为 float。
+        y: y，作为执行 _quaternion_matrix 对应的处理流程所需的输入。 类型为 float。
+        z: z，作为执行 _quaternion_matrix 对应的处理流程所需的输入。 类型为 float。
+        w: w，作为执行 _quaternion_matrix 对应的处理流程所需的输入。 类型为 float。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 np.ndarray。
+    """
     norm = x*x + y*y + z*z + w*w
     if norm < 1e-12:
         return np.eye(3)
@@ -128,6 +201,15 @@ def _quaternion_matrix(x: float, y: float, z: float, w: float) -> np.ndarray:
 
 class CameraNode(Node):
     def __init__(self, config_path: str | None = None, overrides: dict[str, Any] | None = None) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config_path: 配置文件路径，指向要加载的设备配置。 类型为 str | None。
+            overrides: overrides，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 dict[str, Any] | None。
+
+        Returns:
+            无返回值。
+        """
         super().__init__("embodied_nexus_camera")
         self.declare_parameter("config_file", config_path or _share_config())
         self.declare_parameter("interface_mode", "")
@@ -219,10 +301,28 @@ class CameraNode(Node):
                           clock=Clock(clock_type=ClockType.STEADY_TIME))
 
     def _log_line(self, level: str, message: str) -> None:
+        """将一条设备日志写入日志流。
+
+        Args:
+            level: level，作为执行 _log_line 对应的处理流程所需的输入。 类型为 str。
+            message: 待处理的消息对象。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         logger = self.get_logger()
         getattr(logger, level if level in {"info", "warning", "error", "debug"} else "info")(message)
 
     def _srv_get_config(self, request, response):
+        """处理读取相机配置的 ROS 服务请求。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.success = True
             response.config_json = json.dumps(self.runtime.public_config(), ensure_ascii=False)
@@ -234,6 +334,15 @@ class CameraNode(Node):
         return response
 
     def _config_patch_response(self, patch_json: str, apply: bool):
+        """配置patch响应。
+
+        Args:
+            patch_json: patchJSON，作为配置patch响应所需的输入。 类型为 str。
+            apply: 应用，作为配置patch响应所需的输入。 类型为 bool。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             patch = json.loads(patch_json)
             if not isinstance(patch, dict):
@@ -244,14 +353,40 @@ class CameraNode(Node):
             return False, "{}", str(exc)
 
     def _srv_validate_config(self, request, response):
+        """处理校验相机配置的 ROS 服务请求。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         response.success, response.config_json, response.error = self._config_patch_response(request.patch_json, False)
         return response
 
     def _srv_apply_config(self, request, response):
+        """处理应用相机配置的 ROS 服务请求。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         response.success, response.config_json, response.error = self._config_patch_response(request.patch_json, True)
         return response
 
     def _install_parameters(self) -> None:
+        """声明并读取相机节点所需的 ROS 参数。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         hot_values = {
             "streams.color_output_fps": float(self.config["streams"]["color_output_fps"]),
             "streams.depth_output_fps": float(self.config["streams"]["depth_output_fps"]),
@@ -268,6 +403,15 @@ class CameraNode(Node):
 
     @staticmethod
     def _apply_v4l2_controls(device: str, controls: dict[str, Any]) -> None:
+        """应用v4l2controls。
+
+        Args:
+            device: 设备，作为应用v4l2controls所需的输入。 类型为 str。
+            controls: controls，作为应用v4l2controls所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            无返回值。
+        """
         if not controls:
             return
         command = ["v4l2-ctl", "-d", device]
@@ -278,6 +422,14 @@ class CameraNode(Node):
             raise RuntimeError(f"failed to apply V4L2 controls on {device}: {detail}")
 
     def _on_parameter_update(self, parameters):
+        """处理参数更新事件。
+
+        Args:
+            parameters: 参数，作为处理参数更新事件所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         from rcl_interfaces.msg import SetParametersResult
 
         patch: dict[str, dict[str, Any]] = {}
@@ -294,6 +446,14 @@ class CameraNode(Node):
         return SetParametersResult(successful=True)
 
     def _start_backend(self) -> None:
+        """启动后端。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         backend = self.config["source"]["backend"]
         if backend == "gemini_v4l2":
             self._spawn(self._color_v4l2_loop, "camera-color-capture")
@@ -310,11 +470,28 @@ class CameraNode(Node):
             self.create_subscription(PointCloud2, self.config["pointcloud"]["input_topic"], self._ros_cloud, qos_profile_sensor_data)
 
     def _spawn(self, target, name: str) -> None:
+        """启动并登记一个后台工作线程。
+
+        Args:
+            target: 目标，作为执行 _spawn 对应的处理流程所需的输入。
+            name: 名称，作为执行 _spawn 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         thread = threading.Thread(target=target, name=name, daemon=True)
         self._capture_threads.append(thread)
         thread.start()
 
     def _color_v4l2_loop(self) -> None:
+        """循环读取 V4L2 彩色相机帧并提交新图像。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cfg = self.config["capture"]
         source = self.config["source"]
         backoff = 0.2
@@ -352,6 +529,14 @@ class CameraNode(Node):
                     cap.release()
 
     def _depth_v4l2_loop(self) -> None:
+        """循环读取 V4L2 深度相机帧并提交新图像。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cfg = self.config["capture"]
         device = self.config["source"]["depth_device"]
         width, height = int(cfg["depth_width"]), int(cfg["depth_height"])
@@ -394,6 +579,14 @@ class CameraNode(Node):
                         process.stdout.close()
 
     def _mock_loop(self) -> None:
+        """周期性生成并发布相机 mock 图像。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cfg = self.config["capture"]
         width, height = int(cfg["color_width"]), int(cfg["color_height"])
         yy, xx = np.mgrid[:height, :width]
@@ -409,6 +602,17 @@ class CameraNode(Node):
             self._stop.wait(1.0 / max(float(cfg["color_fps"]), 1.0))
 
     def _accept_color(self, bgr: np.ndarray, stamp: float, frame_id: str, stamp_source: str) -> None:
+        """验证并缓存一帧彩色图像及其时间戳。
+
+        Args:
+            bgr: bgr，作为执行 _accept_color 对应的处理流程所需的输入。 类型为 np.ndarray。
+            stamp: 时间戳，作为执行 _accept_color 对应的处理流程所需的输入。 类型为 float。
+            frame_id: 坐标系标识符，作为执行 _accept_color 对应的处理流程所需的输入。 类型为 str。
+            stamp_source: 时间戳来源，作为执行 _accept_color 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         now = time.monotonic()
         self.runtime.update_color(bgr)
         self.latest_color = (bgr, stamp)
@@ -426,6 +630,17 @@ class CameraNode(Node):
             self._last_ros_publish["color"] = now
 
     def _accept_depth(self, depth: np.ndarray, stamp: float, frame_id: str, stamp_source: str) -> None:
+        """验证并缓存一帧深度图像及其时间戳。
+
+        Args:
+            depth: depth，作为执行 _accept_depth 对应的处理流程所需的输入。 类型为 np.ndarray。
+            stamp: 时间戳，作为执行 _accept_depth 对应的处理流程所需的输入。 类型为 float。
+            frame_id: 坐标系标识符，作为执行 _accept_depth 对应的处理流程所需的输入。 类型为 str。
+            stamp_source: 时间戳来源，作为执行 _accept_depth 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         now = time.monotonic()
         self.latest_depth = (depth, stamp)
         self.latest_depth_frame_id = frame_id
@@ -452,9 +667,25 @@ class CameraNode(Node):
         self._cloud_event.set()
 
     def _publish_depth_cloud(self) -> None:
+        """发布depth点云。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._cloud_event.set()
 
     def _cloud_worker(self) -> None:
+        """点云工作线程。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         while not self._stop.is_set():
             self._cloud_event.wait(timeout=0.5)
             self._cloud_event.clear()
@@ -462,6 +693,14 @@ class CameraNode(Node):
                 self._generate_depth_cloud()
 
     def _generate_depth_cloud(self) -> None:
+        """生成depth点云。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if not self._cloud_lock.acquire(blocking=False):
             return
         try:
@@ -470,6 +709,14 @@ class CameraNode(Node):
             self._cloud_lock.release()
 
     def _generate_depth_cloud_locked(self) -> None:
+        """生成depth点云锁保护。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if not self.config["streams"]["publish_points"] or self.config["pointcloud"]["source"] != "depth":
             return
         now = time.monotonic()
@@ -549,6 +796,14 @@ class CameraNode(Node):
         self._next_pointcloud_publish = time.monotonic() + interval
 
     def _ros_color(self, msg: Image) -> None:
+        """将 ROS 彩色图像消息转换为网关数据。
+
+        Args:
+            msg: 待处理的消息对象。 类型为 Image。
+
+        Returns:
+            无返回值。
+        """
         try:
             image, enc = _array_from_image(msg)
             self._accept_color(image, _stamp_seconds(msg.header.stamp) or time.time(), msg.header.frame_id, "ros2_header")
@@ -556,6 +811,14 @@ class CameraNode(Node):
             self.hub.error(f"ROS 2 color input: {exc}", "color")
 
     def _ros_depth(self, msg: Image) -> None:
+        """将 ROS 深度图像消息转换为网关数据。
+
+        Args:
+            msg: 待处理的消息对象。 类型为 Image。
+
+        Returns:
+            无返回值。
+        """
         try:
             image, _ = _array_from_image(msg)
             self._accept_depth(image, _stamp_seconds(msg.header.stamp) or time.time(), msg.header.frame_id, "ros2_header")
@@ -563,6 +826,15 @@ class CameraNode(Node):
             self.hub.error(f"ROS 2 depth input: {exc}", "depth")
 
     def _publish_info_copy(self, msg: CameraInfo, channel: str) -> None:
+        """发布信息copy。
+
+        Args:
+            msg: 待处理的消息对象。 类型为 CameraInfo。
+            channel: channel，作为发布信息copy所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         model = CameraModel(
             width=int(msg.width), height=int(msg.height), fx=float(msg.k[0]), fy=float(msg.k[4]),
             cx=float(msg.k[2]), cy=float(msg.k[5]), distortion=list(msg.d),
@@ -578,6 +850,14 @@ class CameraNode(Node):
         self.hub.publish(channel + "_info", {"K": list(msg.k), "D": list(msg.d), "model": msg.distortion_model, "calibrated": bool(msg.k[0])}, stamp_sec=_stamp_seconds(msg.header.stamp) or time.time(), frame_id=msg.header.frame_id, encoding="json")
 
     def _ros_cloud(self, msg: PointCloud2) -> None:
+        """将 ROS 点云消息转换为网关数据。
+
+        Args:
+            msg: 待处理的消息对象。 类型为 PointCloud2。
+
+        Returns:
+            无返回值。
+        """
         if not self.config["streams"]["publish_points"]:
             return
         output = msg
@@ -600,6 +880,14 @@ class CameraNode(Node):
             self.hub.error(f"external XYZ cloud was forwarded without RGB: {colorization_error}", "points")
 
     def _colorize_ros_cloud(self, msg: PointCloud2) -> PointCloud2:
+        """从 RGB 图像为 ROS 点云中的点着色。
+
+        Args:
+            msg: 待处理的消息对象。 类型为 PointCloud2。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 PointCloud2。
+        """
         color_record = self.latest_color
         model = self.runtime.calibration.color
         cloud_stamp = _stamp_seconds(msg.header.stamp)
@@ -650,6 +938,16 @@ class CameraNode(Node):
         return output
 
     def _camera_info(self, model: CameraModel, frame_id: str, stamp: float) -> CameraInfo:
+        """相机信息。
+
+        Args:
+            model: model，作为相机信息所需的输入。 类型为 CameraModel。
+            frame_id: 坐标系标识符，作为相机信息所需的输入。 类型为 str。
+            stamp: 时间戳，作为相机信息所需的输入。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 CameraInfo。
+        """
         data = camera_info_dict(model, frame_id, stamp)
         msg = CameraInfo()
         msg.header.frame_id = frame_id
@@ -660,6 +958,14 @@ class CameraNode(Node):
         return msg
 
     def _publish_status(self) -> None:
+        """发布状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if not self.ros_enabled:
             return
         status = self.hub.status(self.runtime.config, self.runtime.calibration.version)
@@ -667,6 +973,15 @@ class CameraNode(Node):
         self.status_pub.publish(msg)
 
     def _srv_calibration_start(self, request, response):
+        """处理开始相机标定会话的 ROS 服务请求。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             session = self.runtime.start_calibration({})
             self._calibration_session_id = session["session_id"]
@@ -676,6 +991,15 @@ class CameraNode(Node):
         return response
 
     def _srv_calibration_capture(self, request, response):
+        """处理采集当前标定图像的 ROS 服务请求。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             result = self.runtime.capture_calibration(self._calibration_session_id)
             response.success = True; response.message = json.dumps(result)
@@ -684,6 +1008,15 @@ class CameraNode(Node):
         return response
 
     def _srv_calibration_solve(self, request, response):
+        """处理求解相机标定结果的 ROS 服务请求。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             result = self.runtime.solve_calibration(self._calibration_session_id)
             response.success = True; response.message = json.dumps(result)
@@ -692,14 +1025,38 @@ class CameraNode(Node):
         return response
 
     def _calibration_goal_request(self, request):
+        """验证相机标定动作目标并决定是否接受。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if not request.session_id and not self._calibration_session_id:
             return GoalResponse.REJECT
         return GoalResponse.ACCEPT
 
     def _calibration_cancel_request(self, goal_handle):
+        """处理取消相机标定动作的请求。
+
+        Args:
+            goal_handle: goal处理，作为执行 _calibration_cancel_request 对应的处理流程所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return CancelResponse.ACCEPT
 
     def _execute_calibration_action(self, goal_handle):
+        """执行calibration动作。
+
+        Args:
+            goal_handle: goal处理，作为执行calibration动作所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         result = SolveRgbCalibration.Result()
         session_id = goal_handle.request.session_id or self._calibration_session_id
         try:
@@ -744,6 +1101,14 @@ class CameraNode(Node):
             return result
 
     def _apply_calibration_msg(self, msg: String) -> None:
+        """应用calibrationmsg。
+
+        Args:
+            msg: 待处理的消息对象。 类型为 String。
+
+        Returns:
+            无返回值。
+        """
         try:
             result = self.runtime.apply_calibration(msg.data.strip())
             out = {"ok": True, **result}
@@ -753,12 +1118,28 @@ class CameraNode(Node):
         self.calibration_status_pub.publish(state)
 
     def destroy_node(self) -> bool:
+        """销毁节点。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示销毁节点是否成功或成立。
+        """
         self.stop_capture()
         if self.web_server:
             self.web_server.close()
         return super().destroy_node()
 
     def stop_capture(self) -> None:
+        """停止采集。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._stop.set()
         self._cloud_event.set()
         deadline = time.monotonic() + 5.0
@@ -771,6 +1152,14 @@ class CameraNode(Node):
 
 
 def main(args=None) -> None:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        args: 额外的位置参数集合。
+
+    Returns:
+        无返回值。
+    """
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--config", default=None)
     known, ros_args = parser.parse_known_args(args)

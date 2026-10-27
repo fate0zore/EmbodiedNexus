@@ -14,6 +14,14 @@ class DifopStatus:
 
 
 def inspect_difop(packet: bytes | bytearray | list[int]) -> DifopStatus:
+    """解析雷达 DIFOP 配置数据包字段。
+
+    Args:
+        packet: 数据包，作为执行 inspect_difop 对应的处理流程所需的输入。 类型为 bytes | bytearray | list[int]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 DifopStatus。
+    """
     raw = bytes(packet)
     if len(raw) < 1206 or raw[:4] != b"\xA5\xFF\x00\x5A":
         raise ValueError("DIFOP packet is incomplete or has an invalid header")
@@ -32,6 +40,16 @@ def inspect_difop(packet: bytes | bytearray | list[int]) -> DifopStatus:
 def build_motor_packet(
     packet: bytes | bytearray | list[int], *, enabled: bool, speed_hz: int | None = None,
 ) -> bytes:
+    """构建控制电机数据包。
+
+    Args:
+        packet: 数据包，作为构建控制电机数据包所需的输入。 类型为 bytes | bytearray | list[int]。
+        enabled: 表示对应功能是否启用的布尔值。 类型为 bool。
+        speed_hz: 目标雷达转速，单位为 Hz。 类型为 int | None。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 bytes。
+    """
     status = inspect_difop(packet)
     command = bytearray(bytes(packet[:1206]))
     command[:8] = b"\xAA\x00\xFF\x11\x22\x22\xAA\xAA"
@@ -49,6 +67,15 @@ def build_motor_packet(
 
 
 def build_speed_packet(packet: bytes | bytearray | list[int], speed_hz: int) -> bytes:
+    """构建速度数据包。
+
+    Args:
+        packet: 数据包，作为构建速度数据包所需的输入。 类型为 bytes | bytearray | list[int]。
+        speed_hz: 目标雷达转速，单位为 Hz。 类型为 int。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 bytes。
+    """
     inspect_difop(packet)
     if isinstance(speed_hz, bool) or speed_hz not in _SPEED_BYTES:
         raise ValueError("speed_hz must be one of 5, 10, or 20")

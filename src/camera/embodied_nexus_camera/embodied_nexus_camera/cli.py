@@ -8,6 +8,14 @@ from .config import load_config, validate_config
 
 
 def main(argv=None) -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        argv: argv，作为解析启动参数并运行程序入口所需的输入。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     parser = argparse.ArgumentParser(description="Validate EmbodiedNexus camera configuration")
     parser.add_argument("--config", default=None)
     parser.add_argument("--dry-run-check", action="store_true")

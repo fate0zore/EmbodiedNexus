@@ -29,6 +29,14 @@ from .runtime import LidarRuntime, mock_cloud
 
 
 def _default_config_path() -> str:
+    """获取默认配置文件路径。
+
+    Args:
+        无参数。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 str。
+    """
     try:
         from ament_index_python.packages import get_package_share_directory
         return str(Path(get_package_share_directory("embodied_nexus_lidar")) / "config" / "c16.yaml")
@@ -37,6 +45,15 @@ def _default_config_path() -> str:
 
 
 def _topic(path: str, namespace: str) -> str:
+    """话题当前设备或操作。
+
+    Args:
+        path: 目标文件、资源或接口的路径。 类型为 str。
+        namespace: namespace，作为话题当前设备或操作所需的输入。 类型为 str。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 str。
+    """
     return path if path.startswith("/") else f"{namespace}/{path.strip('/')}"
 
 
@@ -44,6 +61,14 @@ class LidarNode(Node):
     """Owns the driver lifecycle and exposes the single public lidar contract."""
 
     def __init__(self) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         super().__init__("embodied_nexus_lidar")
         self.declare_parameter("config_file", _default_config_path())
         self.declare_parameter("interface_mode", "")
@@ -114,10 +139,26 @@ class LidarNode(Node):
 
     @staticmethod
     def _packet_type():
+        """数据包类型。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         from lslidar_msgs.msg import LslidarPacket
         return LslidarPacket
 
     def _install_services(self) -> None:
+        """创建雷达节点的 ROS 服务接口。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         group = self._service_group
         self.create_service(GetLidarInfo, f"{self.namespace}/info", self._get_info, callback_group=group)
         self.create_service(GetLidarState, f"{self.namespace}/get_state", self._get_state, callback_group=group)
@@ -132,6 +173,14 @@ class LidarNode(Node):
         self.create_service(SetLidarMotorSpeed, f"{self.namespace}/motor/speed", self._set_speed, callback_group=group)
 
     def _on_cloud(self, message: PointCloud2) -> None:
+        """处理点云事件。
+
+        Args:
+            message: 待处理的消息对象。 类型为 PointCloud2。
+
+        Returns:
+            无返回值。
+        """
         try:
             frame = cloud_from_ros(message)
             target_frame = str(self.config["filter"].get("target_frame", "")).strip()
@@ -148,12 +197,28 @@ class LidarNode(Node):
             self.runtime.set_error(f"point cloud rejected: {exc}")
 
     def _on_difop(self, message: Any) -> None:
+        """接收并记录雷达设备配置数据包。
+
+        Args:
+            message: 待处理的消息对象。 类型为 Any。
+
+        Returns:
+            无返回值。
+        """
         try:
             self.runtime.ingest_difop(bytes(message.data))
         except Exception as exc:
             self.runtime.set_error(f"invalid DIFOP packet: {exc}")
 
     def _publish_latest_scan(self) -> None:
+        """发布latest扫描。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         scan = self.runtime.latest_scan()
         if scan is None:
             return
@@ -168,16 +233,40 @@ class LidarNode(Node):
         self.scan_pub.publish(msg)
 
     def _mock_tick(self) -> None:
+        """更新一次雷达 mock 状态和传感器数据。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if not self.runtime.config["mock"]["disconnect"]:
             self._on_mock_cloud(mock_cloud(self.get_clock().now().nanoseconds * 1e-9,
                                            str(self.config["driver"]["frame_id"])))
 
     def _on_mock_cloud(self, frame: CloudFrame) -> None:
+        """处理mock点云事件。
+
+        Args:
+            frame: 坐标系，作为处理mock点云事件所需的输入。 类型为 CloudFrame。
+
+        Returns:
+            无返回值。
+        """
         if self.runtime.ingest_cloud(frame):
             self.points_pub.publish(cloud_to_ros(self.runtime.latest_cloud(), PointCloud2()))
             self._publish_latest_scan()
 
     def _publish_state(self) -> None:
+        """发布状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.runtime.tick()
         state = self.runtime.state()
         message = LidarState()
@@ -203,11 +292,30 @@ class LidarNode(Node):
 
     @staticmethod
     def _response(response, success: bool, error: str = ""):
+        """响应当前设备或操作。
+
+        Args:
+            response: 服务端或被调用操作返回的响应对象。
+            success: success，作为响应当前设备或操作所需的输入。 类型为 bool。
+            error: error，作为响应当前设备或操作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         response.success = success
         response.error = error
         return response
 
     def _get_info(self, _request, response):
+        """获取信息。
+
+        Args:
+            _request: 请求，作为获取信息所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         try:
             response.descriptor_json = json.dumps(self.runtime.descriptor(), ensure_ascii=False)
             return self._response(response, True)
@@ -216,14 +324,41 @@ class LidarNode(Node):
             return self._response(response, False, str(exc))
 
     def _get_state(self, _request, response):
+        """获取状态。
+
+        Args:
+            _request: 请求，作为获取状态所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         response.state_json = json.dumps(self.runtime.state(), ensure_ascii=False)
         return self._response(response, True)
 
     def _get_config(self, _request, response):
+        """读取设备配置并构造服务响应。
+
+        Args:
+            _request: 请求，作为读取设备配置并构造服务响应所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         response.config_json = json.dumps(self.runtime.configuration(), ensure_ascii=False)
         return self._response(response, True)
 
     def _validate_config(self, request, response):
+        """验证配置。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。
+        """
         try:
             patch = json.loads(request.patch_json)
             response.config_json = json.dumps(self.runtime.validate_config(patch), ensure_ascii=False)
@@ -233,6 +368,15 @@ class LidarNode(Node):
         return response
 
     def _apply_config(self, request, response):
+        """应用配置。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             patch = json.loads(request.patch_json)
             response.config_json = json.dumps(self.runtime.apply_config(patch), ensure_ascii=False)
@@ -242,11 +386,29 @@ class LidarNode(Node):
         return response
 
     def _set_capture(self, request, response):
+        """设置采集。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         response.capturing = self.runtime.set_capture(request.capturing)
         response.success, response.error = True, ""
         return response
 
     def _acquire(self, request, response):
+        """申请设备控制权。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             lease_id, ttl = self.runtime.acquire(request.owner, request.ttl_sec)
             response.success, response.lease_id, response.expires_in_sec, response.error = True, lease_id, ttl, ""
@@ -255,6 +417,15 @@ class LidarNode(Node):
         return response
 
     def _renew(self, request, response):
+        """续租当前设备控制权。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.expires_in_sec = self.runtime.renew(request.lease_id)
             response.success, response.error = True, ""
@@ -263,6 +434,15 @@ class LidarNode(Node):
         return response
 
     def _release(self, request, response):
+        """释放当前设备控制租约。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.stop_sent = self.runtime.release(request.lease_id)
             response.success = True
@@ -272,6 +452,15 @@ class LidarNode(Node):
         return response
 
     def _set_motor(self, request, response):
+        """设置控制电机。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             result = self.runtime.set_motor(request.lease_id, request.enabled)
             for key in ("success", "command_sent", "hardware_state_confirmed", "motor_state", "error"):
@@ -281,6 +470,15 @@ class LidarNode(Node):
         return response
 
     def _set_speed(self, request, response):
+        """设置速度。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         response.requested_speed_hz = request.speed_hz
         try:
             result = self.runtime.set_motor_speed(request.lease_id, request.speed_hz)
@@ -295,6 +493,14 @@ class LidarNode(Node):
         return response
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         state = self.runtime.state()
         if state["backend"] in {"c16", "mock"}:
             sent = self.runtime.shutdown()
@@ -303,6 +509,14 @@ class LidarNode(Node):
 
 
 def main(argv=None) -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        argv: argv，作为解析启动参数并运行程序入口所需的输入。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     rclpy.init(args=argv, signal_handler_options=SignalHandlerOptions.NO)
     node = LidarNode()
     executor = MultiThreadedExecutor(num_threads=4)

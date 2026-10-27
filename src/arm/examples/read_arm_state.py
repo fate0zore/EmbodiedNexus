@@ -9,6 +9,14 @@ from embodied_nexus_client import ArmClient
 
 
 def main() -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://jetson.local:8779")
     parser.add_argument("--device-id", default="arm_main")

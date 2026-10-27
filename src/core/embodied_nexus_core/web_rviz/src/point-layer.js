@@ -1,6 +1,15 @@
 import * as THREE from "three";
 
 // Keep GPU objects alive between frames; only grow storage when needed.
+/**
+ * 更新三维场景中的点云图层。
+ * @param {*} object - 需要更新的三维场景对象。
+ * @param {*} buffers - 点云顶点及其数量缓冲区。
+ * @param {*} pose - 点云或模型在目标坐标系中的位姿。
+ * @param {*} size - 绘制点的尺寸。
+ * @param {*} color - 可选的点云颜色设置。
+ * @returns {*} 更新三维场景中的点云图层得到的数据或处理结果。
+ */
 export function updatePointLayer(object, buffers, pose, size, color = null) {
   if (!object) {
     object = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({

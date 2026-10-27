@@ -37,6 +37,15 @@ class CameraHub:
     """Thread-safe latest-frame cache; slow WebSocket readers never build a queue."""
 
     def __init__(self, camera_id: str, stale_sec: float = 1.0) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            camera_id: 相机标识符，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str。
+            stale_sec: stalesec，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         self.camera_id = camera_id
         self.stale_sec = stale_sec
         self._frames: dict[str, Frame] = {}
@@ -56,6 +65,21 @@ class CameraHub:
         frame_id: str = "", encoding: str = "", width: int = 0, height: int = 0,
         extra: dict[str, Any] | None = None,
     ) -> Frame:
+        """发布当前设备或操作。
+
+        Args:
+            channel: channel，作为发布当前设备或操作所需的输入。 类型为 str。
+            payload: 消息载荷或接口响应内容。 类型为 bytes | np.ndarray。
+            stamp_sec: 时间戳sec，作为发布当前设备或操作所需的输入。 类型为 float。
+            frame_id: 坐标系标识符，作为发布当前设备或操作所需的输入。 类型为 str。
+            encoding: encoding，作为发布当前设备或操作所需的输入。 类型为 str。
+            width: width，作为发布当前设备或操作所需的输入。 类型为 int。
+            height: height，作为发布当前设备或操作所需的输入。 类型为 int。
+            extra: extra，作为发布当前设备或操作所需的输入。 类型为 dict[str, Any] | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Frame。
+        """
         with self._changed:
             seq = self._sequences.get(channel, 0) + 1
             self._sequences[channel] = seq
@@ -74,22 +98,56 @@ class CameraHub:
             return frame
 
     def error(self, message: str, channel: str = "camera") -> None:
+        """构造包含错误代码和说明的统一响应。
+
+        Args:
+            message: 待处理的消息对象。 类型为 str。
+            channel: channel，作为执行 error 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         with self._changed:
             self._errors[str(channel)] = str(message)
             self.last_error = "; ".join(f"{key}: {value}" for key, value in sorted(self._errors.items()))
             self._changed.notify_all()
 
     def record_drops(self, count: int) -> None:
+        """记录新发生的数据丢帧数量。
+
+        Args:
+            count: count，作为执行 record_drops 对应的处理流程所需的输入。 类型为 int。
+
+        Returns:
+            无返回值。
+        """
         if count <= 0:
             return
         with self._lock:
             self.dropped_frames += int(count)
 
     def latest(self, channel: str) -> Frame | None:
+        """返回指定数据通道的最新样本。
+
+        Args:
+            channel: channel，作为执行 latest 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Frame | None。
+        """
         with self._lock:
             return self._frames.get(channel)
 
     def wait_for_change(self, sequences: dict[str, int], timeout: float) -> list[Frame]:
+        """等待的change。
+
+        Args:
+            sequences: sequences，作为等待的change所需的输入。 类型为 dict[str, int]。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 list[Frame]。
+        """
         with self._changed:
             self._changed.wait_for(
                 lambda: any(self._sequences.get(key, 0) > sequences.get(key, 0) for key in self._frames),
@@ -98,6 +156,15 @@ class CameraHub:
             return [frame for key, frame in self._frames.items() if frame.sequence > sequences.get(key, 0)]
 
     def status(self, config: dict[str, Any], calibration_version: str = "uncalibrated") -> dict[str, Any]:
+        """获取服务当前运行状态。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+            calibration_version: calibrationversion，作为获取服务当前运行状态所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         with self._lock:
             now = time.time()
             streams = {}
@@ -129,6 +196,16 @@ class CameraHub:
             }
 
     def encode(self, frame: Frame, codec: str, quality: int) -> bytes:
+        """编码当前设备或操作。
+
+        Args:
+            frame: 坐标系，作为编码当前设备或操作所需的输入。 类型为 Frame。
+            codec: codec，作为编码当前设备或操作所需的输入。 类型为 str。
+            quality: quality，作为编码当前设备或操作所需的输入。 类型为 int。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 bytes。
+        """
         if isinstance(frame.payload, bytes):
             return frame.payload
         key = (frame.channel, frame.sequence, codec, quality)
@@ -157,10 +234,27 @@ class CameraHub:
 
 
 def _json_bytes(value: Any) -> bytes:
+    """JSONbytes。
+
+    Args:
+        value: 要应用、比较或转换的输入值。 类型为 Any。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 bytes。
+    """
     return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
 def _ws_frame(opcode: int, payload: bytes) -> bytes:
+    """将通道元数据和二进制数据组装为 WebSocket 帧。
+
+    Args:
+        opcode: opcode，作为执行 _ws_frame 对应的处理流程所需的输入。 类型为 int。
+        payload: 消息载荷或接口响应内容。 类型为 bytes。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 bytes。
+    """
     size = len(payload)
     if size < 126:
         head = bytes([0x80 | opcode, size])
@@ -172,6 +266,15 @@ def _ws_frame(opcode: int, payload: bytes) -> bytes:
 
 
 def _read_exact(sock: socket.socket, count: int) -> bytes:
+    """读取exact。
+
+    Args:
+        sock: sock，作为读取exact所需的输入。 类型为 socket.socket。
+        count: count，作为读取exact所需的输入。 类型为 int。
+
+    Returns:
+        查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 bytes。
+    """
     chunks = bytearray()
     while len(chunks) < count:
         part = sock.recv(count - len(chunks))
@@ -182,6 +285,14 @@ def _read_exact(sock: socket.socket, count: int) -> bytes:
 
 
 def _read_ws_message(sock: socket.socket) -> tuple[int, bytes]:
+    """读取ws消息。
+
+    Args:
+        sock: sock，作为读取ws消息所需的输入。 类型为 socket.socket。
+
+    Returns:
+        查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 tuple[int, bytes]。
+    """
     first, second = _read_exact(sock, 2)
     opcode = first & 0x0F
     masked = bool(second & 0x80)
@@ -201,6 +312,17 @@ def _read_ws_message(sock: socket.socket) -> tuple[int, bytes]:
 
 class CameraWebServer:
     def __init__(self, runtime: Any, bind_host: str, port: int, token: str) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            runtime: runtime，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 Any。
+            bind_host: bind主机，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str。
+            port: 网络服务使用的端口号。 类型为 int。
+            token: 用于身份验证的访问令牌。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         if not token:
             raise ValueError("Web mode requires a token from the configured environment variable")
         if not re.fullmatch(r"[A-Za-z0-9._~-]+", token):
@@ -217,9 +339,26 @@ class CameraWebServer:
             server_version = "EmbodiedNexusCamera/0.1"
 
             def log_message(self, fmt: str, *args: Any) -> None:
+                """将设备日志消息按级别写入 ROS 日志。
+
+                Args:
+                    fmt: fmt，作为执行 log_message 对应的处理流程所需的输入。 类型为 str。
+                    *args: 额外的位置参数集合。 类型为 Any。
+
+                Returns:
+                    无返回值。
+                """
                 owner.runtime.log("web", fmt % args)
 
             def _auth(self, ws: bool = False) -> bool:
+                """检查 HTTP 请求是否携带有效的授权令牌。
+
+                Args:
+                    ws: ws，作为执行 _auth 对应的处理流程所需的输入。 类型为 bool。
+
+                Returns:
+                    布尔值，表示执行 _auth 对应的处理流程是否成功或成立。
+                """
                 if ws:
                     raw = self.headers.get("Sec-WebSocket-Protocol", "")
                     supplied = [part.strip() for part in raw.split(",")]
@@ -227,6 +366,15 @@ class CameraWebServer:
                 return hmac.compare_digest(self.headers.get("Authorization", ""), f"Bearer {owner.token}")
 
             def _send_json(self, code: int, value: Any) -> None:
+                """发送JSON。
+
+                Args:
+                    code: code，作为发送JSON所需的输入。 类型为 int。
+                    value: 要应用、比较或转换的输入值。 类型为 Any。
+
+                Returns:
+                    无返回值。
+                """
                 body = _json_bytes(value)
                 self.send_response(code)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -236,6 +384,14 @@ class CameraWebServer:
                 self.wfile.write(body)
 
             def _body(self) -> dict[str, Any]:
+                """请求体当前设备或操作。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    本次处理产生的结果值。 返回类型为 dict[str, Any]。
+                """
                 length = int(self.headers.get("Content-Length", "0"))
                 if length > 1024 * 1024:
                     raise ValueError("request body exceeds 1 MiB")
@@ -246,6 +402,14 @@ class CameraWebServer:
                 return parsed
 
             def do_GET(self) -> None:
+                """处理 HTTP GET 请求并返回对应资源。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    无返回值。
+                """
                 parsed = urlparse(self.path)
                 path = parsed.path.rstrip("/")
                 base = f"/api/v1/cameras/{owner.hub.camera_id}"
@@ -279,6 +443,14 @@ class CameraWebServer:
                 self._send_json(404, {"error": "not found"})
 
             def do_PUT(self) -> None:
+                """处理 HTTP PUT 请求并更新目标资源。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    无返回值。
+                """
                 if not self._auth():
                     self._send_json(401, {"error": "unauthorized"}); return
                 try:
@@ -290,6 +462,14 @@ class CameraWebServer:
                     self._send_json(400, {"error": str(exc)})
 
             def do_POST(self) -> None:
+                """处理 HTTP POST 请求并执行目标操作。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    无返回值。
+                """
                 if not self._auth():
                     self._send_json(401, {"error": "unauthorized"}); return
                 try:
@@ -315,6 +495,14 @@ class CameraWebServer:
                     self._send_json(409, {"error": str(exc)})
 
             def do_DELETE(self) -> None:
+                """处理 HTTP DELETE 请求并移除目标资源。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    无返回值。
+                """
                 if not self._auth():
                     self._send_json(401, {"error": "unauthorized"}); return
                 prefix = f"/api/v1/cameras/{owner.hub.camera_id}/calibration/sessions/"
@@ -327,6 +515,14 @@ class CameraWebServer:
                     self._send_json(400, {"error": str(exc)})
 
             def _websocket(self, parsed: Any) -> None:
+                """处理 WebSocket 连接、订阅和消息转发。
+
+                Args:
+                    parsed: parsed，作为执行 _websocket 对应的处理流程所需的输入。 类型为 Any。
+
+                Returns:
+                    无返回值。
+                """
                 if parsed.path != "/ws":
                     self._send_json(404, {"error": "not found"}); return
                 if not self._auth(ws=True):
@@ -387,12 +583,36 @@ class CameraWebServer:
         self.thread = threading.Thread(target=self.server.serve_forever, name="camera-web", daemon=True)
 
     def start(self) -> None:
+        """启动设备或后台任务。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.thread.start()
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.server.shutdown()
         self.server.server_close()
 
 
 def main() -> None:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        无参数。
+
+    Returns:
+        无返回值。
+    """
     raise SystemExit("camera_web is embedded in camera_node; start it with camera.launch.py interface_mode:=web or both")

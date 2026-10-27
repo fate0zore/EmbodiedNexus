@@ -15,6 +15,14 @@ class FakeGateway:
     device_id = "arm_main"
 
     def status(self):
+        """获取服务当前运行状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return {"connected": True, "feedback_valid": True}
 
 
@@ -22,14 +30,48 @@ class FakeGateway:
 class ArmWebApiTests(unittest.TestCase):
     @staticmethod
     def request(app, path, authorization=b""):
+        """请求当前设备或操作。
+
+        Args:
+            app: app，作为请求当前设备或操作所需的输入。
+            path: 目标文件、资源或接口的路径。
+            authorization: authorization，作为请求当前设备或操作所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         async def run():
+            """运行当前设备或操作。
+
+            Args:
+                无参数。
+
+            Returns:
+                本次处理产生的结果值。
+            """
             sent = []
             receive_events = [{"type": "http.request", "body": b"", "more_body": False}]
 
             async def receive():
+                """接收当前设备或操作。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    本次处理产生的结果值。
+                """
                 return receive_events.pop(0)
 
             async def send(message):
+                """发送当前设备或操作。
+
+                Args:
+                    message: 待处理的消息对象。
+
+                Returns:
+                    无返回值。
+                """
                 sent.append(message)
 
             scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
@@ -42,6 +84,14 @@ class ArmWebApiTests(unittest.TestCase):
         return asyncio.run(run())
 
     def test_http_requires_bearer_and_returns_state(self):
+        """验证httprequiresbearer和returns状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         app = create_app(FakeGateway(), "token-123")
         route = "/api/v1/arms/arm_main/status"
         unauthorized = self.request(app, route)

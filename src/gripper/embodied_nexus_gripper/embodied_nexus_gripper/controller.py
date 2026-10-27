@@ -26,6 +26,15 @@ class GripperController:
     """Thread-safe, ROS-independent MS42DC state and motion controller."""
 
     def __init__(self, config: dict, backend: Backend | None = None) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict。
+            backend: 后端，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 Backend | None。
+
+        Returns:
+            无返回值。
+        """
         validate_config(config)
         self.config = copy.deepcopy(config)
         self._config_version = 1
@@ -55,6 +64,14 @@ class GripperController:
         self._try_connect()
 
     def _try_connect(self) -> None:
+        """尝试连接设备并返回连接结果。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         try:
             self.backend.open()
         except Exception as exc:
@@ -69,7 +86,14 @@ class GripperController:
                 self._last_connect_attempt = time.monotonic()
 
     def poll_once(self) -> bool:
-        """Read and validate one new sample; return true only for a fresh sample."""
+        """Read and validate one new sample; return true only for a fresh sample.
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示读取并验证一条新样本，更新设备状态是否成功或成立。
+        """
         with self._poll_lock:
             with self._lock:
                 connected = self._connected
@@ -119,6 +143,14 @@ class GripperController:
                 return True
 
     def state(self) -> dict:
+        """获取设备当前状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self._lock:
             age = None if not self._feedback_at else max(time.monotonic() - self._feedback_at, 0.0)
             if not self._connected:
@@ -156,6 +188,14 @@ class GripperController:
             }
 
     def descriptor(self) -> dict:
+        """获取雷达点云流描述信息。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         return {
             "device_id": self.config["device_id"], "model": "ms42dc",
             "driver": "embodied_nexus_gripper", "driver_version": "0.1.0",
@@ -180,12 +220,28 @@ class GripperController:
         }
 
     def configuration(self) -> dict:
+        """获取当前设备配置。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self._lock:
             result = public_config(self.config)
             result["config_version"] = self._config_version
             return result
 
     def validate_configuration(self, patch: dict) -> dict:
+        """验证配置。
+
+        Args:
+            patch: patch，作为验证配置所需的输入。 类型为 dict。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。 返回类型为 dict。
+        """
         with self._lock:
             if "mock" in patch and self.config["backend"] != "mock":
                 raise ValueError("mock fault injection fields require backend=mock")
@@ -194,6 +250,15 @@ class GripperController:
             return result
 
     def apply_configuration(self, patch: dict, lease_id: str) -> dict:
+        """应用配置。
+
+        Args:
+            patch: patch，作为应用配置所需的输入。 类型为 dict。
+            lease_id: 租约标识符，作为应用配置所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self._lock:
             self._require_lease_locked(lease_id)
             if self._operation_state == "running" or self._reserved_goal_id:
@@ -215,6 +280,15 @@ class GripperController:
             return result
 
     def acquire_control(self, owner: str, ttl_sec: float | None = None) -> tuple[str, float]:
+        """获取控制权。
+
+        Args:
+            owner: owner，作为获取控制权所需的输入。 类型为 str。
+            ttl_sec: ttlsec，作为获取控制权所需的输入。 类型为 float | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 tuple[str, float]。
+        """
         owner = str(owner).strip()
         if not owner:
             raise ValueError("control owner must not be empty")
@@ -234,12 +308,28 @@ class GripperController:
             return self._lease_id, ttl
 
     def renew_control(self, lease_id: str) -> float:
+        """续租控制权。
+
+        Args:
+            lease_id: 租约标识符，作为续租控制权所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 float。
+        """
         with self._lock:
             self._require_lease_locked(lease_id)
             self._lease_deadline = time.monotonic() + self._lease_ttl
             return self._lease_ttl
 
     def release_control(self, lease_id: str) -> None:
+        """释放控制权。
+
+        Args:
+            lease_id: 租约标识符，作为释放控制权所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         with self._lock:
             self._require_lease_locked(lease_id)
             active = self._operation_state == "running"
@@ -250,6 +340,15 @@ class GripperController:
             self._clear_lease_locked()
 
     def set_motion_enabled(self, lease_id: str, enabled: bool) -> None:
+        """设置motionenabled。
+
+        Args:
+            lease_id: 租约标识符，作为设置motionenabled所需的输入。 类型为 str。
+            enabled: 表示对应功能是否启用的布尔值。 类型为 bool。
+
+        Returns:
+            无返回值。
+        """
         if enabled:
             self.poll_once()
             with self._lock:
@@ -272,11 +371,27 @@ class GripperController:
             self.stop("motion disabled")
 
     def _lease_valid_locked(self, lease_id: str | None = None) -> bool:
+        """租约valid锁保护。
+
+        Args:
+            lease_id: 租约标识符，作为租约valid锁保护所需的输入。 类型为 str | None。
+
+        Returns:
+            布尔值，表示租约valid锁保护是否成功或成立。
+        """
         self._expire_lease_locked()
         return bool(self._lease_id and time.monotonic() < self._lease_deadline and
                     (lease_id is None or self._lease_id == lease_id))
 
     def _expire_lease_locked(self) -> bool:
+        """在锁保护下检查并过期控制租约。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示在锁保护下检查并过期控制租约是否成功或成立。
+        """
         if self._lease_id and time.monotonic() >= self._lease_deadline:
             self._clear_lease_locked()
             self._motion_enabled = False
@@ -284,14 +399,39 @@ class GripperController:
         return False
 
     def _clear_lease_locked(self) -> None:
+        """在锁保护下清除控制租约。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._lease_id = self._lease_owner = ""
         self._lease_deadline = self._lease_ttl = 0.0
 
     def _require_lease_locked(self, lease_id: str) -> None:
+        """检查租约锁保护。
+
+        Args:
+            lease_id: 租约标识符，作为检查租约锁保护所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         if not self._lease_valid_locked(lease_id):
             raise PermissionError("valid control lease required")
 
     def _motion_parameters(self, command: str, angle_degrees: float) -> tuple[int, int, float]:
+        """从运动目标中提取速度和时长参数。
+
+        Args:
+            command: command，作为执行 _motion_parameters 对应的处理流程所需的输入。 类型为 str。
+            angle_degrees: 角度degrees，作为执行 _motion_parameters 对应的处理流程所需的输入。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 tuple[int, int, float]。
+        """
         command = str(command).strip().lower()
         if command not in {"open", "close", "relative"}:
             raise ValueError("command must be open, close, or relative")
@@ -318,6 +458,17 @@ class GripperController:
         return direction, angle_raw, target_degrees
 
     def reserve_motion_goal(self, lease_id: str, command: str, angle_degrees: float, operation_id: str) -> None:
+        """预留底盘运动目标及其控制租约。
+
+        Args:
+            lease_id: 租约标识符，作为执行 reserve_motion_goal 对应的处理流程所需的输入。 类型为 str。
+            command: command，作为执行 reserve_motion_goal 对应的处理流程所需的输入。 类型为 str。
+            angle_degrees: 角度degrees，作为执行 reserve_motion_goal 对应的处理流程所需的输入。 类型为 float。
+            operation_id: 操作标识符，作为执行 reserve_motion_goal 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         with self._lock:
             self._require_lease_locked(lease_id)
             if not self._motion_enabled:
@@ -330,6 +481,14 @@ class GripperController:
             self._reserved_goal_id = operation_id
 
     def cancel_reserved_goal(self, operation_id: str) -> None:
+        """取消reservedgoal。
+
+        Args:
+            operation_id: 操作标识符，作为取消reservedgoal所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         with self._lock:
             if self._reserved_goal_id == operation_id:
                 self._reserved_goal_id = ""
@@ -340,6 +499,19 @@ class GripperController:
         feedback_callback: Callable[[dict], None] | None = None,
         operation_id: str = "",
     ) -> MotionResult:
+        """运动当前设备或操作。
+
+        Args:
+            lease_id: 租约标识符，作为运动当前设备或操作所需的输入。 类型为 str。
+            command: command，作为运动当前设备或操作所需的输入。 类型为 str。
+            angle_degrees: 角度degrees，作为运动当前设备或操作所需的输入。 类型为 float。
+            cancel_requested: 取消requested，作为运动当前设备或操作所需的输入。 类型为 Callable[[], bool] | None。
+            feedback_callback: 反馈callback，作为运动当前设备或操作所需的输入。 类型为 Callable[[dict], None] | None。
+            operation_id: 操作标识符，作为运动当前设备或操作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 MotionResult。
+        """
         direction, angle_raw, target_degrees = self._motion_parameters(command, angle_degrees)
         operation_id = operation_id.strip() or str(uuid.uuid4())
         stop_event = threading.Event()
@@ -456,6 +628,14 @@ class GripperController:
                             stop_result["stop_sent"], stop_result["hardware_stop_confirmed"])
 
     def stop(self, reason: str = "stop requested") -> dict:
+        """停止设备当前动作。
+
+        Args:
+            reason: 原因，作为停止设备当前动作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         reason = str(reason or "stop requested")
         with self._lock:
             event = self._operation_stop_event
@@ -502,6 +682,14 @@ class GripperController:
                 "stop_feedback_confirmed": self._stop_feedback_confirmed, "error": error}
 
     def shutdown(self) -> None:
+        """关闭当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         try:
             if self._connected:
                 self.stop("device shutting down")

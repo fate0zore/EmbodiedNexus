@@ -75,6 +75,13 @@ test("TF graph composes link transforms and traverses inverse edges", () => {
 });
 
 test("one TF traversal resolves all connected frames and excludes disconnected frames", () => {
+  /**
+ * 创建测试使用的 TF 变换边对象。
+ * @param {*} parent - 要追加信息的父 DOM 元素。
+ * @param {*} child - 变换的子坐标系名称。
+ * @param {*} x - TF 边的 X 方向平移值。
+ * @returns {*} 创建测试使用的 TF 变换边对象得到的数据或处理结果。
+ */
   const edge = (parent, child, x) => ({ parent, child, translation: { x, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } });
   const poses = buildTfPoses([edge("map", "base", 2), edge("base", "sensor", 3), edge("other", "lost", 4)], "base");
   assert.deepEqual([...poses.keys()].sort(), ["base", "map", "sensor"]);

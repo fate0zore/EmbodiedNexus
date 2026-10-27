@@ -9,6 +9,14 @@ from .config import config_json, load_config
 
 
 def main(argv=None) -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        argv: argv，作为解析启动参数并运行程序入口所需的输入。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     parser = argparse.ArgumentParser(description="Validate and inspect MS42DC gripper configuration")
     parser.add_argument("--config", default=None)
     parser.add_argument("--show-config", action="store_true", help="print the final merged configuration")

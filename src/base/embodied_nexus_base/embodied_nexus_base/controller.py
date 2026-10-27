@@ -11,13 +11,29 @@ from .config import validate_patch
 
 
 def relative_distance_progress(start: tuple[float, float, float], current: tuple[float, float]) -> float:
-    """Project estimated displacement onto the operation's starting heading."""
+    """Project estimated displacement onto the operation's starting heading.
+
+    Args:
+        start: 启动，作为沿动作开始时的朝向投影估计位移进度所需的输入。 类型为 tuple[float, float, float]。
+        current: current，作为沿动作开始时的朝向投影估计位移进度所需的输入。 类型为 tuple[float, float]。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 float。
+    """
     return ((current[0] - start[0]) * math.cos(start[2]) +
             (current[1] - start[1]) * math.sin(start[2]))
 
 
 def unwrapped_yaw_delta(current: float, previous: float) -> float:
-    """Return the signed shortest yaw increment across the ±pi boundary."""
+    """Return the signed shortest yaw increment across the ±pi boundary.
+
+    Args:
+        current: current，作为计算跨越 ±π 边界时连续的偏航角增量所需的输入。 类型为 float。
+        previous: previous，作为计算跨越 ±π 边界时连续的偏航角增量所需的输入。 类型为 float。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 float。
+    """
     return math.atan2(math.sin(current - previous), math.cos(current - previous))
 
 
@@ -25,6 +41,15 @@ class BaseController:
     """ROS-independent control rules shared by the hardware node and tests."""
 
     def __init__(self, config: dict[str, Any], backend=None) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+            backend: 后端，作为初始化对象并保存构造参数或依赖所需的输入。
+
+        Returns:
+            无返回值。
+        """
         self.config = config
         self.backend = backend or create_backend(config)
         self.lock = threading.RLock()
@@ -56,6 +81,14 @@ class BaseController:
         self.stationary_confirmed = False
 
     def info(self) -> dict:
+        """获取设备能力与静态信息。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         return {"device_id": self.config["device_id"], "device_type": "base",
                 "model": self.config["model"], "backend": self.config["backend"],
                 "interface_version": "1.0", "capabilities": ["state", "odometry", "set_velocity",
@@ -63,6 +96,14 @@ class BaseController:
                 "odometry_source": self.odometry_source}
 
     def state(self) -> dict:
+        """获取设备当前状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self.lock:
             now = time.monotonic()
             stale = float(self.config["feedback"]["stale_sec"])
@@ -104,15 +145,40 @@ class BaseController:
                     "hardware_estop": vehicle_state == 1}
 
     def configuration(self) -> dict:
+        """获取当前设备配置。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         import copy
         with self.lock:
             return copy.deepcopy(self.config)
 
     def validate_configuration(self, patch: dict) -> dict:
+        """验证配置。
+
+        Args:
+            patch: patch，作为验证配置所需的输入。 类型为 dict。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。 返回类型为 dict。
+        """
         with self.lock:
             return validate_patch(self.config, patch)
 
     def apply_configuration(self, patch: dict, lease_id: str) -> dict:
+        """应用配置。
+
+        Args:
+            patch: patch，作为应用配置所需的输入。 类型为 dict。
+            lease_id: 租约标识符，作为应用配置所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self.lock:
             self._require_lease(lease_id)
             if self.motion_enabled or self.operation_id:
@@ -123,6 +189,15 @@ class BaseController:
             return self.configuration()
 
     def acquire_control(self, owner: str, ttl_sec: float | None = None) -> tuple[str, float]:
+        """获取控制权。
+
+        Args:
+            owner: owner，作为获取控制权所需的输入。 类型为 str。
+            ttl_sec: ttlsec，作为获取控制权所需的输入。 类型为 float | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 tuple[str, float]。
+        """
         with self.lock:
             self._expire_lease()
             if self.lease_id:
@@ -140,12 +215,28 @@ class BaseController:
             return self.lease_id, ttl
 
     def renew_control(self, lease_id: str) -> float:
+        """续租控制权。
+
+        Args:
+            lease_id: 租约标识符，作为续租控制权所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 float。
+        """
         with self.lock:
             self._require_lease(lease_id)
             self.lease_deadline = time.monotonic() + self.lease_ttl
             return self.lease_ttl
 
     def release_control(self, lease_id: str) -> dict:
+        """释放控制权。
+
+        Args:
+            lease_id: 租约标识符，作为释放控制权所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self.lock:
             self._require_lease(lease_id)
         result = self.stop("control lease released")
@@ -155,6 +246,15 @@ class BaseController:
         return result
 
     def enable_motion(self, lease_id: str, enabled: bool) -> dict:
+        """启用motion。
+
+        Args:
+            lease_id: 租约标识符，作为启用motion所需的输入。 类型为 str。
+            enabled: 表示对应功能是否启用的布尔值。 类型为 bool。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         if not enabled:
             with self.lock:
                 self._require_lease(lease_id)
@@ -190,6 +290,16 @@ class BaseController:
         raise TimeoutError("Scout did not confirm CAN control mode")
 
     def set_velocity(self, lease_id: str, linear: float, angular: float) -> None:
+        """设置速度。
+
+        Args:
+            lease_id: 租约标识符，作为设置速度所需的输入。 类型为 str。
+            linear: 线速度，作为设置速度所需的输入。 类型为 float。
+            angular: 角速度，作为设置速度所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         linear = self._finite(linear, "linear_mps")
         angular = self._finite(angular, "angular_rps")
         motion = self.config["motion"]
@@ -207,6 +317,16 @@ class BaseController:
             self.zero_velocity_written = False
 
     def set_operation_velocity(self, operation_id: str, linear: float, angular: float) -> None:
+        """设置操作速度。
+
+        Args:
+            operation_id: 操作标识符，作为设置操作速度所需的输入。 类型为 str。
+            linear: 线速度，作为设置操作速度所需的输入。 类型为 float。
+            angular: 角速度，作为设置操作速度所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         with self.lock:
             if not operation_id or operation_id != self.operation_id or not self.motion_enabled:
                 raise RuntimeError("relative operation is no longer active")
@@ -216,6 +336,14 @@ class BaseController:
             self.zero_velocity_written = False
 
     def begin_operation(self, lease_id: str) -> tuple[str, tuple[float, float, float]]:
+        """为有效控制租约登记一个运行中的设备操作。
+
+        Args:
+            lease_id: 租约标识符，作为执行 begin_operation 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 tuple[str, tuple[float, float, float]]。
+        """
         with self.lock:
             self._require_lease(lease_id)
             if not self.motion_enabled:
@@ -229,6 +357,15 @@ class BaseController:
             return self.operation_id, (self.x, self.y, self.yaw)
 
     def finish_operation(self, operation_id: str, state: str) -> None:
+        """结束指定操作并记录最终状态。
+
+        Args:
+            operation_id: 操作标识符，作为执行 finish_operation 对应的处理流程所需的输入。 类型为 str。
+            state: 状态，作为执行 finish_operation 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         with self.lock:
             if self.operation_id == operation_id:
                 self.operation_state = state
@@ -237,7 +374,15 @@ class BaseController:
                 self.command_time = 0.0
 
     def finish_operation_with_zero(self, operation_id: str, state: str) -> dict:
-        """Write zero at an action boundary while leaving a healthy lease enabled."""
+        """Write zero at an action boundary while leaving a healthy lease enabled.
+
+        Args:
+            operation_id: 操作标识符，作为在动作边界发送零速度并保留有效控制租约所需的输入。 类型为 str。
+            state: 状态，作为在动作边界发送零速度并保留有效控制租约所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self.lock:
             if not operation_id or operation_id != self.operation_id:
                 return {"stop_requested": False, "zero_velocity_written": False,
@@ -266,6 +411,14 @@ class BaseController:
                 "hardware_estop": state_data["hardware_estop"], "error": error}
 
     def stop(self, reason: str = "stop requested") -> dict:
+        """停止设备当前动作。
+
+        Args:
+            reason: 原因，作为停止设备当前动作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self.lock:
             self.stop_requested = True
             self.target_linear = self.target_angular = 0.0
@@ -288,6 +441,14 @@ class BaseController:
                 "hardware_estop": state["hardware_estop"], "error": error}
 
     def tick(self) -> None:
+        """更新当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.poll_once()
         now = time.monotonic()
         with self.lock:
@@ -321,6 +482,14 @@ class BaseController:
                 self.stop("velocity write failed")
 
     def poll_once(self) -> None:
+        """读取并验证一条新样本，更新设备状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         system, motion, connected, error = self.backend.poll()
         odometry = self.backend.read_odometry() if hasattr(self.backend, "read_odometry") else None
         now = time.monotonic()
@@ -349,6 +518,14 @@ class BaseController:
                 self.odometry_source = "simulator_odometry"
 
     def shutdown(self) -> None:
+        """关闭当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         try:
             self.stop("base service shutting down")
         finally:
@@ -358,11 +535,27 @@ class BaseController:
                 self.lifecycle_state = "closed"
 
     def _require_lease(self, lease_id: str) -> None:
+        """确认请求持有有效的控制租约。
+
+        Args:
+            lease_id: 租约标识符，作为确认请求持有有效的控制租约所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         self._expire_lease()
         if not self.lease_id or lease_id != self.lease_id or time.monotonic() >= self.lease_deadline:
             raise PermissionError("valid base control lease required")
 
     def _expire_lease(self) -> bool:
+        """检查控制租约是否到期并在到期时释放控制权。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示执行 _expire_lease 对应的处理流程是否成功或成立。
+        """
         if self.lease_id and time.monotonic() >= self.lease_deadline:
             was_active = self.motion_enabled or self.target_linear != 0.0 or self.target_angular != 0.0
             self.motion_enabled = False
@@ -381,11 +574,28 @@ class BaseController:
         return False
 
     def _clear_lease(self) -> None:
+        """清除租约。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.lease_id = self.lease_owner = ""
         self.lease_deadline = self.lease_ttl = 0.0
 
     @staticmethod
     def _finite(value: float, name: str) -> float:
+        """校验有限数值输入。
+
+        Args:
+            value: 要应用、比较或转换的输入值。 类型为 float。
+            name: 名称，作为执行 _finite 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 float。
+        """
         if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value):
             raise ValueError(f"{name} must be a finite number")
         return float(value)

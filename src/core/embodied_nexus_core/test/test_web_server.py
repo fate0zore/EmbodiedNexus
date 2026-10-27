@@ -26,6 +26,14 @@ from embodied_nexus_core.web_server import create_app
 
 
 def _port() -> int:
+    """端口当前设备或操作。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
@@ -33,6 +41,14 @@ def _port() -> int:
 
 class _Server:
     def __init__(self, app):
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            app: app，作为初始化对象并保存构造参数或依赖所需的输入。
+
+        Returns:
+            无返回值。
+        """
         self.port = _port()
         options = {
             "host": "127.0.0.1", "port": self.port, "log_level": "critical",
@@ -50,6 +66,14 @@ class _Server:
             raise RuntimeError("test ASGI server failed to start")
 
     def close(self):
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.server.should_exit = True
         self.thread.join(timeout=3.0)
 
@@ -59,11 +83,27 @@ class _Process:
 
     @staticmethod
     def poll():
+        """轮询当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         return None
 
 
 class _Manager:
     def __init__(self, upstream_port):
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            upstream_port: upstream端口，作为初始化对象并保存构造参数或依赖所需的输入。
+
+        Returns:
+            无返回值。
+        """
         self.platform = {"config_file": "platform.yaml", "core": {"port": 8780}, "devices": []}
         self._items = {"base_one": {
             "id": "base_one", "type": "base", "enabled": True,
@@ -71,37 +111,117 @@ class _Manager:
         }}
 
     def status(self):
+        """获取服务当前运行状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return {"state": "running"}
 
     def list_devices(self):
+        """列出设备列表。
+
+        Args:
+            无参数。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         return [{"id": "base_one"}]
 
     def get_device(self, device_id):
+        """获取设备。
+
+        Args:
+            device_id: 设备标识符，作为获取设备所需的输入。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         if device_id not in self._items:
             raise KeyError(device_id)
         return {"id": device_id}
 
     def start(self, device_id):
+        """启动设备或后台任务。
+
+        Args:
+            device_id: 设备标识符，作为启动设备或后台任务所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return {"success": True, "device": {"id": device_id}}
 
     def shutdown(self, device_id):
+        """关闭当前设备或操作。
+
+        Args:
+            device_id: 设备标识符，作为关闭当前设备或操作所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return {"success": True, "device": {"id": device_id}}
 
     def restart(self, device_id):
+        """重启当前设备或操作。
+
+        Args:
+            device_id: 设备标识符，作为重启当前设备或操作所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return {"success": True, "device": {"id": device_id}}
 
     def stop_all(self):
+        """停止all。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return [{"device_id": "base_one", "success": True}]
 
     def request_core_shutdown(self):
+        """请求core关闭。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return {"success": True, "results": []}
 
 
 class CoreGatewayTests(unittest.TestCase):
     def setUp(self):
+        """为当前测试准备所需对象和资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         self.upstream_observed = {}
 
         async def info(request):
+            """获取设备能力与静态信息。
+
+            Args:
+                request: 封装调用输入字段的请求对象。
+
+            Returns:
+                本次处理产生的结果值。
+            """
             self.upstream_observed["http_query"] = request.url.query
             self.upstream_observed["http_authorization"] = request.headers.get("authorization")
             self.upstream_observed["http_custom_header"] = request.headers.get("x-correlation-id")
@@ -109,6 +229,14 @@ class CoreGatewayTests(unittest.TestCase):
                             headers={"Cache-Control": "no-store", "X-Upstream": "preserved"})
 
         async def ws(socket: WebSocket):
+            """执行 ws 对应的处理流程。
+
+            Args:
+                socket: 套接字，作为执行 ws 对应的处理流程所需的输入。 类型为 WebSocket。
+
+            Returns:
+                无返回值。
+            """
             offered = socket.scope["subprotocols"]
             self.upstream_observed["protocols"] = offered
             self.upstream_observed["ws_query"] = socket.scope["query_string"].decode("ascii")
@@ -137,10 +265,30 @@ class CoreGatewayTests(unittest.TestCase):
         self.base_url = f"http://127.0.0.1:{self.core.port}"
 
     def tearDown(self):
+        """清理当前测试创建的对象和资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.core.close()
         self.upstream.close()
 
     def _request(self, path, *, method="GET", token="core-secret", body=None, extra_headers=None):
+        """向服务端发送 HTTP 请求并解析响应。
+
+        Args:
+            path: 目标文件、资源或接口的路径。
+            method: HTTP 请求方法，例如 GET 或 POST。
+            token: 用于身份验证的访问令牌。
+            body: 随请求发送的 JSON 数据。
+            extra_headers: extraheaders，作为向服务端发送 HTTP 请求并解析响应所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         data = json.dumps(body).encode() if body is not None else None
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         headers.update(extra_headers or {})
@@ -153,6 +301,14 @@ class CoreGatewayTests(unittest.TestCase):
             return exc
 
     def test_core_auth_and_http_proxy_preserve_device_body_and_query(self):
+        """验证coreauth和httpproxypreserve设备请求体和查询。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         denied = self._request("/api/v1/core/status", token="")
         self.assertEqual(denied.code, 401)
 
@@ -169,6 +325,14 @@ class CoreGatewayTests(unittest.TestCase):
         self.assertEqual(self.upstream_observed["http_custom_header"], "request-42")
 
     def test_core_web_dashboard_and_assets_are_public(self):
+        """验证corewebdashboard和assetsare公开。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         for path, content_type in (("/", "text/html"),
                                    ("/rviz/", "text/html"),
                                    ("/app.css", "text/css"),
@@ -195,6 +359,14 @@ class CoreGatewayTests(unittest.TestCase):
                 self.assertNotIn(b"internal-secret", body)
 
     def test_visualization_status_is_authenticated_and_reports_supported_topics(self):
+        """验证visualization状态isauthenticated和reportssupportedtopics。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         class Visualization:
             enabled = True
             port = 9090
@@ -202,16 +374,40 @@ class CoreGatewayTests(unittest.TestCase):
 
             @staticmethod
             def info():
+                """获取设备能力与静态信息。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    本次处理产生的结果值。
+                """
                 return {"enabled": True, "available": True, "port": 9090,
                         "resource_packages": ["description"], "topics": [
                             {"name": "/tf", "type": "tf2_msgs/msg/TFMessage"}], "presets": []}
 
             @staticmethod
             def topic_types():
+                """话题类型。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    本次处理产生的结果值。
+                """
                 return {"/tf": "tf2_msgs/msg/TFMessage"}
 
             @staticmethod
             def ready():
+                """就绪当前设备或操作。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    本次处理产生的结果值。
+                """
                 return True
 
         server = _Server(create_app(self.manager, "core-secret", Visualization()))
@@ -225,6 +421,14 @@ class CoreGatewayTests(unittest.TestCase):
         self.assertEqual(json.loads(response.read())["topics"][0]["name"], "/tf")
 
     def test_visualization_resource_route_requires_auth_and_confines_paths(self):
+        """验证visualizationresourcerouterequiresauth和confinespaths。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         class Visualization:
             resource_packages = ("description",)
 
@@ -260,6 +464,14 @@ class CoreGatewayTests(unittest.TestCase):
             self.assertEqual(unallowed_error.exception.code, 404)
 
     def test_visualization_resource_route_supports_colcon_symlink_install(self):
+        """验证visualizationresourceroutesupportscolconsymlinkinstall。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         class Visualization:
             resource_packages = ("description",)
 
@@ -297,10 +509,26 @@ class CoreGatewayTests(unittest.TestCase):
             self.assertEqual(escape_error.exception.code, 404)
 
     def test_visualization_websocket_forwards_only_subscriptions_and_binary_data(self):
+        """验证visualizationwebsocketforwardsonlysubscriptions和binary数据。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         observed = {}
         topic_graph = {"/points": "sensor_msgs/msg/PointCloud2"}
 
         async def bridge(socket: WebSocket):
+            """执行 bridge 对应的处理流程。
+
+            Args:
+                socket: 套接字，作为执行 bridge 对应的处理流程所需的输入。 类型为 WebSocket。
+
+            Returns:
+                无返回值。
+            """
             await socket.accept()
             observed["subscribe"] = json.loads(await socket.receive_text())
             await socket.send_bytes(b"\x81\x01")
@@ -321,14 +549,38 @@ class CoreGatewayTests(unittest.TestCase):
 
             @staticmethod
             def topic_types():
+                """话题类型。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    本次处理产生的结果值。
+                """
                 return dict(topic_graph)
 
             @staticmethod
             def ready():
+                """就绪当前设备或操作。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    本次处理产生的结果值。
+                """
                 return True
 
             @staticmethod
             def info():
+                """获取设备能力与静态信息。
+
+                Args:
+                    无参数。
+
+                Returns:
+                    本次处理产生的结果值。
+                """
                 return {"enabled": True, "available": True, "port": bridge_server.port,
                         "resource_packages": [], "topics": [], "presets": []}
 
@@ -357,6 +609,14 @@ class CoreGatewayTests(unittest.TestCase):
         self.assertEqual(observed["unsubscribe"]["op"], "unsubscribe")
 
     def test_command_catalog_matches_mock_and_sim_launch_assets(self):
+        """验证commandcatalogmatchesmock和sim启动assets。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         assets = Path(__file__).resolve().parents[1] / "web"
         catalog = json.loads((assets / "commands.json").read_text(encoding="utf-8"))
         repo_root = Path(__file__).resolve().parents[4]
@@ -394,11 +654,35 @@ class CoreGatewayTests(unittest.TestCase):
             self.assertIn("embodied_nexus_core_interfaces/srv/ManageAllCoreDevices", operation_commands[operation_id])
 
     def test_core_management_api_remains_authenticated_with_web_ui(self):
+        """验证coremanagementapiremainsauthenticated并web界面。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         denied = self._request("/api/v1/core/status", token="")
         self.assertEqual(denied.code, 401)
 
     def test_conflicting_management_action_returns_http_409(self):
+        """验证conflictingmanagement动作returnshttp409。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         def busy(_device_id):
+            """构造控制器繁忙状态的模拟响应。
+
+            Args:
+                _device_id: 设备标识符，作为执行 busy 对应的处理流程所需的输入。
+
+            Returns:
+                无返回值。
+            """
             raise OperationInProgress("device is busy")
 
         self.manager.shutdown = busy
@@ -408,6 +692,14 @@ class CoreGatewayTests(unittest.TestCase):
         self.assertIn("device is busy", response.read().decode())
 
     def test_websocket_proxy_preserves_query_protocol_and_message_order(self):
+        """验证websocketproxypreserves查询协议和消息order。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         url = f"ws://127.0.0.1:{self.core.port}/api/v1/bases/base_one/ws?streams=status&filter=x%2Fy"
         with websockets.sync.client.connect(
             url, subprotocols=["en-base-v1", "bearer.core-secret"], open_timeout=3.0,
@@ -422,10 +714,26 @@ class CoreGatewayTests(unittest.TestCase):
         self.assertNotIn("bearer.core-secret", self.upstream_observed["protocols"])
 
     def test_stop_management_remains_available_with_unread_data_stream(self):
+        """验证停止managementremainsavailable并unread数据数据流。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         ready = threading.Event()
         finished = threading.Event()
 
         def unread_client():
+            """建立连接但不读取响应数据的测试客户端。
+
+            Args:
+                无参数。
+
+            Returns:
+                无返回值。
+            """
             url = f"ws://127.0.0.1:{self.core.port}/api/v1/bases/base_one/ws?slow=1"
             try:
                 with websockets.sync.client.connect(

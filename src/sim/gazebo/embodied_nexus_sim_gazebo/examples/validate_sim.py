@@ -11,6 +11,16 @@ from embodied_nexus_client import CoreClient
 
 
 def wait_for(predicate, label: str, timeout: float = 20.0):
+    """等待的。
+
+    Args:
+        predicate: predicate，作为等待的所需的输入。
+        label: label，作为等待的所需的输入。 类型为 str。
+        timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     deadline = time.monotonic() + timeout
     last = None
     while time.monotonic() < deadline:
@@ -22,11 +32,29 @@ def wait_for(predicate, label: str, timeout: float = 20.0):
 
 
 def operation_succeeded(result: dict) -> bool:
+    """操作succeeded。
+
+    Args:
+        result: 前序操作产生、供本函数继续处理的结果。 类型为 dict。
+
+    Returns:
+        布尔值，表示操作succeeded是否成功或成立。
+    """
     return result.get("success") is True or result.get("state") == "succeeded"
 
 
 def read_camera_color_sample(camera, *, after_sequence: int | None = None,
                              timeout_sec: float = 15.0) -> dict:
+    """读取相机color采集样本。
+
+    Args:
+        camera: 相机，作为读取相机color采集样本所需的输入。
+        after_sequence: aftersequence，作为读取相机color采集样本所需的输入。 类型为 int | None。
+        timeout_sec: 本次调用的最长等待时长，单位为秒。 类型为 float。
+
+    Returns:
+        查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 dict。
+    """
     deadline = time.monotonic() + timeout_sec
     for frame in camera.subscribe(streams=("color",), color_fps=10.0):
         if frame.metadata.get("channel") != "color":
@@ -43,6 +71,14 @@ def read_camera_color_sample(camera, *, after_sequence: int | None = None,
 
 
 def validate(core: CoreClient) -> int:
+    """验证当前设备或操作。
+
+    Args:
+        core: core，作为验证当前设备或操作所需的输入。 类型为 CoreClient。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     lifecycle = []
     for device_id in ("base_main", "arm_main", "gripper_main", "camera_front", "lidar_main"):
         print(f"[sim validation] start/query/shutdown {device_id}", flush=True)
@@ -80,6 +116,14 @@ def validate(core: CoreClient) -> int:
     lidar_frames = {"points": None, "scan": None}
 
     def read_scans() -> None:
+        """读取scans。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         try:
             for frame in lidar.subscribe(streams=("points", "scan"), points_fps=5.0,
                                          scan_fps=10.0, point_stride=2):
@@ -116,6 +160,14 @@ def validate(core: CoreClient) -> int:
     scan_thread = threading.Thread(target=read_scans, name="sim-validation-lidar", daemon=True)
     scan_thread.start()
     def forward_scan_ready():
+        """等待转发后的前向雷达扫描数据就绪。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         if scan_error["message"]:
             raise RuntimeError(f"lidar scan stream failed: {scan_error['message']}")
         return nearest_forward["range_m"]
@@ -293,6 +345,14 @@ def validate(core: CoreClient) -> int:
 
 
 def main() -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     core = CoreClient(os.environ.get("EMBODIED_NEXUS_CORE_URL", "http://127.0.0.1:8780"),
                       os.environ["EMBODIED_NEXUS_CORE_TOKEN"], timeout=8.0,
                       management_timeout=90.0)

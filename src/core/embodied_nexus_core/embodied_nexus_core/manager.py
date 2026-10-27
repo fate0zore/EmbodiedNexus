@@ -24,16 +24,40 @@ class OperationInProgress(RuntimeError):
 
 
 def _now() -> str:
+    """读取用于租约和超时计算的单调时钟。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 str。
+    """
     return datetime.now(timezone.utc).isoformat()
 
 
 def _unused_port() -> int:
+    """申请一个当前未占用的本机 TCP 端口。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
 
 
 def _group_alive(process: Any) -> bool:
+    """检查子进程组中是否仍有进程运行。
+
+    Args:
+        process: 处理，作为执行 _group_alive 对应的处理流程所需的输入。 类型为 Any。
+
+    Returns:
+        布尔值，表示执行 _group_alive 对应的处理流程是否成功或成立。
+    """
     if process.poll() is None:
         return True
     if os.name == "nt":
@@ -52,6 +76,16 @@ class DeviceManager:
 
     def __init__(self, config_file: str | None = None, *, popen=subprocess.Popen,
                  check_packages: bool = True):
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config_file: 配置文件，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str | None。
+            popen: popen，作为初始化对象并保存构造参数或依赖所需的输入。
+            check_packages: 检查packages，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 bool。
+
+        Returns:
+            无返回值。
+        """
         self.platform = load_platform(config_file, check_packages=check_packages)
         self._popen = popen
         self._items = {item["id"]: {
@@ -68,17 +102,41 @@ class DeviceManager:
         self._monitor: threading.Thread | None = None
 
     def start_monitor(self) -> None:
+        """启动monitor。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if self._monitor is None:
             self._monitor = threading.Thread(target=self._monitor_loop, name="core-device-monitor", daemon=True)
             self._monitor.start()
 
     def close_monitor(self) -> None:
+        """关闭monitor。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._stop_monitor.set()
         if self._monitor and self._monitor.is_alive():
             self._monitor.join(timeout=2.0)
         self._refresh_pool.shutdown(wait=False, cancel_futures=True)
 
     def _monitor_loop(self) -> None:
+        """监视设备子进程并更新进程存活状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         interval = float(self.platform["core"]["poll_interval_sec"])
         while not self._stop_monitor.is_set():
             futures = [self._refresh_pool.submit(self._probe, key) for key in self._items]
@@ -92,6 +150,18 @@ class DeviceManager:
     @staticmethod
     def _http(item: dict[str, Any], suffix: str, *, method: str = "GET", body: dict | None = None,
               timeout: float = 0.5) -> tuple[int, bytes, str]:
+        """向目标服务发送 HTTP 请求并返回响应。
+
+        Args:
+            item: 条目，作为执行 _http 对应的处理流程所需的输入。 类型为 dict[str, Any]。
+            suffix: suffix，作为执行 _http 对应的处理流程所需的输入。 类型为 str。
+            method: HTTP 请求方法，例如 GET 或 POST。 类型为 str。
+            body: 随请求发送的 JSON 数据。 类型为 dict | None。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 tuple[int, bytes, str]。
+        """
         data = json.dumps(body or {}, separators=(",", ":")).encode() if method != "GET" else None
         request = Request(f"http://127.0.0.1:{item['port']}{suffix}", data=data, method=method,
                           headers={"Authorization": f"Bearer {item['token']}",
@@ -103,6 +173,14 @@ class DeviceManager:
             return exc.code, exc.read(), exc.headers.get("Content-Type", "application/json")
 
     def _probe(self, device_id: str) -> None:
+        """探测服务健康接口并等待服务就绪。
+
+        Args:
+            device_id: 设备标识符，作为执行 _probe 对应的处理流程所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         item = self._items[device_id]
         with self._locks[device_id]:
             process = item["process"]
@@ -131,6 +209,14 @@ class DeviceManager:
                     item["last_error"] = process_error or f"device gateway unavailable: {exc}"
 
     def _start_one(self, device_id: str) -> dict[str, Any]:
+        """启动one。
+
+        Args:
+            device_id: 设备标识符，作为启动one所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         item = self._require(device_id)
         operation_lock = self._operation_locks[device_id]
         if not operation_lock.acquire(blocking=False):
@@ -141,6 +227,14 @@ class DeviceManager:
             operation_lock.release()
 
     def _start_one_impl(self, item: dict[str, Any]) -> dict[str, Any]:
+        """启动oneimpl。
+
+        Args:
+            item: 条目，作为启动oneimpl所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         device_id = item["id"]
         with self._locks[device_id]:
             if item["process"] is not None:
@@ -212,13 +306,37 @@ class DeviceManager:
             raise RuntimeError(item["last_error"])
 
     def start(self, device_id: str) -> dict[str, Any]:
+        """启动设备或后台任务。
+
+        Args:
+            device_id: 设备标识符，作为启动设备或后台任务所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         return self._start_one(device_id)
 
     def start_all(self) -> list[dict[str, Any]]:
+        """启动all。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 list[dict[str, Any]]。
+        """
         ids = [key for key, item in self._items.items() if item["enabled"]]
         return self._run_many(ids, self._start_one)
 
     def _stop_confirmed(self, item: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+        """停止confirmed。
+
+        Args:
+            item: 条目，作为停止confirmed所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 tuple[bool, dict[str, Any]]。
+        """
         response: dict[str, Any] = {}
         deadline = time.monotonic() + float(self.platform["core"]["shutdown_timeout_sec"])
         try:
@@ -266,6 +384,15 @@ class DeviceManager:
 
     @staticmethod
     def _signal_process(process: Any, sig: int) -> None:
+        """向设备子进程组发送停止信号。
+
+        Args:
+            process: 处理，作为执行 _signal_process 对应的处理流程所需的输入。 类型为 Any。
+            sig: sig，作为执行 _signal_process 对应的处理流程所需的输入。 类型为 int。
+
+        Returns:
+            无返回值。
+        """
         try:
             if os.name == "nt":
                 if process.poll() is not None:
@@ -277,6 +404,14 @@ class DeviceManager:
             pass
 
     def _close_process(self, item: dict[str, Any]) -> None:
+        """关闭处理。
+
+        Args:
+            item: 条目，作为关闭处理所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            无返回值。
+        """
         process = item["process"]
         if process is None:
             item.update(process=None, process_state="stopped", gateway_reachable=False,
@@ -305,6 +440,14 @@ class DeviceManager:
                     device_status=None, token="", port=0, last_error="")
 
     def shutdown(self, device_id: str) -> dict[str, Any]:
+        """关闭当前设备或操作。
+
+        Args:
+            device_id: 设备标识符，作为关闭当前设备或操作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         item = self._require(device_id)
         operation_lock = self._operation_locks[device_id]
         if not operation_lock.acquire(blocking=False):
@@ -315,6 +458,14 @@ class DeviceManager:
             operation_lock.release()
 
     def _shutdown_impl(self, item: dict[str, Any]) -> dict[str, Any]:
+        """关闭impl。
+
+        Args:
+            item: 条目，作为关闭impl所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         device_id = item["id"]
         with self._locks[device_id]:
             process = item["process"]
@@ -337,6 +488,14 @@ class DeviceManager:
             return {"success": True, "device": self._snapshot(item), "stop": result if item["type"] in {"base", "arm", "gripper"} else None}
 
     def restart(self, device_id: str) -> dict[str, Any]:
+        """重启当前设备或操作。
+
+        Args:
+            device_id: 设备标识符，作为重启当前设备或操作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         item = self._require(device_id)
         operation_lock = self._operation_locks[device_id]
         if not operation_lock.acquire(blocking=False):
@@ -350,13 +509,37 @@ class DeviceManager:
             operation_lock.release()
 
     def shutdown_all(self) -> list[dict[str, Any]]:
+        """关闭all。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 list[dict[str, Any]]。
+        """
         ids = [key for key, item in self._items.items() if item["process"] is not None]
         return self._run_many(ids, self.shutdown)
 
     def stop_all(self) -> list[dict[str, Any]]:
+        """停止all。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 list[dict[str, Any]]。
+        """
         ids = [key for key, item in self._items.items()
                if item["type"] in {"base", "arm", "gripper"} and item["process"] is not None]
         def stop_one(device_id: str) -> dict[str, Any]:
+            """停止one。
+
+            Args:
+                device_id: 设备标识符，作为停止one所需的输入。 类型为 str。
+
+            Returns:
+                本次处理产生的结果值。 返回类型为 dict[str, Any]。
+            """
             item = self._require(device_id)
             operation_lock = self._operation_locks[device_id]
             if not operation_lock.acquire(blocking=False):
@@ -373,6 +556,15 @@ class DeviceManager:
         return self._run_many(ids, stop_one)
 
     def _run_many(self, ids: list[str], operation) -> list[dict[str, Any]]:
+        """运行many。
+
+        Args:
+            ids: ids，作为运行many所需的输入。 类型为 list[str]。
+            operation: 操作，作为运行many所需的输入。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 list[dict[str, Any]]。
+        """
         results = []
         with ThreadPoolExecutor(max_workers=max(1, len(ids))) as pool:
             futures = {pool.submit(operation, key): key for key in ids}
@@ -386,29 +578,77 @@ class DeviceManager:
         return sorted(results, key=lambda result: order[result["device_id"]])
 
     def refresh(self) -> None:
+        """刷新当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         futures = [self._refresh_pool.submit(self._probe, key) for key in self._items]
         for future in futures:
             future.result()
 
     def get_device(self, device_id: str) -> dict[str, Any]:
+        """获取设备。
+
+        Args:
+            device_id: 设备标识符，作为获取设备所需的输入。 类型为 str。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 dict[str, Any]。
+        """
         item = self._require(device_id)
         return self._snapshot(item)
 
     def list_devices(self) -> list[dict[str, Any]]:
+        """列出设备列表。
+
+        Args:
+            无参数。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。 返回类型为 list[dict[str, Any]]。
+        """
         return [self._snapshot(item) for item in self._items.values()]
 
     def status(self) -> dict[str, Any]:
+        """获取服务当前运行状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         items = self.list_devices()
         return {"state": "running", "config_file": self.platform["config_file"],
                 "device_count": len(items), "running_count": sum(i["process_state"] in {"running", "starting", "stop_blocked"} for i in items),
                 "devices": items, "timestamp": _now()}
 
     def request_core_shutdown(self) -> dict[str, Any]:
+        """请求core关闭。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         results = self.shutdown_all()
         return {"success": all(item.get("success", False) for item in results), "results": results}
 
     @staticmethod
     def _snapshot(item: dict[str, Any]) -> dict[str, Any]:
+        """读取当前平台配置和设备状态快照。
+
+        Args:
+            item: 条目，作为执行 _snapshot 对应的处理流程所需的输入。 类型为 dict[str, Any]。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         state = item["device_status"] or {}
         return {"id": item["id"], "type": item["type"], "enabled": item["enabled"],
                 "process_state": item["process_state"], "pid": item["process"].pid if item["process"] else None,
@@ -419,6 +659,14 @@ class DeviceManager:
                 "exit_code": item["exit_code"]}
 
     def _require(self, device_id: str) -> dict[str, Any]:
+        """检查当前设备或操作。
+
+        Args:
+            device_id: 设备标识符，作为检查当前设备或操作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         try:
             return self._items[device_id]
         except KeyError as exc:

@@ -21,6 +21,15 @@ CAMERA_FROM_OPTICAL = (
 
 
 def _apply_camera_extrinsics(robot_xml: str, extrinsics: dict) -> str:
+    """应用相机extrinsics。
+
+    Args:
+        robot_xml: robotxml，作为应用相机extrinsics所需的输入。 类型为 str。
+        extrinsics: extrinsics，作为应用相机extrinsics所需的输入。 类型为 dict。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 str。
+    """
     robot = ET.fromstring(robot_xml)
     optical_rotation = [row[:3] for row in extrinsics["matrix_4x4"][:3]]
     optical_to_camera = tuple(zip(*CAMERA_FROM_OPTICAL))
@@ -53,6 +62,14 @@ def _apply_camera_extrinsics(robot_xml: str, extrinsics: dict) -> str:
 
 
 def generate_launch_description():
+    """生成 ROS launch 启动描述。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     description_package = get_package_share_directory("embodied_nexus_sim_description")
     model_file = f"{description_package}/urdf/arachne.urdf.xacro"
     camera_extrinsics = json.loads(

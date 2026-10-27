@@ -11,6 +11,18 @@ from .camera_geometry import camera_geometry
 
 class SimCameraInfo(Node):
     def __init__(self, channel: str, namespace: str, width: int = 640, height: int = 480, rate: float = 10.0) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            channel: channel，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str。
+            namespace: namespace，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str。
+            width: width，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 int。
+            height: height，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 int。
+            rate: rate，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         super().__init__(f"sim_camera_info_{channel}", parameter_overrides=[
             Parameter("use_sim_time", value=True),
         ])
@@ -24,6 +36,14 @@ class SimCameraInfo(Node):
         self.timer = self.create_timer(1.0 / rate, self.publish_info)
 
     def publish_info(self) -> None:
+        """发布信息。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         width, height = self.width, self.height
         fx, fy, cx, cy = (self.intrinsic[key] for key in ("fx", "fy", "cx", "cy"))
         frame = "camera_color_optical_frame" if self.channel == "color" else "camera_depth_optical_frame"
@@ -44,6 +64,14 @@ class SimCameraInfo(Node):
 
 
 def main(argv=None) -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        argv: argv，作为解析启动参数并运行程序入口所需的输入。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--channel", choices=("color", "depth"), required=True)
     parser.add_argument("--namespace", default="/sim/arachne")

@@ -10,10 +10,26 @@ from embodied_nexus_base.protocol import (
 
 class ScoutProtocolTests(unittest.TestCase):
     def test_waveshare_standard_frame_matches_vendor_example(self):
+        """验证wavesharestandard坐标系matchesvendorexample。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         frame = encode_variable_frame(0x123, bytes.fromhex("11 22 33 44 55 66 77 88"))
         self.assertEqual(frame, bytes.fromhex("AA C8 23 01 11 22 33 44 55 66 77 88 55"))
 
     def test_split_packet_noise_and_multiple_frames(self):
+        """验证拆分数据包noise和multipleframes。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         first = encode_variable_frame(0x123, b"\x01")
         second = encode_variable_frame(0x124, b"\x02\x03")
         frames, remainder = decode_variable_frames(b"noise" + first[:3])
@@ -24,12 +40,28 @@ class ScoutProtocolTests(unittest.TestCase):
         self.assertEqual(remainder2, b"")
 
     def test_invalid_frames_are_discarded_without_blocking_next_frame(self):
+        """验证invalidframesarediscardedwithoutblockingnext坐标系。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         valid = encode_variable_frame(0x222, b"\x00")
         frames, remainder = decode_variable_frames(b"\xaa\xffgarbage" + valid)
         self.assertEqual([item.can_id for item in frames], [0x222])
         self.assertEqual(remainder, b"")
 
     def test_feedback_fields_and_units(self):
+        """验证反馈fields和units。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         system = CanFrame(SCOUT_SYSTEM_STATE_ID,
                           bytes([0, 1]) + (240).to_bytes(2, "big", signed=True) +
                           (3).to_bytes(2, "big", signed=True) + b"\x00\x00", "standard")

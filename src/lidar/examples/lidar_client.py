@@ -2,6 +2,14 @@ from embodied_nexus_client import LidarClient
 
 
 def main() -> None:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        无参数。
+
+    Returns:
+        无返回值。
+    """
     client = LidarClient("http://robot-host:8777", token="replace-with-a-local-token")
     print(client.info())
     print(client.status())

@@ -19,6 +19,18 @@ PACKAGE = Path(__file__).resolve().parents[1]
 
 
 def make_cloud(points, *, endian="<", point_step=20, row_padding=0, stamp=123.456):
+    """生成点云。
+
+    Args:
+        points: points，作为生成点云所需的输入。
+        endian: endian，作为生成点云所需的输入。
+        point_step: 点step，作为生成点云所需的输入。
+        row_padding: rowpadding，作为生成点云所需的输入。
+        stamp: 时间戳，作为生成点云所需的输入。
+
+    Returns:
+        构造或创建完成的对象或资源。
+    """
     fields = [
         {"name": "x", "offset": 0, "datatype": 7, "count": 1},
         {"name": "y", "offset": 4, "datatype": 7, "count": 1},
@@ -36,6 +48,14 @@ def make_cloud(points, *, endian="<", point_step=20, row_padding=0, stamp=123.45
 
 
 def difop(speed=(0x02, 0x58)):
+    """设备配置包当前设备或操作。
+
+    Args:
+        speed: 速度，作为设备配置包当前设备或操作所需的输入。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     packet = bytearray(1206)
     packet[:4] = b"\xA5\xFF\x00\x5A"
     packet[8:10] = bytes(speed)
@@ -45,6 +65,14 @@ def difop(speed=(0x02, 0x58)):
 
 class ConfigTests(unittest.TestCase):
     def test_all_backends_have_checked_configs(self):
+        """验证allbackendshavecheckedconfigs。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         for name, backend in (("c16.yaml", "c16"), ("c16_topics.yaml", "ros2_topics"),
                               ("c16_mock.yaml", "mock"), ("c16_sim.yaml", "ros2_topics")):
             cfg = load_config(PACKAGE / "config" / name)
@@ -53,6 +81,14 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(load_config(PACKAGE / "config" / "c16.yaml")["web"]["port"], 8777)
 
     def test_unknown_fields_ranges_addresses_and_topic_loops_are_rejected(self):
+        """验证未知项fieldsrangesaddresses和话题loopsarerejected。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cfg = load_config(PACKAGE / "config" / "c16_mock.yaml")
         for update in (
             {"extra": True},
@@ -72,6 +108,14 @@ class ConfigTests(unittest.TestCase):
                 validate_config(candidate)
 
     def test_config_apply_is_atomic_and_runtime_only(self):
+        """验证配置应用isatomic和runtimeonly。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cfg = load_config(PACKAGE / "config" / "c16_mock.yaml")
         candidate = validate_patch(cfg, {"scan": {"range_max_m": 12.0}})
         self.assertEqual(candidate["scan"]["range_max_m"], 12.0)
@@ -82,6 +126,14 @@ class ConfigTests(unittest.TestCase):
 
 class ProtocolTests(unittest.TestCase):
     def test_difop_validation_and_motor_packets(self):
+        """验证设备配置包validation和控制电机packets。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         source = difop((0x01, 0x2C))
         status = inspect_difop(source)
         self.assertEqual(status.model_version, 4)
@@ -109,6 +161,14 @@ class ProtocolTests(unittest.TestCase):
 
 class GeometryTests(unittest.TestCase):
     def test_big_endian_point_layout_and_stride_bytes_are_preserved(self):
+        """验证bigendian点layout和stridebytesarepreserved。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cloud = make_cloud([(1, 2, 3, 17, 4), (4, 5, 6, 23, 7)], endian=">")
         decoded = list(iter_points(cloud))
         self.assertEqual(decoded[0]["x"], 1.0)
@@ -119,6 +179,14 @@ class GeometryTests(unittest.TestCase):
         self.assertEqual(sampled.is_bigendian, True)
 
     def test_organized_rows_keep_declared_padding(self):
+        """验证organizedrowskeepdeclaredpadding。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cloud = make_cloud([(1, 0, 0, 10, 1), (2, 0, 0, 20, 2)])
         padded = CloudFrame(cloud.stamp_sec, cloud.frame_id, 1, 2, cloud.fields, False,
                             cloud.point_step, cloud.point_step + 4,
@@ -126,6 +194,14 @@ class GeometryTests(unittest.TestCase):
         self.assertEqual([point["x"] for point in iter_points(padded)], [1.0, 2.0])
 
     def test_filter_compacts_rows_and_rejects_nonfinite_and_out_of_height(self):
+        """验证筛选compactsrows和rejectsnonfinite和out的height。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cloud = make_cloud([(1, 0, 0, 9, 1), (0, 2, 0.5, 8, 2), (-2, 0, 0, 7, 3),
                             (math.nan, 0, 0, 6, 4)])
         cfg = load_config(PACKAGE / "config" / "c16_mock.yaml")
@@ -135,6 +211,14 @@ class GeometryTests(unittest.TestCase):
         self.assertEqual([p["intensity"] for p in iter_points(result)], [9.0, 7.0])
 
     def test_scan_full_circle_edges_empty_bins_and_timestamp(self):
+        """验证扫描fullcircleedgesemptybins和timestamp。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         points = [(2, 0, 0, 1, 0), (0, -2, 0, 2, 1), (-2, 0, 0, 3, 2),
                   (0, 2, 0, 4, 3)]
         cloud = make_cloud(points, stamp=77.25)
@@ -151,6 +235,14 @@ class GeometryTests(unittest.TestCase):
         self.assertTrue(math.isinf(empty.ranges[0]))
 
     def test_tf_translation_rotation_and_timestamp_are_real(self):
+        """验证tftranslationrotation和timestamparereal。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cloud = make_cloud([(1, 0, 0, 12, 3)], endian=">")
         qz = math.sqrt(0.5)
         transformed = transform_cloud(cloud, (1, 2, 3), (0, 0, qz, qz), "base_link")
@@ -166,6 +258,14 @@ class GeometryTests(unittest.TestCase):
 
 class RuntimeTests(unittest.TestCase):
     def test_difop_and_status_remain_responsive_during_cloud_projection(self):
+        """验证设备配置包和状态remainresponsiveduring点云projection。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         config = load_config(PACKAGE / "config" / "c16_mock.yaml")
         runtime = LidarRuntime(config)
         projection_entered = threading.Event()
@@ -174,6 +274,15 @@ class RuntimeTests(unittest.TestCase):
         original_filter = lidar_runtime_module.filter_cloud
 
         def slow_filter(frame, filter_config):
+            """在测试中模拟耗时的点云过滤操作。
+
+            Args:
+                frame: 坐标系，作为执行 slow_filter 对应的处理流程所需的输入。
+                filter_config: 筛选配置，作为执行 slow_filter 对应的处理流程所需的输入。
+
+            Returns:
+                本次处理产生的结果值。
+            """
             projection_entered.set()
             continue_projection.wait(2.0)
             return original_filter(frame, filter_config)
@@ -200,6 +309,14 @@ class RuntimeTests(unittest.TestCase):
             self.assertFalse(difop_thread.is_alive())
 
     def test_mock_control_lease_conflict_expiry_and_stop_without_lease(self):
+        """验证mock控制权租约conflictexpiry和停止without租约。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         runtime = LidarRuntime(load_config(PACKAGE / "config" / "c16_mock.yaml"))
         self.assertTrue(runtime.set_motor("", False)["command_sent"])
         lease, _ = runtime.acquire("first", 0.05)
@@ -213,6 +330,14 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(state["hardware_state_confirmed"])
 
     def test_c16_requires_fresh_checked_difop_and_reports_send_failures(self):
+        """验证c16requiresfreshchecked设备配置包和reports发送failures。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cfg = load_config(PACKAGE / "config" / "c16.yaml")
         runtime = LidarRuntime(cfg)
         sent = []
@@ -233,6 +358,14 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(len(sent), 1)
 
     def test_c16_motor_start_preserves_requested_speed_when_difop_is_unknown(self):
+        """验证c16控制电机启动preservesrequested速度时设备配置包is未知项。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         runtime = LidarRuntime(load_config(PACKAGE / "config" / "c16.yaml"))
         sent = []
         runtime._send_packet_locked = lambda packet: sent.append(packet)
@@ -253,6 +386,14 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(state["data_fresh"])
 
     def test_release_failure_is_reported_and_shutdown_attempts_stop(self):
+        """验证释放failureisreported和关闭attempts停止。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         runtime = LidarRuntime(load_config(PACKAGE / "config" / "c16_mock.yaml"))
         runtime.config["mock"]["fail_stop"] = True
         lease, _ = runtime.acquire("test")
@@ -260,6 +401,14 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(runtime.shutdown())
 
     def test_stream_cache_keeps_only_latest_and_counts_overwrite(self):
+        """验证数据流cachekeepsonlylatest和countsoverwrite。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         hub = StreamHub()
         hub.publish("points", 1)
         hub.publish("points", 2)
@@ -268,6 +417,14 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(hub.wait_after({}, 0.01)[0][1], 2)
 
     def test_mock_cloud_is_deterministic_xyzirt(self):
+        """验证mock点云isdeterministicxyzirt。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         cloud = mock_cloud(12.5)
         self.assertEqual((cloud.width, cloud.height, cloud.point_step, cloud.row_step), (360, 1, 32, 11520))
         first = next(iter(iter_points(cloud)))

@@ -13,6 +13,14 @@ from .web_server import create_app
 
 
 def main(argv=None) -> None:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        argv: argv，作为解析启动参数并运行程序入口所需的输入。
+
+    Returns:
+        无返回值。
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default=None)
     args, ros_args = parser.parse_known_args(argv)

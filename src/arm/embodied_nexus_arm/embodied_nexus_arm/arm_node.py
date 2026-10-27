@@ -29,6 +29,14 @@ from .controller import ArmController
 
 class ArmNode(Node):
     def __init__(self, config_path: str | None = None) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config_path: 配置文件路径，指向要加载的设备配置。 类型为 str | None。
+
+        Returns:
+            无返回值。
+        """
         super().__init__("embodied_nexus_arm")
         self.declare_parameter("config_file", config_path or str(Path(__file__).resolve().parents[1] / "config" / "aubo_i5_mock.yaml"))
         self.declare_parameter("interface_mode", "")
@@ -68,15 +76,41 @@ class ArmNode(Node):
 
     @staticmethod
     def _json(value) -> str:
+        """将输入值转换为可写入 JSON 的数据。
+
+        Args:
+            value: 要应用、比较或转换的输入值。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 str。
+        """
         return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
 
     @staticmethod
     def _ok(response, error=""):
+        """构造表示操作成功的响应。
+
+        Args:
+            response: 服务端或被调用操作返回的响应对象。
+            error: error，作为构造表示操作成功的响应所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         response.success = not bool(error)
         response.error = str(error)
         return response
 
     def _info(self, _request, response):
+        """构造设备信息响应。
+
+        Args:
+            _request: 请求，作为构造设备信息响应所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.descriptor_json = self._json(self.controller.info())
             return self._ok(response)
@@ -84,6 +118,15 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _state(self, _request, response):
+        """构造设备状态响应。
+
+        Args:
+            _request: 请求，作为构造设备状态响应所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.state_json = self._json(self.controller.state())
             return self._ok(response)
@@ -91,6 +134,15 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _get_config(self, _request, response):
+        """读取设备配置并构造服务响应。
+
+        Args:
+            _request: 请求，作为读取设备配置并构造服务响应所需的输入。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            查询或读取到的数据；未找到时的处理方式由实现决定。
+        """
         try:
             response.config_json = self._json(self.controller.configuration())
             return self._ok(response)
@@ -98,6 +150,15 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _validate(self, request, response):
+        """验证当前设备或操作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.config_json = self._json(self.controller.validate_configuration(json.loads(request.patch_json)))
             response.valid = True
@@ -108,6 +169,15 @@ class ArmNode(Node):
         return response
 
     def _apply(self, request, response):
+        """应用当前设备或操作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.config_json = self._json(self.controller.apply_configuration(
                 json.loads(request.patch_json), request.lease_id))
@@ -116,6 +186,15 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _acquire(self, request, response):
+        """申请设备控制权。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.lease_id, response.expires_in_sec = self.controller.acquire_control(
                 request.owner, request.ttl_sec or None)
@@ -124,6 +203,15 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _renew(self, request, response):
+        """续租当前设备控制权。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.expires_in_sec = self.controller.renew_control(request.lease_id)
             return self._ok(response)
@@ -131,6 +219,15 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _release(self, request, response):
+        """释放当前设备控制租约。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             result = self.controller.release_control(request.lease_id)
             response.stop_requested = result["stop_requested"]
@@ -143,6 +240,15 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _enable(self, request, response):
+        """更新设备运动使能状态。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             response.enabled = self.controller.enable_motion(request.lease_id, request.enabled)["enabled"]
             return self._ok(response)
@@ -151,6 +257,15 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _velocity(self, request, response):
+        """更新设备速度指令。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             result = self.controller.set_joint_velocity(request.lease_id, request.velocity_rad_sec)
             response.controller_accepted = result["controller_accepted"]
@@ -162,6 +277,15 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _lifecycle(self, request, response):
+        """设置设备生命周期状态。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             result = self.controller.set_lifecycle(request.lease_id, request.command)
             response.operation_state = result["operation_state"]
@@ -171,6 +295,15 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _teach(self, request, response):
+        """切换机械臂示教模式。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             result = self.controller.set_teach_mode(request.lease_id, request.enabled)
             response.teach_state = result["teach_state"]
@@ -180,6 +313,15 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _stop(self, request, response):
+        """停止设备当前动作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+            response: 服务端或被调用操作返回的响应对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             result = self.controller.stop(request.reason or "ROS stop requested")
             response.stop_requested = result["stop_requested"]
@@ -193,6 +335,14 @@ class ArmNode(Node):
             return self._ok(response, exc)
 
     def _move_goal(self, request):
+        """校验运动目标并启动动作。
+
+        Args:
+            request: 封装调用输入字段的请求对象。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             ArmController._validate_vector(request.positions_rad, "positions_rad")
             ArmController._validate_vector([request.speed_rad_sec or self.config["motion"]["max_speed_rad_sec"]] * 6,
@@ -205,9 +355,25 @@ class ArmNode(Node):
 
     @staticmethod
     def _cancel_goal(_goal_handle):
+        """取消正在执行的动作目标。
+
+        Args:
+            _goal_handle: goal处理，作为取消正在执行的动作目标所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         return CancelResponse.ACCEPT
 
     def _move_joints(self, goal_handle):
+        """执行机械臂关节运动。
+
+        Args:
+            goal_handle: goal处理，作为执行机械臂关节运动所需的输入。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         request = goal_handle.request
         result = MoveArmJoints.Result()
         try:
@@ -242,12 +408,30 @@ class ArmNode(Node):
 
     @staticmethod
     def _publish_action_feedback(goal_handle, state, error):
+        """发布动作执行反馈。
+
+        Args:
+            goal_handle: goal处理，作为发布动作执行反馈所需的输入。
+            state: 状态，作为发布动作执行反馈所需的输入。
+            error: error，作为发布动作执行反馈所需的输入。
+
+        Returns:
+            无返回值。
+        """
         feedback = MoveArmJoints.Feedback()
         feedback.state = str(state)
         feedback.max_error_rad = float(error if math.isfinite(error) else 0.0)
         goal_handle.publish_feedback(feedback)
 
     def _tick(self):
+        """执行一次周期性状态更新。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.controller.tick()
         state = self.controller.state()
         self.state_pub.publish(String(data=self._json(state)))
@@ -261,6 +445,14 @@ class ArmNode(Node):
             self.joints_pub.publish(message)
 
     def destroy_node(self):
+        """销毁节点。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         try:
             self.controller.shutdown()
         finally:
@@ -269,6 +461,14 @@ class ArmNode(Node):
 
 
 def main(args=None):
+    """解析启动参数并运行程序入口。
+
+    Args:
+        args: 额外的位置参数集合。
+
+    Returns:
+        无返回值。
+    """
     rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = ArmNode()
     executor = MultiThreadedExecutor(num_threads=6)

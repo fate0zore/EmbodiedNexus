@@ -18,7 +18,14 @@ SUPPORTED_TYPES = {
 
 
 def _explicit_qos_available() -> bool:
-    """Detect the installed rosbridge capability instead of trusting its version tag."""
+    """Detect the installed rosbridge capability instead of trusting its version tag.
+
+    Args:
+        无参数。
+
+    Returns:
+        布尔值，表示检测已安装 rosbridge 是否支持所需 QoS 能力是否成功或成立。
+    """
     try:
         from rosbridge_library.capabilities.subscribe import Subscription
         return "qos" in inspect.signature(Subscription.subscribe).parameters
@@ -31,6 +38,17 @@ class RosbridgeRuntime:
 
     def __init__(self, settings: dict[str, Any], topic_reader: Callable[[], list[tuple[str, str]]], *,
                  popen=subprocess.Popen, wait_sec: float = 30.0):
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            settings: settings，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 dict[str, Any]。
+            topic_reader: 话题reader，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 Callable[[], list[tuple[str, str]]]。
+            popen: popen，作为初始化对象并保存构造参数或依赖所需的输入。
+            wait_sec: 等待sec，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         self.enabled = bool(settings["enabled"])
         self.port = int(settings["port"])
         self.resource_packages = tuple(settings["resource_packages"])
@@ -94,6 +112,14 @@ class RosbridgeRuntime:
             self._process = None
 
     def ready(self) -> bool:
+        """就绪当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            布尔值，表示就绪当前设备或操作是否成功或成立。
+        """
         if not self.enabled or self._process is None or self._process.poll() is not None:
             return False
         try:
@@ -103,6 +129,14 @@ class RosbridgeRuntime:
             return False
 
     def topic_types(self) -> dict[str, str]:
+        """话题类型。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, str]。
+        """
         try:
             result = {}
             for name, types in self._topic_reader():
@@ -117,6 +151,14 @@ class RosbridgeRuntime:
             return {}
 
     def info(self) -> dict[str, Any]:
+        """获取设备能力与静态信息。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict[str, Any]。
+        """
         available = self.ready()
         error = ""
         if not available:
@@ -158,16 +200,40 @@ class RosbridgeRuntime:
         }
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self._close_process("_model_process")
         self._close_process("_process")
 
     def _safe_topics(self) -> list[tuple[str, list[str]]]:
+        """过滤并规范化允许转发的 ROS 话题。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 list[tuple[str, list[str]]]。
+        """
         try:
             return self._topic_reader()
         except Exception:
             return []
 
     def _close_process(self, attribute: str) -> None:
+        """关闭处理。
+
+        Args:
+            attribute: attribute，作为关闭处理所需的输入。 类型为 str。
+
+        Returns:
+            无返回值。
+        """
         process = getattr(self, attribute)
         setattr(self, attribute, None)
         if process is None or process.poll() is not None:

@@ -18,6 +18,14 @@ CONTROL_SERVICE = f"/world/{WORLD}/control"
 
 
 def run_wsl(*command: str) -> str:
+    """运行wsl。
+
+    Args:
+        *command: command，作为运行wsl所需的输入。 类型为 str。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 str。
+    """
     distro = os.environ.get("EMBODIED_NEXUS_WSL_DISTRO", "Ubuntu-22.04")
     ign_ip = os.environ.get("EMBODIED_NEXUS_IGN_IP", "192.168.31.185")
     inner = (
@@ -36,6 +44,14 @@ def run_wsl(*command: str) -> str:
 
 
 def world_clock_sec() -> float:
+    """读取 Gazebo 世界时钟并转换为秒。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 float。
+    """
     output = run_wsl("ign", "topic", "-e", "-t", CLOCK_TOPIC, "-n", "1", "--json-output")
     for line in reversed(output.splitlines()):
         try:
@@ -47,6 +63,14 @@ def world_clock_sec() -> float:
 
 
 def scene_pose() -> dict[str, float]:
+    """查询并返回场景中机器人的位姿。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict[str, float]。
+    """
     output = run_wsl("ign", "topic", "-e", "-t", POSE_TOPIC, "-n", "1", "--json-output")
     for line in reversed(output.splitlines()):
         try:
@@ -68,6 +92,14 @@ def scene_pose() -> dict[str, float]:
 
 
 def set_world_time_only_reset() -> str:
+    """设置world时间only重置。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 str。
+    """
     request: dict[str, Any] = {"world_control": {"reset": {"time_only": True}}}
     result = run_wsl(
         "ros2", "service", "call", CONTROL_SERVICE,
@@ -79,6 +111,14 @@ def set_world_time_only_reset() -> str:
 
 
 def set_world_paused(paused: bool) -> str:
+    """设置worldpaused。
+
+    Args:
+        paused: paused，作为设置worldpaused所需的输入。 类型为 bool。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 str。
+    """
     request = {"world_control": {"pause": bool(paused)}}
     result = run_wsl(
         "ros2", "service", "call", CONTROL_SERVICE,
@@ -90,6 +130,14 @@ def set_world_paused(paused: bool) -> str:
 
 
 def validate(core: CoreClient) -> dict[str, Any]:
+    """验证当前设备或操作。
+
+    Args:
+        core: core，作为验证当前设备或操作所需的输入。 类型为 CoreClient。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 dict[str, Any]。
+    """
     started = core.start("base_main")
     if not started.get("success"):
         raise RuntimeError(f"could not start base_main: {started}")
@@ -158,6 +206,14 @@ def validate(core: CoreClient) -> dict[str, Any]:
 
 
 def main() -> int:
+    """解析启动参数并运行程序入口。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。 返回类型为 int。
+    """
     core = CoreClient(
         os.environ.get("EMBODIED_NEXUS_CORE_URL", "http://127.0.0.1:8780"),
         os.environ["EMBODIED_NEXUS_CORE_TOKEN"], timeout=8.0, management_timeout=60.0,

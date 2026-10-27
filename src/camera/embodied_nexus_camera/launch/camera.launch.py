@@ -7,6 +7,14 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
+    """生成 ROS launch 启动描述。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     return LaunchDescription([
         DeclareLaunchArgument(
             "config_file",

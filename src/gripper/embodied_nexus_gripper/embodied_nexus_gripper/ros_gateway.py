@@ -24,6 +24,14 @@ from .config import load_config
 
 
 def _default_config_path() -> str:
+    """获取默认配置文件路径。
+
+    Args:
+        无参数。
+
+    Returns:
+        构造或创建完成的对象或资源。 返回类型为 str。
+    """
     try:
         from ament_index_python.packages import get_package_share_directory
         return str(Path(get_package_share_directory("embodied_nexus_gripper")) / "config" / "ms42dc.yaml")
@@ -35,6 +43,15 @@ class GripperRosGateway(Node):
     """ROS client facade for the HTTP gateway; it never opens hardware."""
 
     def __init__(self, device_id: str | None = None, config_path: str | None = None) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            device_id: 设备标识符，作为初始化对象并保存构造参数或依赖所需的输入。 类型为 str | None。
+            config_path: 配置文件路径，指向要加载的设备配置。 类型为 str | None。
+
+        Returns:
+            无返回值。
+        """
         overrides = [Parameter("config_file", value=config_path)] if config_path else None
         super().__init__("embodied_nexus_gripper_web", parameter_overrides=overrides)
         self.declare_parameter("config_file", _default_config_path())
@@ -73,6 +90,16 @@ class GripperRosGateway(Node):
         self._operation_lock = threading.RLock()
 
     def _call(self, name: str, request: Any, timeout: float = 5.0):
+        """调用 ROS 服务并等待调用结果。
+
+        Args:
+            name: 名称，作为调用 ROS 服务并等待调用结果所需的输入。 类型为 str。
+            request: 封装调用输入字段的请求对象。 类型为 Any。
+            timeout: 本次网络或服务调用的最长等待时长，通常以秒为单位。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。
+        """
         client = self._service_clients[name]
         if not client.wait_for_service(timeout_sec=timeout):
             raise TimeoutError(f"ROS service {self._service_specs[name][1]} is unavailable")
@@ -88,16 +115,42 @@ class GripperRosGateway(Node):
 
     @staticmethod
     def _require(response: Any, success: bool, error: str = "") -> Any:
+        """检查当前设备或操作。
+
+        Args:
+            response: 服务端或被调用操作返回的响应对象。 类型为 Any。
+            success: success，作为检查当前设备或操作所需的输入。 类型为 bool。
+            error: error，作为检查当前设备或操作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 Any。
+        """
         if not success:
             raise RuntimeError(error or "gripper request failed")
         return response
 
     def info(self) -> dict:
+        """获取设备能力与静态信息。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         response = self._call("info", GetGripperInfo.Request())
         self._require(response, response.success, response.error)
         return json.loads(response.descriptor_json)
 
     def state(self) -> dict:
+        """获取设备当前状态。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         response = self._call("state", GetGripperState.Request())
         message = response.state
         stamp = message.header.stamp
@@ -125,11 +178,27 @@ class GripperRosGateway(Node):
         }
 
     def config(self) -> dict:
+        """获取当前配置。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         response = self._call("config", GetGripperConfiguration.Request())
         self._require(response, response.success, response.error)
         return json.loads(response.config_json)
 
     def validate_config(self, patch: dict) -> dict:
+        """验证配置。
+
+        Args:
+            patch: patch，作为验证配置所需的输入。 类型为 dict。
+
+        Returns:
+            布尔值，表示验证配置是否成功或成立。 返回类型为 dict。
+        """
         request = ValidateGripperConfiguration.Request()
         request.patch_json = json.dumps(patch)
         response = self._call("validate", request)
@@ -137,6 +206,15 @@ class GripperRosGateway(Node):
         return json.loads(response.config_json)
 
     def apply_config(self, lease_id: str, patch: dict) -> dict:
+        """应用配置。
+
+        Args:
+            lease_id: 租约标识符，作为应用配置所需的输入。 类型为 str。
+            patch: patch，作为应用配置所需的输入。 类型为 dict。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = ApplyGripperConfiguration.Request()
         request.lease_id, request.patch_json = lease_id, json.dumps(patch)
         response = self._call("apply", request)
@@ -144,6 +222,15 @@ class GripperRosGateway(Node):
         return json.loads(response.config_json)
 
     def acquire(self, owner: str, ttl_sec: float | None = None) -> dict:
+        """申请设备控制权。
+
+        Args:
+            owner: owner，作为申请设备控制权所需的输入。 类型为 str。
+            ttl_sec: ttlsec，作为申请设备控制权所需的输入。 类型为 float | None。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = AcquireGripperControl.Request()
         request.owner, request.ttl_sec = owner, float(ttl_sec or 0.0)
         response = self._call("acquire", request)
@@ -151,6 +238,14 @@ class GripperRosGateway(Node):
         return {"lease_id": response.lease_id, "expires_in_sec": response.expires_in_sec}
 
     def renew(self, lease_id: str) -> dict:
+        """续租当前设备控制权。
+
+        Args:
+            lease_id: 租约标识符，作为续租当前设备控制权所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = RenewGripperControl.Request()
         request.lease_id = lease_id
         response = self._call("renew", request)
@@ -158,6 +253,14 @@ class GripperRosGateway(Node):
         return {"expires_in_sec": response.expires_in_sec}
 
     def release(self, lease_id: str) -> dict:
+        """释放当前设备控制租约。
+
+        Args:
+            lease_id: 租约标识符，作为释放当前设备控制租约所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = ReleaseGripperControl.Request()
         request.lease_id = lease_id
         response = self._call("release", request)
@@ -165,6 +268,15 @@ class GripperRosGateway(Node):
         return {"released": True}
 
     def enable(self, lease_id: str, enabled: bool) -> dict:
+        """更新设备运动使能状态。
+
+        Args:
+            lease_id: 租约标识符，作为更新设备运动使能状态所需的输入。 类型为 str。
+            enabled: 表示对应功能是否启用的布尔值。 类型为 bool。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = SetGripperMotionEnabled.Request()
         request.lease_id, request.enabled = lease_id, bool(enabled)
         response = self._call("enable", request)
@@ -172,6 +284,14 @@ class GripperRosGateway(Node):
         return {"motion_enabled": bool(enabled)}
 
     def stop(self, reason: str = "HTTP stop requested") -> dict:
+        """停止设备当前动作。
+
+        Args:
+            reason: 原因，作为停止设备当前动作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         request = StopGripper.Request()
         request.reason = reason
         response = self._call("stop", request)
@@ -179,6 +299,16 @@ class GripperRosGateway(Node):
                 "hardware_stop_confirmed": response.hardware_stop_confirmed, "error": response.error}
 
     def start_operation(self, lease_id: str, command: str, angle_degrees: float = 0.0) -> dict:
+        """启动操作。
+
+        Args:
+            lease_id: 租约标识符，作为启动操作所需的输入。 类型为 str。
+            command: command，作为启动操作所需的输入。 类型为 str。
+            angle_degrees: 角度degrees，作为启动操作所需的输入。 类型为 float。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         if not self.action_client.wait_for_server(timeout_sec=2.0):
             raise TimeoutError(f"ROS action server {self.prefix}/move is unavailable")
         operation_id = str(uuid.uuid4())
@@ -209,6 +339,15 @@ class GripperRosGateway(Node):
         return {"operation_id": operation_id, "state": "submitting"}
 
     def _on_feedback(self, operation_id: str, wrapped: Any) -> None:
+        """处理反馈事件。
+
+        Args:
+            operation_id: 操作标识符，作为处理反馈事件所需的输入。 类型为 str。
+            wrapped: wrapped，作为处理反馈事件所需的输入。 类型为 Any。
+
+        Returns:
+            无返回值。
+        """
         message = wrapped.feedback
         with self._operation_lock:
             operation = self._operations.get(operation_id)
@@ -217,6 +356,15 @@ class GripperRosGateway(Node):
                 operation["feedback_age_sec"] = message.feedback_age_sec if message.feedback_age_sec >= 0 else None
 
     def _on_goal_response(self, operation_id: str, future: Any) -> None:
+        """处理goal响应事件。
+
+        Args:
+            operation_id: 操作标识符，作为处理goal响应事件所需的输入。 类型为 str。
+            future: 异步服务调用返回的 Future 对象。 类型为 Any。
+
+        Returns:
+            无返回值。
+        """
         try:
             goal_handle = future.result()
             if not goal_handle.accepted:
@@ -236,6 +384,15 @@ class GripperRosGateway(Node):
                 self._operations[operation_id].update(state="failed", success=False, error=str(exc))
 
     def _on_result(self, operation_id: str, future: Any) -> None:
+        """处理结果事件。
+
+        Args:
+            operation_id: 操作标识符，作为处理结果事件所需的输入。 类型为 str。
+            future: 异步服务调用返回的 Future 对象。 类型为 Any。
+
+        Returns:
+            无返回值。
+        """
         try:
             wrapped = future.result()
             result = wrapped.result
@@ -251,6 +408,14 @@ class GripperRosGateway(Node):
                 self._operations[operation_id].update(state="failed", success=False, error=str(exc))
 
     def operation(self, operation_id: str) -> dict:
+        """操作当前设备或操作。
+
+        Args:
+            operation_id: 操作标识符，作为操作当前设备或操作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self._operation_lock:
             operation = self._operations.get(operation_id)
             if operation is None:
@@ -258,6 +423,14 @@ class GripperRosGateway(Node):
             return dict(operation)
 
     def cancel_operation(self, operation_id: str) -> dict:
+        """取消操作。
+
+        Args:
+            operation_id: 操作标识符，作为取消操作所需的输入。 类型为 str。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 dict。
+        """
         with self._operation_lock:
             goal_handle = self._goal_handles.get(operation_id)
             operation = self._operations.get(operation_id)

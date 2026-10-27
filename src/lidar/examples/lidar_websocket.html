@@ -47,21 +47,49 @@
   </div>
 <script>
 (() => {
+  /**
+ * 按元素 ID 获取 DOM 元素。
+ * @param {*} id - 页面元素或设备的标识符。
+ * @returns {*} 按元素 ID 获取 DOM 元素得到的数据或处理结果。
+ */
   const $ = id => document.getElementById(id);
   let socket = null, metadata = null, gl = null, program = null, buffer = null, lastCloudAt = 0, yaw = 0;
+  /**
+ * 更新雷达示例页面的运行状态文本。
+ * @param {*} value - 需要转换或显示的输入值。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   const status = value => $('status').textContent = value;
 
+  /**
+ * 处理initGL。
+ * @returns {*} 处理initGL得到的数据或处理结果。
+ */
   function initGL() {
     gl = $('points').getContext('webgl');
     if (!gl) throw Error('WebGL is unavailable in this browser');
     const vs = 'attribute vec4 p; uniform float yaw; void main(){float c=cos(yaw),s=sin(yaw);float x=c*p.x-s*p.y;float y=s*p.x+c*p.y;float d=3.0+y*0.035-p.z*0.12;gl_Position=vec4(x*0.12/d,p.z*0.18/d,0.0,1.0);gl_PointSize=3.0;}';
     const fs = 'precision mediump float; void main(){gl_FragColor=vec4(0.18,0.82,0.73,1.0);}';
+    /**
+ * 编译并返回指定类型的 WebGL 着色器。
+ * @param {*} type - 供本函数编译并返回指定类型的 WebGL 着色器使用的输入值。
+ * @param {*} src - 供本函数编译并返回指定类型的 WebGL 着色器使用的输入值。
+ * @returns {*} 编译并返回指定类型的 WebGL 着色器得到的数据或处理结果。
+ */
     const shader = (type, src) => { const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw Error(gl.getShaderInfoLog(s)); return s; };
     program=gl.createProgram(); gl.attachShader(program,shader(gl.VERTEX_SHADER,vs)); gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(program);
     if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(program));
     buffer=gl.createBuffer(); gl.clearColor(0.035,0.055,0.075,1); return gl;
   }
 
+  /**
+ * 处理fieldReader。
+ * @param {*} view - 用于读取消息字段的二进制 DataView。
+ * @param {*} field - 供本函数处理fieldReader使用的输入值。
+ * @param {*} offset - 字段在二进制缓冲区中的字节偏移量。
+ * @param {*} little - 供本函数处理fieldReader使用的输入值。
+ * @returns {*} 处理fieldReader得到的数据或处理结果。
+ */
   function fieldReader(view, field, offset, little) {
     const at=offset+field.offset;
     switch(field.datatype) {
@@ -72,6 +100,12 @@
     }
   }
 
+  /**
+ * 解码并绘制点云数据。
+ * @param {*} meta - 供本函数解码并绘制点云数据使用的输入值。
+ * @param {*} payload - 接口响应体或消息载荷。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function drawCloud(meta, payload) {
     if(!gl) initGL();
     const canvas=$('points'), dpr=window.devicePixelRatio||1, w=Math.max(1,Math.floor(canvas.clientWidth*dpr)), h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
@@ -89,6 +123,12 @@
     $('frame').textContent=`${meta.frame_id||'—'} / ${meta.client_dropped_frames||0}`; lastCloudAt=Date.now();
   }
 
+  /**
+ * 绘制激光扫描数据。
+ * @param {*} meta - 供本函数绘制激光扫描数据使用的输入值。
+ * @param {*} payload - 接口响应体或消息载荷。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function drawScan(meta,payload) {
     const canvas=$('scan'),ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1,w=Math.max(1,Math.floor(canvas.clientWidth*dpr)),h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
     if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
@@ -99,6 +139,11 @@
     for(let i=0;i<meta.count;i++){const range=view.getFloat32(meta.ranges_offset+i*4,true);if(!Number.isFinite(range)||range<meta.range_min_m||range>max)continue;const a=meta.angle_min_rad+i*meta.angle_increment_rad,r=R*range/max;ctx.fillRect(cx+Math.cos(a)*r-1.5*dpr,cy-Math.sin(a)*r-1.5*dpr,3*dpr,3*dpr);}
   }
 
+  /**
+ * 渲染雷达服务状态。
+ * @param {*} s - 供本函数渲染雷达服务状态使用的输入值。
+ * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
+ */
   function drawStatus(s){$('life').textContent=s.lifecycle_state||'—';$('fps').textContent=s.pointcloud_fps==null?'—':`${Number(s.pointcloud_fps).toFixed(1)} Hz`;$('age').textContent=s.pointcloud_age_sec==null?'—':`${Number(s.pointcloud_age_sec).toFixed(3)} s`;if(s.last_error)status(s.last_error);else status(`${s.connected?'Connected':'Waiting'} · ${s.backend||''} · dropped ${s.client_dropped_frames||s.dropped_frames||0}`);}
 
   $('connect').onclick=async()=>{try{

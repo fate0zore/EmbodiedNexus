@@ -14,6 +14,16 @@ from embodied_nexus_base.config import load_config
 
 
 def _setup(context, *args, **kwargs):
+    """设置当前设备或操作。
+
+    Args:
+        context: context，作为设置当前设备或操作所需的输入。
+        *args: 额外的位置参数集合。
+        **kwargs: 额外的关键字参数集合。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     config_path = Path(LaunchConfiguration("config_file").perform(context)).expanduser().resolve()
     config = load_config(config_path)
     interface_mode = LaunchConfiguration("interface_mode").perform(context).strip() or config["interface_mode"]
@@ -40,6 +50,14 @@ def _setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    """生成 ROS launch 启动描述。
+
+    Args:
+        无参数。
+
+    Returns:
+        本次处理产生的结果值。
+    """
     return LaunchDescription([
         DeclareLaunchArgument("config_file", default_value=PathJoinSubstitution([
             FindPackageShare("embodied_nexus_base"), "config", "scout_mock.yaml"])),

@@ -17,16 +17,79 @@ class BaseBackend(Protocol):
 
     connected: bool
 
-    def open(self) -> None: ...
-    def close(self) -> None: ...
-    def request_control_mode(self) -> None: ...
-    def set_velocity(self, linear: float, angular: float) -> None: ...
-    def stop(self) -> None: ...
-    def poll(self) -> tuple[dict | None, dict | None, bool, str]: ...
+    def open(self) -> None:
+        """打开设备连接或目标资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
+        ...
+    def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
+        ...
+    def request_control_mode(self) -> None:
+        """请求控制权mode。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
+        ...
+    def set_velocity(self, linear: float, angular: float) -> None:
+        """设置速度。
+
+        Args:
+            linear: 线速度，作为设置速度所需的输入。 类型为 float。
+            angular: 角速度，作为设置速度所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
+        ...
+    def stop(self) -> None:
+        """停止设备当前动作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
+        ...
+    def poll(self) -> tuple[dict | None, dict | None, bool, str]:
+        """轮询当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 tuple[dict | None, dict | None, bool, str]。
+        """
+        ...
 
 
 class MockBackend:
     def __init__(self, config: dict[str, Any]) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+
+        Returns:
+            无返回值。
+        """
         self.config = config
         self.connected = True
         self.enabled = False
@@ -37,26 +100,75 @@ class MockBackend:
         self._lock = threading.RLock()
 
     def open(self) -> None:
+        """打开设备连接或目标资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         return
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.set_velocity(0.0, 0.0)
         self.connected = False
 
     def request_control_mode(self) -> None:
+        """请求控制权mode。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.enabled = True
 
     def set_velocity(self, linear: float, angular: float) -> None:
+        """设置速度。
+
+        Args:
+            linear: 线速度，作为设置速度所需的输入。 类型为 float。
+            angular: 角速度，作为设置速度所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         if self.config["mock"]["fail_command"]:
             raise OSError("mock command write failed")
         self.command = (float(linear), float(angular))
 
     def stop(self) -> None:
+        """停止设备当前动作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if self.config["mock"]["fail_stop"]:
             raise OSError("mock stop write failed")
         self.command = (0.0, 0.0)
 
     def poll(self) -> tuple[dict | None, dict | None, bool, str]:
+        """轮询当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 tuple[dict | None, dict | None, bool, str]。
+        """
         with self._lock:
             now = time.monotonic()
             dt = min(max(now - self._last, 0.0), 0.25)
@@ -85,6 +197,15 @@ class ScoutWaveshareSerialBackend:
     _KNOWN_DRIVERS = ("scout_waveshare_serial_driver", "scout_base_node", "scout_base.launch.py")
 
     def __init__(self, config: dict[str, Any], serial_factory=None) -> None:
+        """初始化对象并保存构造参数或依赖。
+
+        Args:
+            config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+            serial_factory: serialfactory，作为初始化对象并保存构造参数或依赖所需的输入。
+
+        Returns:
+            无返回值。
+        """
         self.config = config
         self._serial_factory = serial_factory
         self._serial = None
@@ -96,6 +217,14 @@ class ScoutWaveshareSerialBackend:
         self.control_mode_requested = False
 
     def _check_existing_driver(self) -> None:
+        """检查existingdriver。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         proc = Path("/proc")
         if not proc.is_dir():
             return
@@ -110,6 +239,14 @@ class ScoutWaveshareSerialBackend:
                 raise RuntimeError(f"existing Scout driver process {entry.name} may own the CAN adapter")
 
     def open(self) -> None:
+        """打开设备连接或目标资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         if self._serial is not None:
             return
         self._check_existing_driver()
@@ -133,6 +270,14 @@ class ScoutWaveshareSerialBackend:
                                   mode=str(settings["adapter_mode"])))
 
     def close(self) -> None:
+        """关闭连接并释放相关资源。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         with self._lock:
             if self._serial is not None:
                 self._serial.close()
@@ -140,6 +285,14 @@ class ScoutWaveshareSerialBackend:
             self.connected = False
 
     def _write(self, payload: bytes) -> None:
+        """写入当前设备或操作。
+
+        Args:
+            payload: 消息载荷或接口响应内容。 类型为 bytes。
+
+        Returns:
+            无返回值。
+        """
         if self._serial is None:
             raise OSError("Scout serial adapter is not open")
         written = self._serial.write(payload)
@@ -147,12 +300,29 @@ class ScoutWaveshareSerialBackend:
             raise OSError(f"short serial write ({written}/{len(payload)} bytes)")
 
     def request_control_mode(self) -> None:
+        """请求控制权mode。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         with self._lock:
             self._write(encode_variable_frame(SCOUT_CONTROL_MODE_ID, bytes([0x01]),
                                               str(self.config["serial"]["frame_type"])))
             self.control_mode_requested = True
 
     def set_velocity(self, linear: float, angular: float) -> None:
+        """设置速度。
+
+        Args:
+            linear: 线速度，作为设置速度所需的输入。 类型为 float。
+            angular: 角速度，作为设置速度所需的输入。 类型为 float。
+
+        Returns:
+            无返回值。
+        """
         payload = (int16_to_bytes(round(linear * 1000.0)) +
                    int16_to_bytes(round(angular * 1000.0)) + int16_to_bytes(0) + int16_to_bytes(0))
         with self._lock:
@@ -160,9 +330,25 @@ class ScoutWaveshareSerialBackend:
                                               str(self.config["serial"]["frame_type"])))
 
     def stop(self) -> None:
+        """停止设备当前动作。
+
+        Args:
+            无参数。
+
+        Returns:
+            无返回值。
+        """
         self.set_velocity(0.0, 0.0)
 
     def poll(self) -> tuple[dict | None, dict | None, bool, str]:
+        """轮询当前设备或操作。
+
+        Args:
+            无参数。
+
+        Returns:
+            本次处理产生的结果值。 返回类型为 tuple[dict | None, dict | None, bool, str]。
+        """
         with self._lock:
             if self._serial is None:
                 return None, None, False, "Scout serial adapter is not open"
@@ -189,6 +375,15 @@ class ScoutWaveshareSerialBackend:
 
 
 def create_backend(config: dict[str, Any], serial_factory=None):
+    """创建后端。
+
+    Args:
+        config: 设备或平台配置对象，提供本次操作所需参数。 类型为 dict[str, Any]。
+        serial_factory: serialfactory，作为创建后端所需的输入。
+
+    Returns:
+        构造或创建完成的对象或资源。
+    """
     if config["backend"] == "mock":
         return MockBackend(config)
     if config["backend"] == "scout_waveshare_serial":
