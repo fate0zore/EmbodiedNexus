@@ -154,14 +154,12 @@ class GripperRosGateway(Node):
         response = self._call("state", GetGripperState.Request())
         message = response.state
         stamp = message.header.stamp
-        reached = self._config_data["feedback"]["reached_value"]
         simulated_stop_feedback = (
             self._config_data["backend"] == "ros2_sim" and not message.motion_enabled and
-            message.feedback_valid and message.feedback_speed_raw == 0 and
-            reached is not None and message.feedback_reached == int(reached)
+            message.feedback_valid and message.feedback_stationary
         )
         return {
-            "device_id": message.device_id, "backend": message.backend,
+            "device_id": message.device_id, "model": message.model, "backend": message.backend,
             "lifecycle_state": message.lifecycle_state, "connected": message.connected,
             "motion_enabled": message.motion_enabled, "operation_id": message.operation_id,
             "operation_state": message.operation_state, "last_error": message.last_error,
@@ -169,8 +167,8 @@ class GripperRosGateway(Node):
             "command_target_known": message.command_target_known,
             "command_target_degrees": message.command_target_degrees if message.command_target_known else None,
             "feedback_valid": message.feedback_valid, "feedback_sequence": message.feedback_sequence,
-            "feedback_device_id": message.feedback_device_id, "feedback_reached": message.feedback_reached,
-            "feedback_speed_raw": message.feedback_speed_raw, "feedback_angle_raw": message.feedback_angle_raw,
+            "feedback_moving": message.feedback_moving, "feedback_reached": message.feedback_reached,
+            "feedback_stationary": message.feedback_stationary,
             "feedback_age_sec": message.feedback_age_sec if message.feedback_age_sec >= 0 else None,
             "stop_sent": message.stop_sent, "hardware_stop_confirmed": message.hardware_stop_confirmed,
             "stop_feedback_confirmed": bool(message.hardware_stop_confirmed or simulated_stop_feedback),

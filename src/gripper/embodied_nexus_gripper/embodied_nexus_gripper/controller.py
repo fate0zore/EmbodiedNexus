@@ -5,11 +5,11 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
-from .backend import Backend, create_backend
+from .backend import Backend, create_backend, create_model_operations
 from .config import finite_number, public_config, validate_config, validate_patch
-from .protocol import Feedback, ProtocolError
+from .errors import FeedbackError
 
 
 @dataclass
@@ -23,7 +23,7 @@ class MotionResult:
 
 
 class GripperController:
-    """Thread-safe, ROS-independent MS42DC state and motion controller."""
+    """Thread-safe, ROS-independent gripper state and motion controller."""
 
     def __init__(self, config: dict, backend: Backend | None = None) -> None:
         """初始化对象并保存构造参数或依赖。
@@ -39,12 +39,13 @@ class GripperController:
         self.config = copy.deepcopy(config)
         self._config_version = 1
         self.backend = backend or create_backend(self.config)
+        self.model_adapter = create_model_operations(self.config)
         self._lock = threading.RLock()
         self._poll_lock = threading.Lock()
         self._connected = False
         self._motion_enabled = False
         self._last_error = ""
-        self._feedback: Feedback | None = None
+        self._feedback: Any | None = None
         self._feedback_at = 0.0
         self._feedback_sequence = 0
         self._last_connect_attempt = 0.0
@@ -97,7 +98,7 @@ class GripperController:
         with self._poll_lock:
             with self._lock:
                 connected = self._connected
-                retry_after = float(self.config["serial"]["reconnect_backoff_sec"])
+                retry_after = self.model_adapter.reconnect_delay(self.config)
                 should_retry = not connected and time.monotonic() - self._last_connect_attempt >= retry_after
             if not connected:
                 if should_retry:
@@ -106,12 +107,13 @@ class GripperController:
                     if not self._connected:
                         return False
             try:
-                feedback = self.backend.read_feedback()
-                if feedback is None:
+                raw_feedback = self.backend.read_feedback()
+                if raw_feedback is None:
                     with self._lock:
                         self._last_error = "feedback timeout: no complete response frame"
                     return False
-            except ProtocolError as exc:
+                feedback = self.model_adapter.normalize_feedback(raw_feedback, self.config)
+            except FeedbackError as exc:
                 with self._lock:
                     self._last_error = str(exc)
                 return False
@@ -131,10 +133,7 @@ class GripperController:
                 self._feedback_at = time.monotonic()
                 self._feedback_sequence += 1
                 if self._stop_sent and not self._stop_feedback_confirmed:
-                    feedback_cfg = self.config["feedback"]
-                    expected = feedback_cfg["reached_value"]
-                    if (feedback.speed_raw == 0 and expected is not None and
-                            feedback.reached == int(expected)):
+                    if self.model_adapter.stopped(feedback, self.config):
                         self._stop_feedback_confirmed = True
                         if not getattr(self.backend, "feedback_is_simulated", False):
                             self._hardware_stop_confirmed = True
@@ -162,6 +161,7 @@ class GripperController:
             feedback = self._feedback
             return {
                 "device_id": self.config["device_id"],
+                "model": self.config["model"],
                 "backend": self.config["backend"],
                 "lifecycle_state": lifecycle,
                 "connected": self._connected,
@@ -176,10 +176,7 @@ class GripperController:
                 "feedback_valid": bool(feedback and age is not None and age <= float(self.config["feedback"]["stale_sec"])),
                 "feedback_source": "simulated_joint_state" if getattr(self.backend, "feedback_is_simulated", False) else "device_protocol",
                 "feedback_sequence": self._feedback_sequence,
-                "feedback_device_id": feedback.device_id if feedback else 0,
-                "feedback_reached": feedback.reached if feedback else 0,
-                "feedback_speed_raw": feedback.speed_raw if feedback else 0,
-                "feedback_angle_raw": feedback.angle_raw if feedback else 0,
+                **self.model_adapter.feedback_fields(feedback),
                 "feedback_age_sec": age,
                 "lease_owner": self._lease_owner if self._lease_valid_locked() else "",
                 "stop_sent": self._stop_sent,
@@ -197,26 +194,10 @@ class GripperController:
             本次处理产生的结果值。 返回类型为 dict。
         """
         return {
-            "device_id": self.config["device_id"], "model": "ms42dc",
+            "device_id": self.config["device_id"], "model": self.config["model"],
             "driver": "embodied_nexus_gripper", "driver_version": "0.1.0",
             "interface_version": "0.1.0",
-            "capabilities": [
-                {"name": "open", "parameters": [], "units": None},
-                {"name": "close", "parameters": [], "units": None},
-                {"name": "move_relative", "parameters": [{
-                    "name": "angle_degrees", "unit": "deg",
-                    "min": -int(self.config["motion"]["max_relative_angle_tenths"]) / 10.0,
-                    "max": int(self.config["motion"]["max_relative_angle_tenths"]) / 10.0,
-                }], "units": None},
-                {"name": "stop", "parameters": [], "units": None},
-                {"name": "enable_motion", "parameters": [], "units": None},
-            ],
-            "feedback": {
-                "raw_motor_angle": self.config["backend"] != "ros2_sim",
-                "opening_width_m": None, "finger_position": None, "force_n": None,
-                "completion_confirmed": bool(self.config["feedback"]["confirmed"]),
-                "source": "simulated_joint_state" if self.config["backend"] == "ros2_sim" else "device_protocol",
-            },
+            **self.model_adapter.descriptor(self.config, self.backend),
         }
 
     def configuration(self) -> dict:
@@ -355,12 +336,10 @@ class GripperController:
                 self._require_lease_locked(lease_id)
                 if not self._connected:
                     raise RuntimeError("gripper is not connected")
-                if not self.config["feedback"]["confirmed"]:
-                    raise RuntimeError("MS42DC feedback semantics are not confirmed in configuration")
-                if self.config["feedback"]["reached_value"] is None:
-                    raise RuntimeError("feedback.reached_value must be configured before motion is enabled")
+                if not self.model_adapter.feedback_configured(self.config):
+                    raise RuntimeError("gripper feedback semantics are not confirmed in configuration")
                 if not self.state()["feedback_valid"]:
-                    raise RuntimeError("a fresh valid MS42DC feedback sample is required before motion is enabled")
+                    raise RuntimeError("a fresh valid gripper feedback sample is required before motion is enabled")
                 self._motion_enabled = True
                 return
         with self._lock:
@@ -422,41 +401,6 @@ class GripperController:
         if not self._lease_valid_locked(lease_id):
             raise PermissionError("valid control lease required")
 
-    def _motion_parameters(self, command: str, angle_degrees: float) -> tuple[int, int, float]:
-        """从运动目标中提取速度和时长参数。
-
-        Args:
-            command: command，作为执行 _motion_parameters 对应的处理流程所需的输入。 类型为 str。
-            angle_degrees: 角度degrees，作为执行 _motion_parameters 对应的处理流程所需的输入。 类型为 float。
-
-        Returns:
-            本次处理产生的结果值。 返回类型为 tuple[int, int, float]。
-        """
-        command = str(command).strip().lower()
-        if command not in {"open", "close", "relative"}:
-            raise ValueError("command must be open, close, or relative")
-        requested = finite_number(angle_degrees, "angle_degrees")
-        if command == "open":
-            direction = 0
-            angle_raw = int(self.config["motion"]["open_angle_tenths"])
-            target_degrees = -angle_raw / 10.0
-        elif command == "close":
-            direction = 1
-            angle_raw = int(self.config["motion"]["close_angle_tenths"])
-            target_degrees = angle_raw / 10.0
-        else:
-            if requested == 0:
-                raise ValueError("relative angle_degrees must be nonzero")
-            angle_raw = int(round(abs(requested) * 10.0))
-            maximum = int(self.config["motion"]["max_relative_angle_tenths"])
-            if angle_raw < 1 or angle_raw > maximum:
-                raise ValueError(f"relative angle must be in [{-maximum / 10.0:g}, {maximum / 10.0:g}] degrees")
-            direction = 1 if requested > 0 else 0
-            target_degrees = requested
-        if angle_raw < 1:
-            raise ValueError(f"{command} angle is configured as zero")
-        return direction, angle_raw, target_degrees
-
     def reserve_motion_goal(self, lease_id: str, command: str, angle_degrees: float, operation_id: str) -> None:
         """预留底盘运动目标及其控制租约。
 
@@ -477,7 +421,7 @@ class GripperController:
                 raise RuntimeError("gripper is not connected")
             if self._operation_state == "running" or self._reserved_goal_id:
                 raise RuntimeError("another gripper operation is active")
-            self._motion_parameters(command, angle_degrees)
+            self.model_adapter.plan(self.config, command, angle_degrees)
             self._reserved_goal_id = operation_id
 
     def cancel_reserved_goal(self, operation_id: str) -> None:
@@ -512,7 +456,7 @@ class GripperController:
         Returns:
             本次处理产生的结果值。 返回类型为 MotionResult。
         """
-        direction, angle_raw, target_degrees = self._motion_parameters(command, angle_degrees)
+        plan = self.model_adapter.plan(self.config, command, angle_degrees)
         operation_id = operation_id.strip() or str(uuid.uuid4())
         stop_event = threading.Event()
         with self._lock:
@@ -530,7 +474,7 @@ class GripperController:
             self._operation_id = operation_id
             self._operation_state = "running"
             self._operation_error = ""
-            self._operation_target = target_degrees
+            self._operation_target = plan.target_degrees
             self._operation_stop_event = stop_event
             self._stop_sent = False
             self._hardware_stop_confirmed = False
@@ -544,7 +488,7 @@ class GripperController:
                 with self._lock:
                     self._require_lease_locked(lease_id)
                     baseline = self._feedback_sequence
-                self.backend.command(direction, angle_raw, int(self.config["control"]["speed_tenths"]))
+                self.model_adapter.execute(self.backend, plan, self.config)
         except Exception as exc:
             with self._lock:
                 self._operation_state = "failed"
@@ -596,13 +540,12 @@ class GripperController:
             if sequence > baseline and sequence != last_reported and feedback is not None:
                 new_sample = True
                 last_reported = sequence
-                feedback_cfg = self.config["feedback"]
-                if feedback_cfg["moving_value"] is not None and feedback.reached == int(feedback_cfg["moving_value"]):
+                if self.model_adapter.moving(feedback, self.config):
                     moving_seen = True
-                transition_ok = not bool(feedback_cfg["require_moving_transition"]) or moving_seen
+                transition_ok = self.model_adapter.completion_allowed(self.config, moving_seen)
                 with self._lock:
                     still_authorized = self._lease_valid_locked(lease_id) and self._motion_enabled
-                if feedback.reached == int(feedback_cfg["reached_value"]) and transition_ok and still_authorized:
+                if self.model_adapter.reached(feedback, self.config) and transition_ok and still_authorized:
                     with self._lock:
                         self._operation_state = "succeeded"
                         self._operation_error = ""
@@ -656,15 +599,14 @@ class GripperController:
                     raise OSError("gripper is not connected; stop could not be sent")
                 self.backend.stop()
                 sent = True
-                feedback = self.backend.read_feedback()
-                if feedback is not None:
+                raw_feedback = self.backend.read_feedback()
+                if raw_feedback is not None:
+                    feedback = self.model_adapter.normalize_feedback(raw_feedback, self.config)
                     with self._lock:
                         self._feedback = feedback
                         self._feedback_at = time.monotonic()
                         self._feedback_sequence += 1
-                        cfg = self.config["feedback"]
-                        expected = cfg["reached_value"]
-                        confirmed = feedback.speed_raw == 0 and expected is not None and feedback.reached == int(expected)
+                        confirmed = self.model_adapter.stopped(feedback, self.config)
             except Exception as exc:
                 error = str(exc)
         with self._lock:

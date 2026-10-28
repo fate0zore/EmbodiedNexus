@@ -100,12 +100,13 @@ def set_world_time_only_reset() -> str:
     Returns:
         本次处理产生的结果值。 返回类型为 str。
     """
-    request: dict[str, Any] = {"world_control": {"reset": {"time_only": True}}}
     result = run_wsl(
-        "ros2", "service", "call", CONTROL_SERVICE,
-        "ros_gz_interfaces/srv/ControlWorld", json.dumps(request),
+        "ign", "service", "-s", CONTROL_SERVICE,
+        "--reqtype", "ignition.msgs.WorldControl",
+        "--reptype", "ignition.msgs.Boolean",
+        "--timeout", "5000", "--req", "reset { time_only: true }",
     )
-    if "success=True" not in result:
+    if "data: true" not in result:
         raise RuntimeError(f"Gazebo rejected the simulation-time reset: {result}")
     return result
 
@@ -119,12 +120,13 @@ def set_world_paused(paused: bool) -> str:
     Returns:
         本次处理产生的结果值。 返回类型为 str。
     """
-    request = {"world_control": {"pause": bool(paused)}}
     result = run_wsl(
-        "ros2", "service", "call", CONTROL_SERVICE,
-        "ros_gz_interfaces/srv/ControlWorld", json.dumps(request),
+        "ign", "service", "-s", CONTROL_SERVICE,
+        "--reqtype", "ignition.msgs.WorldControl",
+        "--reptype", "ignition.msgs.Boolean",
+        "--timeout", "5000", "--req", f"pause: {'true' if paused else 'false'}",
     )
-    if "success=True" not in result:
+    if "data: true" not in result:
         raise RuntimeError(f"Gazebo rejected the world pause request: {result}")
     return result
 

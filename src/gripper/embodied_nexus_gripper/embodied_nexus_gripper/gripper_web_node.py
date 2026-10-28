@@ -39,7 +39,7 @@ def main(argv=None) -> None:
     executor.add_node(node)
     thread.start()
     node.get_logger().info(
-        f"MS42DC HTTP API listening on {web_config['bind_host']}:{web_config['port']}"
+        f"gripper HTTP API listening on {web_config['bind_host']}:{web_config['port']}"
     )
     try:
         executor.spin()

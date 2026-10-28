@@ -6,12 +6,12 @@ import time
 import unittest
 from pathlib import Path
 
-from embodied_nexus_gripper.backend import MockBackend
+from embodied_nexus_gripper.adapters.ms42dc.mock import MockBackend
 from embodied_nexus_gripper.config import load_config
 from embodied_nexus_gripper.config import validate_config
 from embodied_nexus_gripper.controller import GripperController
-from embodied_nexus_gripper.protocol import (
-    Feedback, ProtocolError, build_feedback_frame, build_motion_frame,
+from embodied_nexus_gripper.adapters.ms42dc.protocol import (
+    MS42DCFeedback, ProtocolError, build_feedback_frame, build_motion_frame,
     build_state_request_frame, parse_feedback_frame,
 )
 
@@ -48,7 +48,7 @@ class MS42DCProtocolTests(unittest.TestCase):
         Returns:
             无返回值。
         """
-        expected = Feedback(device_id=1, reached=1, speed_raw=12, angle_raw=0xF1234567)
+        expected = MS42DCFeedback(device_id=1, reached=1, speed_raw=12, angle_raw=0xF1234567)
         self.assertEqual(parse_feedback_frame(build_feedback_frame(expected), 1), expected)
 
     def test_short_bad_checksum_and_wrong_id_are_rejected(self):
@@ -62,12 +62,12 @@ class MS42DCProtocolTests(unittest.TestCase):
         """
         with self.assertRaises(ProtocolError):
             parse_feedback_frame(b"123", 1)
-        valid = bytearray(build_feedback_frame(Feedback(1, 1, 0, 4)))
+        valid = bytearray(build_feedback_frame(MS42DCFeedback(1, 1, 0, 4)))
         valid[-1] ^= 0x01
         with self.assertRaisesRegex(ProtocolError, "checksum"):
             parse_feedback_frame(bytes(valid), 1)
         with self.assertRaisesRegex(ProtocolError, "device id"):
-            parse_feedback_frame(build_feedback_frame(Feedback(2, 1, 0, 4)), 1)
+            parse_feedback_frame(build_feedback_frame(MS42DCFeedback(2, 1, 0, 4)), 1)
 
 
 class GripperControllerTests(unittest.TestCase):
@@ -121,7 +121,12 @@ class GripperControllerTests(unittest.TestCase):
         self.assertTrue(result.success, result.error)
         state = controller.state()
         self.assertEqual(state["operation_state"], "succeeded")
-        self.assertEqual(state["feedback_angle_raw"], 200)
+        self.assertTrue(state["feedback_reached"])
+        self.assertFalse(state["feedback_moving"])
+        self.assertTrue(state["feedback_stationary"])
+        self.assertNotIn("feedback_device_id", state)
+        self.assertNotIn("feedback_speed_raw", state)
+        self.assertNotIn("feedback_angle_raw", state)
         controller.shutdown()
 
     def test_action_goal_reservation_rejects_concurrent_motion(self):

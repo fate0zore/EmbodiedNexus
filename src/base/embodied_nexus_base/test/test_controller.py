@@ -93,6 +93,30 @@ class BaseControllerTests(unittest.TestCase):
         self.controller.set_velocity(lease_id, 0.1, 0.0)
         self.assertEqual(self.controller.target_linear, 0.1)
 
+    def test_state_uses_model_neutral_safety_feedback(self):
+        """Expose normalized safety state without Scout protocol codes.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        state = self.controller.state()
+        self.assertFalse(state["hardware_estop"])
+        self.assertFalse(state["fault_active"])
+        self.assertFalse(state["control_mode_confirmed"])
+        self.assertNotIn("vehicle_state", state)
+        self.assertNotIn("control_mode", state)
+        self.assertNotIn("error_code", state)
+
+        lease_id = self.control()
+        self.controller.enable_motion(lease_id, True)
+        self.assertTrue(self.controller.state()["control_mode_confirmed"])
+        self.config["mock"]["error_code"] = 1
+        self.controller.tick()
+        self.assertTrue(self.controller.state()["fault_active"])
+
     def test_only_one_lease_and_expiry_stops_motion(self):
         """验证onlyone租约和expirystopsmotion。
 

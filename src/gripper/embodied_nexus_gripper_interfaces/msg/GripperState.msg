@@ -1,5 +1,6 @@
 std_msgs/Header header
 string device_id
+string model
 string backend
 string lifecycle_state
 bool connected
@@ -13,10 +14,9 @@ bool command_target_known
 float64 command_target_degrees
 bool feedback_valid
 uint64 feedback_sequence
-uint8 feedback_device_id
-uint8 feedback_reached
-uint16 feedback_speed_raw
-uint32 feedback_angle_raw
+bool feedback_moving
+bool feedback_reached
+bool feedback_stationary
 float64 feedback_age_sec
 bool stop_sent
 bool hardware_stop_confirmed

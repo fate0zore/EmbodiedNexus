@@ -1,5 +1,31 @@
 # 目录结构与模块边界
 
+## 型号适配和注册
+
+设备能力仍是公开 ROS 接口与 Python SDK 的边界；设备配置中的实例 ID 与 `model` 分别表示设备实例和型号，`backend`（相机使用 `source.backend`）表示实际设备、mock 或 ROS 话题/仿真来源。不同实例应使用独立 ID、配置与命名空间。相机型号字段为 `model: gemini335`；已有相机配置未提供该字段时采用 Gemini335 默认值。
+
+各设备包内的 `adapters/<型号>/` 保存现有型号的参数校验、协议、控制或采集实现。公共设备服务负责租约、操作生命周期、状态与停止，型号适配器解释硬件数据和动作；仿真后端继续由 `embodied_nexus_sim` 提供，不导入其他设备的内部代码。型号提供方按设备类型注册到以下 Python entry point 分组；每个名称必须唯一，缺失或重复时拒绝配置：
+
+| 设备 | 型号 entry point | 当前内置型号 | 提供方职责 |
+| --- | --- | --- | --- |
+| 机械臂 | `embodied_nexus_arm.models` | `aubo_i5` | 校验配置，创建后端和语义操作适配器 |
+| 底盘 | `embodied_nexus_base.models` | `scout_2` | 提供默认配置、运行时可变字段、校验、后端和状态策略 |
+| 夹爪 | `embodied_nexus_gripper.models` | `ms42dc` | 提供默认配置、运行时可变字段、校验、后端和动作/反馈适配器 |
+| 相机 | `embodied_nexus_camera.models` | `gemini335` | 提供默认配置、运行时可变字段、校验和真实采集入口 |
+| 雷达 | `embodied_nexus_lidar.models` | `lslidar_c16` | 提供默认配置、运行时可变字段、校验、控制和 ROS 驱动启动入口 |
+
+第三方提供方注册的 entry point 指向无参构造的提供方类，方法契约以各内置型号的 `model.py` 和相应设备的控制器为准；提供方必须声明真实支持的能力并保持停止、反馈与控制权语义。`mock` 是模拟数据而非硬件反馈；ROS 话题来源不隐含支持雷达电机控制。添加型号时同时提供相应配置和契约测试，不应以命令目标冒充测量值。
+
+配置同时填写 `device_id`、`model` 与 `backend`；它们分别标识运行实例、设备型号和连接/数据来源。相机把来源配置放在 `source.backend`。例如同一型号的两台机械臂使用不同的 `device_id`、独立配置文件及命名空间；型号专属字段由对应 `adapters/<型号>/config.py` 校验，型号不支持的后端或能力会拒绝启动或操作。实例 ID 不用于型号选择。
+
+型号专属实现入口如下：Aubo i5 的 RPC 与动作语义在 `src/arm/embodied_nexus_arm/embodied_nexus_arm/adapters/aubo_i5/`；Scout 2.0 的串口、帧协议、反馈解释和运动安全策略在 `src/base/embodied_nexus_base/embodied_nexus_base/adapters/scout_2/`；MS42DC 的串口协议、动作映射和反馈解释在 `src/gripper/embodied_nexus_gripper/embodied_nexus_gripper/adapters/ms42dc/`；Gemini335 的 V4L2 采集在 `src/camera/embodied_nexus_camera/embodied_nexus_camera/adapters/gemini335/`；LSLIDAR C16 的 DIFOP、UDP 电机控制与驱动启动在 `src/lidar/embodied_nexus_lidar/embodied_nexus_lidar/adapters/c16/`。公共层提供统一 ROS 服务、标准状态或图像/点云/扫描、控制租约和停止语义；厂商专属 Python 模块只在型号适配器内导入。型号协议不再通过设备包根级 `protocol.py` 或公共后端模块导出。
+
+跨型号状态字段也保持通用：底盘 `BaseState` 用 `hardware_estop`、`fault_active` 和 `control_mode_confirmed` 表达安全状态，不发布 Scout 状态码；夹爪状态提供 `feedback_moving`、`feedback_reached` 和 `feedback_stationary`，不发布 MS42DC 原始字节字段；雷达状态将型号状态反馈的新鲜度统一称为 `device_feedback_age_sec`。设备状态均包含实例 ID、型号和后端；旧 ROS 消息字段需要按新接口重新生成并更新调用方。
+
+接入新型号时，在所属设备包新增 `adapters/<型号>/model.py` 及它需要的协议、后端、配置和语义实现；通过 Python entry point 注册该型号，例如 `embodied_nexus_arm.models = ["vendor_model = vendor_package:VendorArmModel"]`。提供方只实现对应设备能力实际使用的方法，遵守本设备控制器消费的适配器契约；另为 `mock` 或实机连接提供明确后端选择，并在 `embodied_nexus_sim` 中需要仿真时注册 `<型号>.ros2_sim` 后端。为型号配置、未知型号/后端、多个实例和设备能力契约增加测试。只为已有实际型号创建目录，不以空适配器宣称支持新硬件。
+
+机械臂 ROS 动作和速度服务现在使用变长关节数组；关节名称、目标和限位数量必须一致。Aubo i5 配置仍为六关节；ROS 客户端需要重新生成接口，具体迁移见[机械臂接口说明](../src/arm/docs/variable-joint-interface.md)。
+
 ## 组织方式
 
 项目采用单仓库、统一 ROS 2 工作区，以设备能力作为源码归属边界。一个设备模块聚合多个构建包和设备专用资料；模块目录本身不是 ROS 包。配置、launch 和包测试留在所属构建包内。
@@ -91,7 +117,7 @@ EmbodiedNexus/
 
 功能包使用 `ament_python`，自定义接口包使用 `ament_cmake` / `rosidl`，因此继续保留独立构建边界。厂商雷达包保持原包名和来源材料。colcon 的递归发现允许设备目录作为中间分组层，构建时用 `--base-paths src` 限定范围，详见 [colcon 官方发现参数](https://colcon.readthedocs.io/en/released/reference/discovery-arguments.html)。
 
-`src/sim/common/` 保存仿真器无关的后端契约和共享模型，具体仿真器使用 `src/sim/<仿真器名>/` 独立接入。Gazebo Fortress 首期的五类设备本机验收状态及运行边界见[仿真实施记录](../src/sim/README.md)和[验收报告](../src/sim/gazebo/embodied_nexus_sim_gazebo/docs/acceptance-20261024.md)。
+`src/sim/common/` 保存仿真器无关的后端契约和共享模型，具体仿真器使用 `src/sim/<仿真器名>/` 独立接入。Gazebo Fortress 本机运行状态、型号适配重构验收与边界见[仿真实施记录](../src/sim/README.md)、[本轮验收报告](../src/sim/gazebo/embodied_nexus_sim_gazebo/docs/model-adapter-validation-2026-10-28.md)和[首期历史报告](../src/sim/gazebo/embodied_nexus_sim_gazebo/docs/acceptance-20261024.md)。
 
 ## 资料与依赖归属
 

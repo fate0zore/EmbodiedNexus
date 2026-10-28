@@ -7,14 +7,11 @@ import time
 import uuid
 from typing import Any
 
-from .backend import AuboBackend, MockBackend, create_backend
-
-
-SAFE_MODES = {"normal", "reducedmode"}
+from .backend import create_backend, create_model_operations
 
 
 class ArmController:
-    """ROS-independent Aubo lifecycle, state and motion policy."""
+    """Model-neutral arm lifecycle, state and motion policy."""
 
     def __init__(self, config: dict[str, Any], backend=None) -> None:
         """初始化对象并保存构造参数或依赖。
@@ -28,6 +25,7 @@ class ArmController:
         """
         self.config = copy.deepcopy(config)
         self.backend = backend or create_backend(config)
+        self.operations = create_model_operations(config, self.backend)
         self.lock = threading.RLock()
         self.backend.open()
         self.connected = bool(getattr(self.backend, "connected", True))
@@ -49,8 +47,7 @@ class ArmController:
         self.stationary_confirmed = False
         self.feedback: dict[str, Any] = {}
         self.feedback_time = 0.0
-        self.payload = self.backend.read_optional("RobotConfig.getPayload")
-        self.tcp_offset = self.backend.read_optional("RobotConfig.getTcpOffset")
+        self.payload, self.tcp_offset = self.operations.optional_metadata()
 
     def info(self) -> dict[str, Any]:
         """获取设备能力与静态信息。
@@ -247,10 +244,8 @@ class ArmController:
         state = self.state()
         if not state["feedback_valid"]:
             raise RuntimeError("fresh arm feedback is required before enabling motion")
-        if not self.connected or str(state["mode"]).lower() != "running":
-            raise RuntimeError(f"Aubo must be Running before enabling motion (mode={state['mode']})")
-        if str(state["safety_mode"]).lower() not in SAFE_MODES:
-            raise RuntimeError(f"Aubo safety state does not permit motion: {state['safety_mode']}")
+        if not self.connected or not self.operations.motion_permitted(state):
+            raise RuntimeError("arm mode or safety state does not permit motion")
         if self._effective_limits() is None:
             raise RuntimeError("controller joint limits are unknown; motion remains disabled")
         with self.lock:
@@ -291,47 +286,40 @@ class ArmController:
         if all(abs(value) <= 1.0e-4 for value in velocity):
             accepted = self._halt_velocity_stream()
             if not accepted:
-                raise RuntimeError("Aubo did not confirm joint stop")
+                raise RuntimeError("arm did not confirm joint stop")
             state = self.state()
             return {"controller_accepted": True, "stationary_confirmed": state["stationary_confirmed"]}
         if not previous:
             if not self.backend.stop():
-                raise RuntimeError("Aubo did not confirm pre-velocity stop")
-            result = self.backend.execute("MotionControl.setServoMode", [True])
-            if result not in (0, None):
+                raise RuntimeError("arm did not confirm pre-velocity stop")
+            result = self.operations.set_streaming(True)
+            if not self.operations.command_accepted(result):
                 self.backend.stop()
-                raise RuntimeError(f"Aubo servo mode rejected command: result={result}")
+                raise RuntimeError(self.operations.command_error("streaming", result))
             with self.lock:
                 self.servo_mode_active = True
         try:
-            enabled = self.backend.execute("MotionControl.isServoModeEnabled")
+            enabled = self.operations.streaming_enabled()
             if enabled is False:
-                raise RuntimeError("Aubo servo mode did not become active")
-            command_period = float(self.config["motion"]["servo_joint_command_period_sec"])
+                raise RuntimeError("joint streaming mode did not become active")
+            command_period = self.operations.velocity_step_seconds(self.config)
             target = [float(q) + float(v) * command_period for q, v in zip(measured, velocity)]
             for index, value in enumerate(target):
                 if not limits[0][index] <= value <= limits[1][index]:
                     raise ValueError(f"joint velocity step exceeds limit for {self.config['joints']['names'][index]}")
             servo = self.config["motion"]
-            result = self.backend.execute("MotionControl.servoJoint", [
-                target,
-                float(servo["servo_joint_velocity_rad_sec"]),
-                float(servo["servo_joint_acceleration_rad_sec2"]),
-                float(servo["servo_joint_period_sec"]),
-                float(servo["servo_joint_lookahead_sec"]),
-                int(servo["servo_joint_gain"]),
-            ])
-            if result not in (0, None, 2):
-                raise RuntimeError(f"Aubo servoJoint rejected command: result={result}")
+            result = self.operations.stream_target(target, servo)
+            if not self.operations.stream_result_supported(result):
+                raise RuntimeError(self.operations.command_error("stream_target", result))
         except Exception:
             self.stop("joint servo command failed")
             raise
         with self.lock:
             self.velocity_command_time = time.monotonic()
-            self.controller_accepted = result in (0, None)
+            self.controller_accepted = self.operations.command_accepted(result)
         return {
-            "controller_accepted": result in (0, None),
-            "retry_next_cycle": result == 2,
+            "controller_accepted": self.operations.command_accepted(result),
+            "retry_next_cycle": self.operations.stream_retry_next_cycle(result),
             "commanded_positions_rad": target,
         }
 
@@ -393,13 +381,12 @@ class ArmController:
             self._require_motion_ready(lease_id)
             if self.servo_mode_active:
                 self._leave_servo_mode()
-            self.backend.execute("MotionControl.setServoModeSelect", [0])
+            self.operations.prepare_move()
             if not self.backend.stop():
-                raise RuntimeError("Aubo did not confirm pre-move stop")
-            result = self.backend.execute("MotionControl.moveJoint", [
-                target, acceleration, speed, 0.0, 0.0])
-            if result not in (0, None):
-                raise RuntimeError(f"Aubo moveJoint rejected command: result={result}")
+                raise RuntimeError("arm did not confirm pre-move stop")
+            result = self.operations.move_joints(target, acceleration, speed)
+            if not self.operations.command_accepted(result):
+                raise RuntimeError(self.operations.command_error("move_joints", result))
             accepted = True
             with self.lock:
                 self.controller_accepted = True
@@ -429,7 +416,7 @@ class ArmController:
                     stable_since = None
                 time.sleep(0.04)
             else:
-                raise TimeoutError("Aubo joint target did not reach tolerance before timeout")
+                raise TimeoutError("joint target did not reach tolerance before timeout")
             if stop_requested:
                 self.backend.stop()
                 self.poll_once()
@@ -440,7 +427,7 @@ class ArmController:
                         "stationary_confirmed": stopped_state["stationary_confirmed"] is True,
                         "hardware_estop": bool(stopped_state.get("hardware_estop"))}
             if last_error > tolerance:
-                raise RuntimeError("Aubo joint target failed to settle")
+                raise RuntimeError("joint target failed to settle")
             terminal_state = "succeeded"
             return {"success": True, "message": "joint target reached", "max_error_rad": last_error,
                     "controller_accepted": accepted, "stop_requested": False,
@@ -484,32 +471,32 @@ class ArmController:
             self.cancel_event.clear()
         try:
             if self.cancel_event.is_set():
-                raise RuntimeError("Aubo lifecycle operation cancelled")
+                raise RuntimeError("arm lifecycle operation cancelled")
             if command == "power_off":
                 if not self.backend.stop():
-                    raise RuntimeError("Aubo did not confirm stop before power off")
+                    raise RuntimeError("arm did not confirm stop before power off")
                 result = self._power_off()
-                expected = {"PowerOff", "Poweroff", "poweroff"}
+                expected = "powered_off"
             elif command == "power_on":
                 current = self.state().get("mode")
                 if self.cancel_event.is_set():
-                    raise RuntimeError("Aubo lifecycle operation cancelled")
-                result = 0 if current in {"Idle", "Running"} else self._power_on()
-                expected = {"Idle", "Running"}
+                    raise RuntimeError("arm lifecycle operation cancelled")
+                result = None if self.operations.mode_matches(current, "powered_on") else self._power_on()
+                expected = "powered_on"
             else:
                 state = self.state()
-                if state.get("mode") not in {"Idle", "Running"}:
+                if not self.operations.mode_matches(state.get("mode"), "powered_on"):
                     if self.cancel_event.is_set():
-                        raise RuntimeError("Aubo lifecycle operation cancelled")
+                        raise RuntimeError("arm lifecycle operation cancelled")
                     self._power_on()
-                    self._wait_for_mode({"Idle", "Running"})
+                    self._wait_for_mode("powered_on")
                 state = self.state()
                 if self.cancel_event.is_set():
-                    raise RuntimeError("Aubo lifecycle operation cancelled")
-                result = 0 if state.get("mode") == "Running" else self.backend.execute("RobotManage.startup")
-                expected = {"Running"}
-            if result not in (0, None):
-                raise RuntimeError(f"Aubo {command} rejected command: result={result}")
+                    raise RuntimeError("arm lifecycle operation cancelled")
+                result = None if self.operations.mode_matches(state.get("mode"), "running") else self.operations.lifecycle("startup")
+                expected = "running"
+            if not self.operations.command_accepted(result):
+                raise RuntimeError(self.operations.command_error("lifecycle", result))
             self._wait_for_mode(expected)
             return {"success": True, "operation_state": "succeeded"}
         finally:
@@ -526,13 +513,13 @@ class ArmController:
         Returns:
             本次处理产生的结果值。
         """
-        return self.backend.execute("RobotManage.poweron")
+        return self.operations.lifecycle("power_on")
 
-    def _wait_for_mode(self, expected: set[str]) -> None:
+    def _wait_for_mode(self, expected: str) -> None:
         """等待机械臂进入指定控制模式。
 
         Args:
-            expected: expected，作为等待机械臂进入指定控制模式所需的输入。 类型为 set[str]。
+            expected: 需要达到的设备生命周期阶段。
 
         Returns:
             无返回值。
@@ -540,12 +527,12 @@ class ArmController:
         deadline = time.monotonic() + max(45.0, float(self.config["motion"]["operation_timeout_sec"]))
         while time.monotonic() < deadline:
             if self.cancel_event.is_set():
-                raise RuntimeError("Aubo lifecycle operation cancelled")
+                raise RuntimeError("arm lifecycle operation cancelled")
             self.poll_once()
-            if self.feedback.get("mode") in expected:
+            if self.operations.mode_matches(self.feedback.get("mode"), expected):
                 return
             time.sleep(0.1)
-        raise TimeoutError(f"Aubo did not reach mode {sorted(expected)} (last={self.feedback.get('mode')})")
+        raise TimeoutError(f"arm did not reach {expected} (last={self.feedback.get('mode')})")
 
     def _power_off(self):
         """关闭机械臂驱动并停止运动。
@@ -556,13 +543,7 @@ class ArmController:
         Returns:
             本次处理产生的结果值。
         """
-        error = None
-        for method in ("RobotManage.poweroff", "RobotManage.powerOff"):
-            try:
-                return self.backend.execute(method)
-            except Exception as exc:
-                error = exc
-        raise RuntimeError(f"Aubo power_off RPC unavailable: {error}")
+        return self.operations.lifecycle("power_off")
 
     def set_teach_mode(self, lease_id: str, enabled: bool) -> dict[str, Any]:
         """设置示教mode。
@@ -580,16 +561,12 @@ class ArmController:
                 raise RuntimeError("arm is busy with another operation")
             if enabled:
                 state = self.state()
-                if not self.motion_enabled or not state["feedback_valid"] or not self._safe_state(state):
-                    raise RuntimeError("teach mode requires an enabled arm in fresh Running/Normal state")
+                if not self.motion_enabled or not state["feedback_valid"] or not self.operations.motion_permitted(state):
+                    raise RuntimeError("teach mode requires an enabled arm with fresh, safe feedback")
                 self.active_operation = "teach"
-        method = self.config["teach"]["method"]
-        if method == "handguide":
-            result = self.backend.execute("RobotManage.handguideMode", [[], []]) if enabled else self.backend.execute("RobotManage.exitHandguideMode")
-        else:
-            result = self.backend.execute(f"RobotManage.{method}", [bool(enabled)])
-        if result not in (0, None):
-            raise RuntimeError(f"Aubo teach mode rejected command: result={result}")
+        result = self.operations.teach(self.config, enabled)
+        if not self.operations.command_accepted(result):
+            raise RuntimeError(self.operations.command_error("teach", result))
         with self.lock:
             self.teach_enabled = bool(enabled)
             self.active_operation = "teach" if enabled else ""
@@ -615,8 +592,8 @@ class ArmController:
         accepted = bool(self.backend.stop())
         if self.servo_mode_active:
             try:
-                servo_result = self.backend.execute("MotionControl.setServoMode", [False])
-                accepted = accepted and servo_result in (0, None)
+                servo_result = self.operations.set_streaming(False)
+                accepted = accepted and self.operations.command_accepted(servo_result)
             except Exception:
                 accepted = False
             with self.lock:
@@ -652,10 +629,10 @@ class ArmController:
             无返回值。
         """
         if not self.backend.stop():
-            raise RuntimeError("Aubo did not confirm stop before leaving servo mode")
-        result = self.backend.execute("MotionControl.setServoMode", [False])
-        if result not in (0, None):
-            raise RuntimeError(f"Aubo could not leave servo mode: result={result}")
+            raise RuntimeError("arm did not confirm stop before leaving joint streaming mode")
+        result = self.operations.set_streaming(False)
+        if not self.operations.command_accepted(result):
+            raise RuntimeError(self.operations.command_error("streaming", result))
         with self.lock:
             self.servo_mode_active = False
             self.velocity_command_time = 0.0
@@ -672,8 +649,8 @@ class ArmController:
         accepted = bool(self.backend.stop())
         if self.servo_mode_active:
             try:
-                result = self.backend.execute("MotionControl.setServoMode", [False])
-                accepted = accepted and result in (0, None)
+                result = self.operations.set_streaming(False)
+                accepted = accepted and self.operations.command_accepted(result)
             except Exception:
                 accepted = False
         with self.lock:
@@ -693,6 +670,8 @@ class ArmController:
         """
         try:
             feedback = self.backend.poll()
+            self._validate_vector(feedback.get("positions_rad"), "feedback positions_rad")
+            self._validate_vector(feedback.get("velocities_rad_sec"), "feedback velocities_rad_sec")
             with self.lock:
                 self.feedback = feedback
                 self.feedback_time = time.monotonic()
@@ -740,7 +719,7 @@ class ArmController:
             self.backend.stop()
             if self.servo_mode_active:
                 try:
-                    self.backend.execute("MotionControl.setServoMode", [False])
+                    self.operations.set_streaming(False)
                 except Exception:
                     pass
                 self.servo_mode_active = False
@@ -790,8 +769,8 @@ class ArmController:
             if not self.motion_enabled:
                 raise RuntimeError("arm motion has been disabled")
         state = self.state()
-        if not state["feedback_valid"] or not self._safe_state(state):
-            raise RuntimeError("Aubo mode, safety or feedback no longer permits motion")
+        if not state["feedback_valid"] or not self.operations.motion_permitted(state):
+            raise RuntimeError("arm state or feedback no longer permits motion")
 
     def _send_teach(self, enabled: bool) -> Any:
         """发送示教。
@@ -802,23 +781,7 @@ class ArmController:
         Returns:
             本次处理产生的结果值。 返回类型为 Any。
         """
-        method = self.config["teach"]["method"]
-        if method == "handguide":
-            return self.backend.execute("RobotManage.handguideMode", [[], []]) if enabled else self.backend.execute("RobotManage.exitHandguideMode")
-        return self.backend.execute(f"RobotManage.{method}", [bool(enabled)])
-
-    @staticmethod
-    def _safe_state(state: dict[str, Any]) -> bool:
-        """筛选并返回可安全公开的机械臂状态字段。
-
-        Args:
-            state: 状态，作为执行 _safe_state 对应的处理流程所需的输入。 类型为 dict[str, Any]。
-
-        Returns:
-            布尔值，表示执行 _safe_state 对应的处理流程是否成功或成立。
-        """
-        return (str(state.get("mode", "")).lower() == "running" and
-                str(state.get("safety_mode", "")).lower() in SAFE_MODES)
+        return self.operations.teach(self.config, enabled)
 
     def _effective_limits(self):
         """根据设备和配置计算当前有效的关节速度限制。
@@ -831,16 +794,17 @@ class ArmController:
         """
         local_min = [float(v) for v in self.config["joints"]["min_rad"]]
         local_max = [float(v) for v in self.config["joints"]["max_rad"]]
-        if isinstance(self.backend, AuboBackend):
-            hardware_min, hardware_max = self.backend.hardware_min, self.backend.hardware_max
-            if hardware_min is None or hardware_max is None:
-                return None
-            local_min = [max(a, b) for a, b in zip(local_min, hardware_min)]
-            local_max = [min(a, b) for a, b in zip(local_max, hardware_max)]
+        limits = self.backend.joint_limits()
+        if limits is None:
+            return None
+        hardware_min, hardware_max = limits
+        if len(hardware_min) != len(local_min) or len(hardware_max) != len(local_max):
+            return None
+        local_min = [max(a, b) for a, b in zip(local_min, hardware_min)]
+        local_max = [min(a, b) for a, b in zip(local_max, hardware_max)]
         return (local_min, local_max) if all(a < b for a, b in zip(local_min, local_max)) else None
 
-    @staticmethod
-    def _validate_vector(values: list[float], label: str) -> list[float]:
+    def _validate_vector(self, values: list[float], label: str) -> list[float]:
         """验证vector。
 
         Args:
@@ -851,13 +815,13 @@ class ArmController:
             布尔值，表示验证vector是否成功或成立。 返回类型为 list[float]。
         """
         if isinstance(values, (str, bytes)):
-            raise ValueError(f"{label} must contain six values")
+            raise ValueError(f"{label} must contain joint values")
         try:
             result = [float(value) for value in values]
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"{label} must contain six numeric values") from exc
-        if len(result) != 6:
-            raise ValueError(f"{label} must contain six values")
+            raise ValueError(f"{label} must contain numeric values") from exc
+        if len(result) != len(self.config["joints"]["names"]):
+            raise ValueError(f"{label} must match configured joint count")
         if not all(math.isfinite(value) for value in result):
             raise ValueError(f"{label} must contain finite values")
         return result

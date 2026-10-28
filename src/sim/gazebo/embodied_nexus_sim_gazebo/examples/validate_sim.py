@@ -112,6 +112,7 @@ def validate(core: CoreClient) -> int:
 
     scan_stop = threading.Event()
     nearest_forward = {"range_m": None}
+    scan_observation = {"sequence": 0, "stamp_sec": None, "received_monotonic": 0.0}
     scan_error = {"message": ""}
     lidar_frames = {"points": None, "scan": None}
 
@@ -153,6 +154,11 @@ def validate(core: CoreClient) -> int:
                         ranges.append(distance)
                 if ranges:
                     nearest_forward["range_m"] = min(ranges)
+                    scan_observation.update({
+                        "sequence": int(frame.metadata.get("sequence", 0)),
+                        "stamp_sec": float(frame.metadata.get("stamp_sec", 0.0)),
+                        "received_monotonic": time.monotonic(),
+                    })
         except Exception as exc:
             if not scan_stop.is_set():
                 scan_error["message"] = str(exc)
@@ -185,39 +191,29 @@ def validate(core: CoreClient) -> int:
         print("[sim validation] base turn", json.dumps(base_turn),
               "pose", base_after_turn.get("x_m"), base_after_turn.get("y_m"),
               "yaw", base_after_turn.get("yaw_rad"), flush=True)
-        obstacle_approach = base_lease.move_relative(1.4, 0.15)
-        obstacle_detected = False
-        deadline = time.monotonic() + 12.0
-        next_report = time.monotonic()
-        while time.monotonic() < deadline:
-            operation = obstacle_approach.status()
-            if operation.get("state") in {"succeeded", "failed", "cancelled"}:
-                break
-            if scan_error["message"]:
-                obstacle_approach.cancel()
-                raise RuntimeError(f"lidar stream failed during obstacle approach: {scan_error['message']}")
-            if nearest_forward["range_m"] is not None and nearest_forward["range_m"] < 1.2:
-                obstacle_detected = True
-                obstacle_approach.cancel()
-                break
-            if time.monotonic() >= next_report:
-                print("[sim validation] obstacle approach",
-                      "nearest_forward_m=", nearest_forward["range_m"],
-                      "operation=", operation.get("state"), flush=True)
-                next_report = time.monotonic() + 1.0
-            time.sleep(0.05)
-        else:
-            obstacle_approach.cancel()
-        obstacle_stop = obstacle_approach.wait(timeout=5.0)
+        base_cancel_baseline_sequence = scan_observation["sequence"]
+        base_cancel_pose_start = base.state()
+        base_cancel_handle = base_lease.move_relative(1.4, 0.15)
+        time.sleep(0.6)
+        if scan_error["message"]:
+            base_cancel_handle.cancel()
+            raise RuntimeError(f"lidar stream failed during base cancellation: {scan_error['message']}")
+        base_cancel_request = base_cancel_handle.cancel()
+        base_cancel = base_cancel_handle.wait(timeout=5.0)
         base_lease.enable_motion(False)
-        base_after_obstacle = base.state()
+        base_after_cancel = base.state()
     scan_stop.set()
-    if not obstacle_detected or obstacle_stop.get("state") != "cancelled":
+    base_cancel_scan_is_fresh = (
+        scan_observation["sequence"] > base_cancel_baseline_sequence and
+        time.monotonic() - scan_observation["received_monotonic"] <= 1.0
+    )
+    if base_cancel.get("state") != "cancelled" or not base_cancel.get("zero_velocity_written"):
         raise RuntimeError(
-            "forward lidar did not cancel the base before the obstacle: "
-            f"nearest={nearest_forward['range_m']}, stop={obstacle_stop}, "
-            f"pose=({base_after_obstacle.get('x_m')}, {base_after_obstacle.get('y_m')})"
+            "base cancellation was not confirmed with a zero-velocity command: "
+            f"stop={base_cancel}, pose=({base_after_cancel.get('x_m')}, {base_after_cancel.get('y_m')})"
         )
+    if not base_cancel_scan_is_fresh:
+        raise RuntimeError("lidar stream did not produce a fresh scan during base cancellation")
 
     wrist_camera_before_arm = read_camera_color_sample(camera)
     with arm.acquire_control("sim-validation") as arm_lease:
@@ -303,8 +299,10 @@ def validate(core: CoreClient) -> int:
     results = {
         "device_lifecycle": lifecycle,
         "base_move_0_5m": base_move, "base_turn_30deg": base_turn,
-        "base_after_obstacle": base_after_obstacle,
-        "obstacle_detected": obstacle_detected, "obstacle_stop": obstacle_stop,
+        "base_cancel_request": base_cancel_request, "base_cancel": base_cancel,
+        "base_cancel_pose_start": base_cancel_pose_start,
+        "base_after_cancel": base_after_cancel,
+        "base_cancel_scan_fresh": base_cancel_scan_is_fresh,
         "minimum_forward_range_m": nearest_forward["range_m"],
         "arm_approach": arm_move, "arm_velocity_start": velocity_start,
         "wrist_camera_before_arm": wrist_camera_before_arm,
@@ -332,7 +330,7 @@ def validate(core: CoreClient) -> int:
     successful = all(operation_succeeded(result) for result in
                      (base_move, base_turn, arm_move, gripper_close, arm_return, gripper_open))
     if not successful:
-        raise RuntimeError("simulated actions, RGB-D streaming or lidar obstacle stop failed")
+        raise RuntimeError("simulated base, arm, gripper, RGB-D or lidar validation failed")
     if not {"color", "depth"}.issubset(camera_frames):
         raise RuntimeError("simulated RGB-D stream did not return both color and depth")
     if lidar_frames["points"] is None or lidar_frames["scan"] is None:

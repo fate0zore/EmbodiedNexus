@@ -185,6 +185,8 @@ class CameraHub:
             online = streams["color"]["available"] or streams["depth"]["available"]
             return {
                 "camera_id": self.camera_id,
+                "model": config["model"],
+                "backend": config["source"]["backend"],
                 "online": online,
                 "state": "streaming" if online else "offline",
                 "streams": streams,
@@ -427,7 +429,7 @@ class CameraWebServer:
                 if not self._auth():
                     self._send_json(401, {"error": "unauthorized"}); return
                 if path == f"{base}/info":
-                    self._send_json(200, {"camera_id": owner.hub.camera_id, "interfaces": owner.runtime.config["interface_mode"], "websocket": "/ws", "streams": ["color", "depth", "points"]}); return
+                    self._send_json(200, {"camera_id": owner.hub.camera_id, "model": owner.runtime.config["model"], "interfaces": owner.runtime.config["interface_mode"], "websocket": "/ws", "streams": ["color", "depth", "points"]}); return
                 if path == f"{base}/status":
                     self._send_json(200, owner.hub.status(owner.runtime.config, owner.runtime.calibration.version)); return
                 if path == f"{base}/config":

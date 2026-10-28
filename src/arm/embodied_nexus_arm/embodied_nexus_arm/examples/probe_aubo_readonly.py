@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from embodied_nexus_arm.backend import AuboBackend
+from embodied_nexus_arm.adapters.aubo_i5.backend import AuboBackend
 from embodied_nexus_arm.config import load_config
 
 

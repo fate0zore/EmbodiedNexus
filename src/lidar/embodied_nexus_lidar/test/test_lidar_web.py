@@ -28,6 +28,7 @@ class FakeGateway:
         self.config = load_config()
         self.hub = StreamHub()
         self.capture_values = []
+        self.clients = 0
 
     def info(self):
         """获取设备能力与静态信息。
@@ -163,6 +164,7 @@ class FakeGateway:
         Returns:
             本次处理产生的结果值。
         """
+        self.clients += 1
         return True
 
     def release_client(self):
@@ -174,7 +176,7 @@ class FakeGateway:
         Returns:
             无返回值。
         """
-        pass
+        self.clients -= 1
 
 
 @unittest.skipIf(TestClient is None, "Starlette test client is not installed")
@@ -259,6 +261,7 @@ class WebTests(unittest.TestCase):
         ) as second:
             receive_frames(first)
             receive_frames(second)
+        self.assertEqual(self.gateway.clients, 0)
 
 
 if __name__ == "__main__":

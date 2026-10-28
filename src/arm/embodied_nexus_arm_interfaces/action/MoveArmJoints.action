@@ -1,5 +1,5 @@
 string lease_id
-float64[6] positions_rad
+float64[] positions_rad
 float64 speed_rad_sec
 float64 acceleration_rad_sec2
 float64 timeout_sec

@@ -7,7 +7,8 @@ import time
 import unittest
 from pathlib import Path
 
-from embodied_nexus_arm.backend import AuboBackend, AuboJsonRpc, _six
+from embodied_nexus_arm.adapters.aubo_i5.backend import AuboBackend, _six
+from embodied_nexus_arm.adapters.aubo_i5.rpc import AuboJsonRpc
 from embodied_nexus_arm.config import load_config
 
 

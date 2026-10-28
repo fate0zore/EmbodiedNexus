@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import math
-import socket
 import threading
 import time
 import uuid
@@ -10,7 +9,19 @@ from typing import Any
 
 from .config import public_config, validate_patch
 from .geometry import CloudFrame, ScanFrame, filter_cloud, make_scan
-from .protocol import build_motor_packet, build_speed_packet, inspect_difop
+from .model_registry import resolve_model
+
+
+def create_model_adapter(config: dict[str, Any]):
+    """Create the adapter for a configured lidar model.
+
+    Args:
+        config: Effective lidar configuration.
+
+    Returns:
+        Model-specific motor and feedback adapter.
+    """
+    return resolve_model(config["model"]).create_control()
 
 
 class StreamHub:
@@ -108,17 +119,16 @@ class LidarRuntime:
             无返回值。
         """
         self.config = copy.deepcopy(config)
+        self.model_adapter = create_model_adapter(config)
         self.hub = StreamHub()
         self._lock = threading.RLock()
         # Filtering and LaserScan projection can process hundreds of thousands
         # of points per frame. Keep that work outside the state/control lock so
-        # DIFOP freshness, leases and status services remain responsive.
+        # Device feedback freshness, leases and status services remain responsive.
         self._cloud_processing_lock = threading.Lock()
         self._cloud: CloudFrame | None = None
         self._cloud_received = 0.0
         self._scan: ScanFrame | None = None
-        self._difop = b""
-        self._difop_received = 0.0
         self._sequence = 0
         self._previous_cloud_at = 0.0
         self._fps = 0.0
@@ -213,21 +223,17 @@ class LidarRuntime:
         with self._lock:
             self._last_error = str(message)
 
-    def ingest_difop(self, packet: bytes | bytearray | list[int]) -> None:
-        """接收并缓存雷达 DIFOP 配置数据包。
+    def ingest_device_status(self, packet: bytes | bytearray | list[int]) -> None:
+        """Receive and cache one model-validated device status payload.
 
         Args:
-            packet: 数据包，作为执行 ingest_difop 对应的处理流程所需的输入。 类型为 bytes | bytearray | list[int]。
+            packet: 数据包，作为执行 ingest_device_status 对应的处理流程所需的输入。 类型为 bytes | bytearray | list[int]。
 
         Returns:
             无返回值。
         """
-        raw = bytes(packet)
-        status = inspect_difop(raw)
-        del status
         with self._lock:
-            self._difop = raw[:1206]
-            self._difop_received = time.monotonic()
+            self.model_adapter.ingest_status(packet)
             self._last_error = ""
 
     def set_capture(self, enabled: bool) -> bool:
@@ -298,20 +304,21 @@ class LidarRuntime:
         """
         backend = self.config["backend"]
         capabilities = ["read_pointcloud", "read_laserscan", "start_capture", "stop_capture", "configure_filters"]
-        if backend in {"c16", "mock"}:
+        supports_motor = self.model_adapter.supports_motor(self.config)
+        if supports_motor:
             capabilities.extend(["motor_start", "motor_stop", "set_motor_speed"])
         return {
             "device_id": self.config["device_id"], "model": self.config["model"],
             "driver": "embodied_nexus_lidar", "driver_version": "0.1.0",
             "interface_version": "0.1.0", "backend": backend,
             "capabilities": capabilities,
-            "motor_speeds_hz": [5, 10, 20] if backend in {"c16", "mock"} else [],
+            "motor_speeds_hz": list(self.model_adapter.speeds_hz) if supports_motor else [],
             "pointcloud_fields": ["x", "y", "z", "intensity", "ring", "time"],
             "units": {"coordinates": "m", "angles": "rad", "time": "s", "intensity": "device-defined"},
         }
 
-    def _fresh_difop_locked(self) -> bytes:
-        """在锁保护下读取仍然有效的 DIFOP 数据。
+    def _fresh_device_status_locked(self) -> bytes:
+        """Read device feedback that the model adapter still considers fresh.
 
         Args:
             无参数。
@@ -319,15 +326,10 @@ class LidarRuntime:
         Returns:
             本次处理产生的结果值。 返回类型为 bytes。
         """
-        age = time.monotonic() - self._difop_received if self._difop_received else math.inf
-        if not self._difop or age > float(self.config["control"]["difop_stale_sec"]):
-            raise RuntimeError(f"fresh DIFOP data unavailable (age={age:.3f}s)")
-        inspect_difop(self._difop)
-        return self._difop
+        return self.model_adapter.fresh_status(self.config)
 
-    @staticmethod
-    def _mock_difop() -> bytes:
-        """创建用于 mock 后端的 DIFOP 数据包。
+    def _mock_device_status(self) -> bytes:
+        """Create a mock status payload for the selected model adapter.
 
         Args:
             无参数。
@@ -335,11 +337,7 @@ class LidarRuntime:
         Returns:
             本次处理产生的结果值。 返回类型为 bytes。
         """
-        packet = bytearray(1206)
-        packet[:4] = b"\xA5\xFF\x00\x5A"
-        packet[8:10] = b"\x02\x58"
-        packet[1198] = 0x04
-        return bytes(packet)
+        return self.model_adapter.mock_packet()
 
     def _require_lease_locked(self, lease_id: str) -> None:
         """检查租约锁保护。
@@ -363,17 +361,7 @@ class LidarRuntime:
         Returns:
             无返回值。
         """
-        if self.config["backend"] == "mock":
-            if self.config["mock"]["fail_command"]:
-                raise OSError("mock injected lidar command failure")
-            return
-        if self.config["backend"] != "c16":
-            raise RuntimeError("motor control is unsupported by backend=ros2_topics")
-        driver = self.config["driver"]
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sent = sock.sendto(packet, (driver["device_ip"], int(driver["command_port"])))
-        if sent != len(packet):
-            raise OSError(f"short lidar UDP send: {sent}/{len(packet)} bytes")
+        self.model_adapter.send(packet, self.config)
 
     def set_motor(self, lease_id: str, enabled: bool) -> dict[str, Any]:
         """设置控制电机。
@@ -386,21 +374,22 @@ class LidarRuntime:
             本次处理产生的结果值。 返回类型为 dict[str, Any]。
         """
         with self._lock:
-            if self.config["backend"] not in {"c16", "mock"}:
+            if not self.model_adapter.supports_motor(self.config):
                 raise RuntimeError("motor control is unsupported by backend=ros2_topics")
             if enabled:
                 self._require_lease_locked(lease_id)
-            packet_source = self._mock_difop() if self.config["backend"] == "mock" else self._fresh_difop_locked()
-            packet = build_motor_packet(
+            simulated = self.model_adapter.is_simulated(self.config)
+            packet_source = self._mock_device_status() if simulated else self._fresh_device_status_locked()
+            packet = self.model_adapter.motor_command(
                 packet_source,
                 enabled=bool(enabled),
                 speed_hz=self._requested_motor_speed_hz if enabled else None,
             )
             self._send_packet_locked(packet)
             self._motor_command_sent = True
-            self._motor_state = ("running" if enabled else "stopped") if self.config["backend"] == "mock" else "unknown"
+            self._motor_state = ("running" if enabled else "stopped") if simulated else "unknown"
             return {"success": True, "command_sent": True,
-                    "hardware_state_confirmed": self.config["backend"] == "mock",
+                    "hardware_state_confirmed": simulated,
                     "motor_state": self._motor_state, "error": ""}
 
     def set_motor_speed(self, lease_id: str, speed_hz: int) -> dict[str, Any]:
@@ -414,18 +403,18 @@ class LidarRuntime:
             本次处理产生的结果值。 返回类型为 dict[str, Any]。
         """
         with self._lock:
-            if self.config["backend"] not in {"c16", "mock"}:
+            if not self.model_adapter.supports_motor(self.config):
                 raise RuntimeError("motor control is unsupported by backend=ros2_topics")
             self._require_lease_locked(lease_id)
-            packet_source = self._mock_difop() if self.config["backend"] == "mock" else self._fresh_difop_locked()
-            packet = build_speed_packet(packet_source, speed_hz)
+            simulated = self.model_adapter.is_simulated(self.config)
+            packet_source = self._mock_device_status() if simulated else self._fresh_device_status_locked()
+            packet = self.model_adapter.speed_command(packet_source, speed_hz)
             self._send_packet_locked(packet)
             self._motor_command_sent = True
             self._requested_motor_speed_hz = int(speed_hz)
-            if self.config["backend"] == "mock":
+            if simulated:
                 self._motor_speed_hz = int(speed_hz)
             actual = self.actual_motor_speed()
-            simulated = self.config["backend"] == "mock"
             return {"success": True, "command_sent": True, "hardware_state_confirmed": simulated,
                     "requested_speed_hz": int(speed_hz), "actual_speed_known": actual["known"],
                     "actual_speed_hz": actual["speed_hz"] or 0, "error": ""}
@@ -447,7 +436,7 @@ class LidarRuntime:
             self._expire_lease_locked()
             if self._lease_id:
                 raise RuntimeError(f"lidar control is already held by {self._lease_owner}")
-            if self.config["backend"] == "ros2_topics":
+            if not self.model_adapter.supports_motor(self.config):
                 raise RuntimeError("backend=ros2_topics does not own the external lidar motor")
             ttl = float(self.config["control"]["lease_ttl_sec"] if ttl_sec is None or ttl_sec <= 0 else ttl_sec)
             if not math.isfinite(ttl) or not 0 < ttl <= float(self.config["control"]["max_lease_ttl_sec"]):
@@ -481,17 +470,18 @@ class LidarRuntime:
         Returns:
             布尔值，表示停止加锁状态是否成功或成立。
         """
-        if self.config["backend"] == "ros2_topics":
+        if not self.model_adapter.supports_motor(self.config):
             return False
-        if self.config["backend"] == "mock":
-            if self.config["mock"]["fail_stop"]:
-                self._last_error = "mock injected lidar stop failure"
+        if self.model_adapter.is_simulated(self.config):
+            error = self.model_adapter.simulated_stop_error(self.config)
+            if error:
+                self._last_error = error
                 return False
             self._motor_command_sent = True
             self._motor_state = "stopped"
             return True
         try:
-            packet = build_motor_packet(self._fresh_difop_locked(), enabled=False)
+            packet = self.model_adapter.motor_command(self._fresh_device_status_locked(), enabled=False)
             self._send_packet_locked(packet)
             self._motor_command_sent = True
             self._motor_state = "unknown"
@@ -563,8 +553,8 @@ class LidarRuntime:
         """
         with self._lock:
             self._expire_lease_locked()
-            if self.config["backend"] == "mock":
-                if self.config["mock"]["disconnect"]:
+            if self.model_adapter.is_simulated(self.config):
+                if self.model_adapter.simulated_disconnect(self.config):
                     self._last_error = "mock injected lidar disconnect"
                 elif self._cloud is not None:
                     self._last_error = ""
@@ -579,11 +569,11 @@ class LidarRuntime:
             本次处理产生的结果值。 返回类型为 dict[str, Any]。
         """
         with self._lock:
-            if self.config["backend"] == "mock":
+            if self.model_adapter.is_simulated(self.config):
                 return {"known": True, "speed_hz": self._motor_speed_hz}
             try:
                 self._expire_lease_locked()
-                status = inspect_difop(self._fresh_difop_locked())
+                status = self.model_adapter.inspect(self._fresh_device_status_locked())
                 return {"known": status.speed_confirmed, "speed_hz": status.speed_hz}
             except Exception:
                 return {"known": False, "speed_hz": None}
@@ -601,15 +591,10 @@ class LidarRuntime:
             self._expire_lease_locked()
             now = time.monotonic()
             cloud_age = now - self._cloud_received if self._cloud_received else None
-            difop_age = now - self._difop_received if self._difop_received else None
+            device_feedback_age = self.model_adapter.status_age()
             stale = float(self.config["streams"]["stale_sec"])
             backend = self.config["backend"]
-            if backend == "mock":
-                connected = not self.config["mock"]["disconnect"]
-            elif backend == "c16":
-                connected = difop_age is not None and difop_age <= float(self.config["control"]["difop_stale_sec"])
-            else:
-                connected = cloud_age is not None and cloud_age <= stale
+            connected = self.model_adapter.connected(self.config, cloud_age)
             data_fresh = bool(self._cloud is not None and cloud_age is not None and cloud_age <= stale)
             actual = self.actual_motor_speed()
             if self._last_error:
@@ -626,10 +611,10 @@ class LidarRuntime:
                 "capturing": self._capturing, "data_fresh": data_fresh,
                 "point_sequence": self._sequence, "pointcloud_fps": round(self._fps, 2),
                 "pointcloud_age_sec": cloud_age,
-                "frame_id": self._cloud.frame_id if self._cloud else str(self.config["driver"]["frame_id"]),
-                "difop_age_sec": difop_age, "motor_state": self._motor_state,
+                "frame_id": self._cloud.frame_id if self._cloud else self.model_adapter.default_frame(self.config),
+                "device_feedback_age_sec": device_feedback_age, "motor_state": self._motor_state,
                 "motor_command_sent": self._motor_command_sent,
-                "hardware_state_confirmed": backend == "mock" and self._motor_state in {"running", "stopped"},
+                "hardware_state_confirmed": self.model_adapter.is_simulated(self.config) and self._motor_state in {"running", "stopped"},
                 "motor_speed_known": actual["known"], "motor_speed_hz": actual["speed_hz"],
                 "lease_owner": self._lease_owner if self._lease_id else "",
                 "config_version": self._config_version, "last_error": self._last_error,

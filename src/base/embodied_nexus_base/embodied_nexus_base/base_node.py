@@ -539,12 +539,14 @@ class BaseNode(Node):
                    "pose_estimate_valid": "pose_estimate_valid", "stop_requested": "stop_requested",
                    "zero_velocity_written": "zero_velocity_written",
                    "stationary_confirmed": "stationary_confirmed", "hardware_estop": "hardware_estop"}
+        mapping["fault_active"] = "fault_active"
+        mapping["control_mode_confirmed"] = "control_mode_confirmed"
         for target, source in mapping.items():
             value = state[source]
             if value is not None:
                 setattr(message, target, value)
-        for key in ("vehicle_state", "control_mode", "battery_voltage", "error_code",
-                    "measured_linear_mps", "measured_angular_rps", "x_m", "y_m", "yaw_rad"):
+        for key in ("battery_voltage", "measured_linear_mps", "measured_angular_rps",
+                    "x_m", "y_m", "yaw_rad"):
             value = state[key]
             if value is not None:
                 setattr(message, key, value)

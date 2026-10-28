@@ -26,7 +26,7 @@ python3 -m pip install -e sdk/python
 
 客户端先读状态，再显式申请控制权并使能运动。应用正常退出时释放租约；释放会请求机械臂停止。机械臂运动始终使用弧度、弧度每秒和弧度每秒平方。
 
-完成构建后可运行 `python3 src/arm/examples/validate_mock_stack.py`，通过 HTTP/SDK 验证启动、反馈、租约和 mock 关节操作。
+完成构建后可运行 `python3 src/arm/embodied_nexus_arm/examples/validate_mock_stack.py`，通过 HTTP/SDK 验证启动、反馈、租约和 mock 关节操作。
 
 真实配置位于 `src/arm/embodied_nexus_arm/config/aubo_i5_real.yaml`，启动时不会自动上电、启动、使能或进入示教模式。运动使能要求控制器反馈新鲜、运行模式为 `Running`、安全模式为 `Normal` 或 `ReducedMode`，且控制器关节范围可读取。关节限制取本地和控制器范围交集。示教模式和关节运动互斥。
 

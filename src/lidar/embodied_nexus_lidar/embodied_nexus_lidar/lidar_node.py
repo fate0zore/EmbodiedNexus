@@ -23,6 +23,7 @@ from embodied_nexus_lidar_interfaces.srv import (
     ValidateLidarConfiguration,
 )
 
+from .model_registry import resolve_model
 from .config import load_config, validate_config
 from .geometry import CloudFrame, cloud_from_ros, cloud_to_ros, transform_cloud
 from .runtime import LidarRuntime, mock_cloud
@@ -106,7 +107,7 @@ class LidarNode(Node):
         # Keep sensor callbacks ordered, while allowing control/state services
         # and the status timer to run during CPU-heavy cloud projection.
         self._sensor_group = MutuallyExclusiveCallbackGroup()
-        self._difop_group = MutuallyExclusiveCallbackGroup()
+        self._model_status_group = MutuallyExclusiveCallbackGroup()
         self._service_group = MutuallyExclusiveCallbackGroup()
         self._timer_group = MutuallyExclusiveCallbackGroup()
         self.points_pub = self.create_publisher(PointCloud2, self.points_topic, qos_profile_sensor_data)
@@ -117,13 +118,14 @@ class LidarNode(Node):
             PointCloud2, input_topic, self._on_cloud, qos_profile_sensor_data,
             callback_group=self._sensor_group,
         )
-        if self.config["backend"] == "c16":
-            self.difop_sub = self.create_subscription(
-                self._packet_type(), f"{self.namespace}/_driver/difop_packet", self._on_difop, 10,
-                callback_group=self._difop_group,
+        self.model = resolve_model(self.config["model"])
+        if self.model.uses_driver(self.config):
+            self.model_status_sub = self.create_subscription(
+                self.model.packet_type(), self.model.status_topic(self.namespace), self._on_model_status, 10,
+                callback_group=self._model_status_group,
             )
         else:
-            self.difop_sub = None
+            self.model_status_sub = None
 
         self._install_services()
         self._mock_timer = (self.create_timer(0.1, self._mock_tick, callback_group=self._sensor_group)
@@ -136,19 +138,6 @@ class LidarNode(Node):
             f"lidar {self.device_id} backend={self.config['backend']} mode={self.config['interface_mode']} "
             f"points={self.points_topic} scan={self.scan_topic}"
         )
-
-    @staticmethod
-    def _packet_type():
-        """数据包类型。
-
-        Args:
-            无参数。
-
-        Returns:
-            本次处理产生的结果值。
-        """
-        from lslidar_msgs.msg import LslidarPacket
-        return LslidarPacket
 
     def _install_services(self) -> None:
         """创建雷达节点的 ROS 服务接口。
@@ -196,7 +185,7 @@ class LidarNode(Node):
         except Exception as exc:
             self.runtime.set_error(f"point cloud rejected: {exc}")
 
-    def _on_difop(self, message: Any) -> None:
+    def _on_model_status(self, message: Any) -> None:
         """接收并记录雷达设备配置数据包。
 
         Args:
@@ -206,9 +195,9 @@ class LidarNode(Node):
             无返回值。
         """
         try:
-            self.runtime.ingest_difop(bytes(message.data))
+            self.runtime.ingest_device_status(self.model.status_payload(message))
         except Exception as exc:
-            self.runtime.set_error(f"invalid DIFOP packet: {exc}")
+            self.runtime.set_error(f"invalid device status: {exc}")
 
     def _publish_latest_scan(self) -> None:
         """发布latest扫描。
@@ -502,7 +491,7 @@ class LidarNode(Node):
             无返回值。
         """
         state = self.runtime.state()
-        if state["backend"] in {"c16", "mock"}:
+        if self.runtime.model_adapter.supports_motor(self.config):
             sent = self.runtime.shutdown()
             self.get_logger().info(f"shutdown lidar stop command sent={sent}")
         super().destroy_node()

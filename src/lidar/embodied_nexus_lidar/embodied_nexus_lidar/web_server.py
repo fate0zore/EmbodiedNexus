@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 import hmac
 import json
 import math
@@ -369,8 +370,14 @@ def create_app(gateway: Any, token: str) -> Starlette:
             sequences: dict[str, int] = {}
             sent_at: dict[str, float] = {}
             client_dropped = 0
+            receiver = asyncio.create_task(websocket.receive())
             try:
                 while websocket.application_state.name == "CONNECTED":
+                    if receiver.done():
+                        incoming = receiver.result()
+                        if incoming["type"] == "websocket.receive":
+                            await websocket.close(code=1003)
+                        break
                     ready = await asyncio.to_thread(gateway.hub.wait_after, sequences, 0.05)
                     now = time.monotonic()
                     for channel, seq, frame, received in ready:
@@ -427,6 +434,9 @@ def create_app(gateway: Any, token: str) -> Starlette:
             except (WebSocketDisconnect, RuntimeError, OSError, ValueError):
                 return
             finally:
+                receiver.cancel()
+                with suppress(asyncio.CancelledError, RuntimeError):
+                    await receiver
                 if getattr(self, "_registered", False):
                     gateway.release_client()
                     self._registered = False

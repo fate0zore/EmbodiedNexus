@@ -30,7 +30,7 @@ from embodied_nexus_lidar_interfaces.srv import (
     AcquireLidarControl, GetLidarState, ReleaseLidarControl, RenewLidarControl,
     SetLidarMotor, SetLidarMotorSpeed,
 )
-from embodied_nexus_lidar.protocol import inspect_difop
+from embodied_nexus_lidar.adapters.c16.protocol import inspect_difop
 
 
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -326,7 +326,7 @@ def main() -> int:
                 raise RuntimeError("C16 lidar launch exited during startup")
             try:
                 state = check.state()
-                if state.get("connected") and state.get("difop_age_sec") is not None:
+                if state.get("connected") and state.get("device_feedback_age_sec") is not None:
                     break
             except Exception as exc:
                 last_state_error = f"{type(exc).__name__}: {exc}"

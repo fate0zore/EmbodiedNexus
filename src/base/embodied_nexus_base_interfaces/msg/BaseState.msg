@@ -11,10 +11,9 @@ string lease_owner
 string last_error
 bool system_feedback_valid
 float64 system_feedback_age_sec
-uint8 vehicle_state
-uint8 control_mode
 float64 battery_voltage
-uint16 error_code
+bool fault_active
+bool control_mode_confirmed
 bool motion_feedback_valid
 float64 motion_feedback_age_sec
 float64 measured_linear_mps

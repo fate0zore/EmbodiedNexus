@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import Any
 
-from .backend import create_backend
+from .backend import create_backend, create_model_policy
 from .config import validate_patch
 
 
@@ -52,6 +52,7 @@ class BaseController:
         """
         self.config = config
         self.backend = backend or create_backend(config)
+        self.model_policy = create_model_policy(config)
         self.lock = threading.RLock()
         self.backend.open()
         now = time.monotonic()
@@ -113,11 +114,7 @@ class BaseController:
             motion_valid = self.motion is not None and motion_age is not None and motion_age <= stale
             measured_linear = float(self.motion["linear_mps"]) if motion_valid else None
             measured_angular = float(self.motion["angular_rps"]) if motion_valid else None
-            vehicle_state = int(self.system["vehicle_state"]) if self.system else None
-            control_mode = int(self.system["control_mode"]) if self.system else None
-            battery_value = self.system.get("battery_voltage") if self.system else None
-            battery = float(battery_value) if battery_value is not None else None
-            error_code = int(self.system["error_code"]) if self.system else None
+            model_state = self.model_policy.state_fields(self.system)
             stationary = bool(motion_valid and abs(measured_linear) < 0.01 and abs(measured_angular) < 0.01)
             self.stationary_confirmed = stationary
             timestamp = self.odometry_stamp_sec if self.odometry_source == "simulator_odometry" and self.odometry_stamp_sec else time.time()
@@ -129,8 +126,7 @@ class BaseController:
                     "operation_id": self.operation_id, "operation_state": self.operation_state,
                     "lease_owner": self.lease_owner, "last_error": self.last_error,
                     "system_feedback_valid": system_valid, "system_feedback_age_sec": system_age,
-                    "vehicle_state": vehicle_state, "control_mode": control_mode,
-                    "battery_voltage": battery, "error_code": error_code,
+                    **model_state,
                     "motion_feedback_valid": motion_valid, "motion_feedback_age_sec": motion_age,
                     "measured_linear_mps": measured_linear, "measured_angular_rps": measured_angular,
                     "pose_estimate_valid": self.pose_valid and motion_valid,
@@ -141,8 +137,7 @@ class BaseController:
                     "target_angular_rps": self.target_angular if self.motion_enabled else 0.0,
                     "stop_requested": self.stop_requested,
                     "zero_velocity_written": self.zero_velocity_written,
-                    "stationary_confirmed": stationary,
-                    "hardware_estop": vehicle_state == 1}
+                    "stationary_confirmed": stationary}
 
     def configuration(self) -> dict:
         """获取当前设备配置。
@@ -268,26 +263,26 @@ class BaseController:
         state = self.state()
         if not state["system_feedback_valid"] or not state["motion_feedback_valid"]:
             raise RuntimeError("fresh system and motion feedback are required before enabling motion")
-        if state["vehicle_state"] != 0 or state["error_code"] != 0:
-            raise RuntimeError("Scout vehicle state or error code does not permit motion")
+        if not self.model_policy.motion_permitted(state):
+            raise RuntimeError("base state or error does not permit motion")
         if not getattr(self.backend, "enabled", False):
             self.backend.request_control_mode()
         deadline = time.monotonic() + float(self.config["feedback"]["control_mode_timeout_sec"])
         while time.monotonic() < deadline:
             self.poll_once()
             current = self.state()
-            if current["system_feedback_valid"] and current["control_mode"] == 1:
+            if self.model_policy.control_confirmed(current):
                 with self.lock:
                     self._require_lease(lease_id)
-                    if current["vehicle_state"] != 0 or current["error_code"] != 0:
-                        raise RuntimeError("Scout reported a fault while enabling motion")
+                    if not self.model_policy.motion_permitted(current):
+                        raise RuntimeError("base reported a fault while enabling motion")
                     self.motion_enabled = True
                     self.stop_requested = False
                     self.zero_velocity_written = False
                     self.last_error = ""
                 return {"enabled": True, "control_mode_confirmed": True}
             time.sleep(0.02)
-        raise TimeoutError("Scout did not confirm CAN control mode")
+        raise TimeoutError("base did not confirm control mode")
 
     def set_velocity(self, lease_id: str, linear: float, angular: float) -> None:
         """设置速度。
@@ -456,7 +451,8 @@ class BaseController:
             state = self.state()
             unsafe = self.motion_enabled and (
                 not self.connected or not state["system_feedback_valid"] or
-                not state["motion_feedback_valid"] or state["vehicle_state"] != 0 or state["error_code"] != 0
+                not state["motion_feedback_valid"] or
+                not self.model_policy.motion_permitted(state)
             )
             stale_command = self.motion_enabled and self.command_time and (
                 now - self.command_time > float(self.config["motion"]["command_timeout_sec"]))

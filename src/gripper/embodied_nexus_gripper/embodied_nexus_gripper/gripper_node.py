@@ -91,7 +91,8 @@ class GripperNode(Node):
                                        callback_group=self.callback_group,
                                        clock=Clock(clock_type=ClockType.STEADY_TIME))
         self.get_logger().info(
-            f"MS42DC gripper {config['device_id']} backend={config['backend']} state_topic={self.prefix}/state"
+            f"gripper {config['device_id']} model={config['model']} backend={config['backend']} "
+            f"state_topic={self.prefix}/state"
         )
 
     @staticmethod
@@ -147,6 +148,7 @@ class GripperNode(Node):
         state = self.controller.state()
         message.header.stamp = self.get_clock().now().to_msg()
         message.device_id = state["device_id"]
+        message.model = state["model"]
         message.backend = state["backend"]
         message.lifecycle_state = state["lifecycle_state"]
         message.connected = state["connected"]
@@ -160,10 +162,9 @@ class GripperNode(Node):
         message.command_target_degrees = float(state["command_target_degrees"] or 0.0)
         message.feedback_valid = state["feedback_valid"]
         message.feedback_sequence = state["feedback_sequence"]
-        message.feedback_device_id = state["feedback_device_id"]
+        message.feedback_moving = state["feedback_moving"]
         message.feedback_reached = state["feedback_reached"]
-        message.feedback_speed_raw = state["feedback_speed_raw"]
-        message.feedback_angle_raw = state["feedback_angle_raw"]
+        message.feedback_stationary = state["feedback_stationary"]
         message.feedback_age_sec = float(
             state["feedback_age_sec"] if state["feedback_age_sec"] is not None else -1.0
         )
@@ -348,7 +349,7 @@ class GripperNode(Node):
             本次处理产生的结果值。
         """
         if not request.client_operation_id:
-            self.get_logger().warning("Rejecting MS42DC motion goal without a client_operation_id")
+            self.get_logger().warning("Rejecting gripper motion goal without a client_operation_id")
             return GoalResponse.REJECT
         try:
             self.controller.reserve_motion_goal(
@@ -356,7 +357,7 @@ class GripperNode(Node):
             )
             return GoalResponse.ACCEPT
         except Exception as exc:
-            self.get_logger().warning(f"Rejecting MS42DC motion goal: {exc}")
+            self.get_logger().warning(f"Rejecting gripper motion goal: {exc}")
             return GoalResponse.REJECT
 
     def _cancel_callback(self, goal_handle):

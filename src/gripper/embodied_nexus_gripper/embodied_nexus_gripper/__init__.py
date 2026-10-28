@@ -1,5 +1,6 @@
 from .controller import GripperController, MotionResult
-from .protocol import Feedback, ProtocolError
 from .backend import Backend
+from .errors import FeedbackError
+from .models import GripperFeedback
 
-__all__ = ["Backend", "Feedback", "GripperController", "MotionResult", "ProtocolError"]
+__all__ = ["Backend", "FeedbackError", "GripperController", "GripperFeedback", "MotionResult"]

@@ -2,6 +2,7 @@ import json
 import socket
 import struct
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -288,6 +289,31 @@ class CalibrationAndGeometryTest(unittest.TestCase):
 
 
 class WebTransportTest(unittest.TestCase):
+    def test_camera_reports_offline_after_sensor_stream_interruption(self):
+        """Mark both RGB-D streams unavailable after sensor frames stop.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        hub = CameraHub("camera_interrupted", stale_sec=0.01)
+        sample = np.zeros((2, 2, 3), dtype=np.uint8)
+        hub.publish("color", sample, stamp_sec=time.time(), frame_id="color", encoding="bgr8")
+        hub.publish("depth", np.zeros((2, 2), dtype=np.uint16), stamp_sec=time.time(),
+                    frame_id="depth", encoding="16UC1")
+        self.assertTrue(hub.status(DEFAULT_CONFIG)["online"])
+        self.assertEqual(hub.status(DEFAULT_CONFIG)["model"], "gemini335")
+        self.assertEqual(hub.status(DEFAULT_CONFIG)["backend"], "gemini_v4l2")
+
+        time.sleep(0.02)
+        interrupted = hub.status(DEFAULT_CONFIG)
+        self.assertFalse(interrupted["online"])
+        self.assertEqual(interrupted["state"], "offline")
+        self.assertFalse(interrupted["streams"]["color"]["available"])
+        self.assertFalse(interrupted["streams"]["depth"]["available"])
+
     def test_latest_frame_cache_and_encoded_frame(self):
         """验证latest坐标系cache和encoded坐标系。
 

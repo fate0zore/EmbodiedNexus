@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Iterable
+from ...errors import FeedbackError
 
 
-class ProtocolError(ValueError):
+class ProtocolError(FeedbackError):
     """A received MS42DC feedback frame is incomplete or invalid."""
 
 
 @dataclass(frozen=True)
-class Feedback:
+class MS42DCFeedback:
+    """Raw MS42DC status values decoded from one device frame."""
+
     device_id: int
     reached: int
     speed_raw: int
@@ -78,7 +81,7 @@ def build_state_request_frame(device_id: int) -> bytes:
     return bytes(payload + [xor_checksum(payload), 0x7D])
 
 
-def parse_feedback_frame(frame: bytes, expected_device_id: int) -> Feedback:
+def parse_feedback_frame(frame: bytes, expected_device_id: int) -> MS42DCFeedback:
     """解析反馈坐标系。
 
     Args:
@@ -86,7 +89,7 @@ def parse_feedback_frame(frame: bytes, expected_device_id: int) -> Feedback:
         expected_device_id: expected设备标识符，作为解析反馈坐标系所需的输入。 类型为 int。
 
     Returns:
-        解析或解码后的结构化数据。 返回类型为 Feedback。
+        解析或解码后的结构化数据。 返回类型为 MS42DCFeedback。
     """
     if len(frame) != 9:
         raise ProtocolError(f"feedback must contain 9 bytes; received {len(frame)}")
@@ -99,18 +102,18 @@ def parse_feedback_frame(frame: bytes, expected_device_id: int) -> Feedback:
         raise ProtocolError(
             f"feedback device id mismatch: expected {expected_device_id}, got {frame[0]}"
         )
-    return Feedback(
+    return MS42DCFeedback(
         device_id=frame[0], reached=frame[1],
         speed_raw=(frame[2] << 8) | frame[3],
         angle_raw=(frame[4] << 24) | (frame[5] << 16) | (frame[6] << 8) | frame[7],
     )
 
 
-def build_feedback_frame(feedback: Feedback) -> bytes:
+def build_feedback_frame(feedback: MS42DCFeedback) -> bytes:
     """Build a response frame for tests and the deterministic mock backend.
 
     Args:
-        feedback: 反馈，作为构造供测试与 mock 后端使用的夹爪反馈帧所需的输入。 类型为 Feedback。
+        feedback: 反馈，作为构造供测试与 mock 后端使用的夹爪反馈帧所需的输入。 类型为 MS42DCFeedback。
 
     Returns:
         构造或创建完成的对象或资源。 返回类型为 bytes。

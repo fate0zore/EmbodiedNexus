@@ -272,8 +272,8 @@ class ArmRosGateway(Node):
         Returns:
             本次处理产生的结果值。
         """
-        if not isinstance(velocity, (tuple, list)) or len(velocity) != 6:
-            raise ValueError("velocity_rad_sec must contain six values")
+        if not isinstance(velocity, (tuple, list)) or len(velocity) != len(self.config["joints"]["names"]):
+            raise ValueError("velocity_rad_sec must match configured joint count")
         req = SetArmJointVelocity.Request()
         req.lease_id = str(lease_id)
         req.velocity_rad_sec = [float(v) for v in velocity]
@@ -342,8 +342,8 @@ class ArmRosGateway(Node):
         if values.get("type") != "move_joints":
             raise ValueError("operation type must be move_joints")
         target = values.get("positions_rad")
-        if not isinstance(target, list) or len(target) != 6:
-            raise ValueError("positions_rad must contain six values")
+        if not isinstance(target, list) or len(target) != len(self.config["joints"]["names"]):
+            raise ValueError("positions_rad must match configured joint count")
         operation_id = uuid.uuid4().hex
         record = {"operation_id": operation_id, "type": "move_joints", "state": "submitting",
                   "success": None, "message": "", "progress": None,

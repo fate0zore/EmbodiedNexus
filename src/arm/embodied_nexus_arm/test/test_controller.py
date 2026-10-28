@@ -4,8 +4,9 @@ import copy
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from embodied_nexus_arm.backend import MockBackend
+from embodied_nexus_arm.adapters.aubo_i5.mock import MockBackend
 from embodied_nexus_arm.config import load_config, validate_config
 from embodied_nexus_arm.controller import ArmController
 
@@ -70,6 +71,137 @@ class ArmControllerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_config(broken)
 
+    def test_variable_joint_count_and_limits(self):
+        """验证非六关节 mock 的数量、限位和有限值检查。
+
+        Returns:
+            无返回值。
+        """
+        config = copy.deepcopy(self.config)
+        for key in ("names", "min_rad", "max_rad"):
+            config["joints"][key] = config["joints"][key][:4]
+        with self.assertRaises(ValueError):
+            validate_config(config)
+        controller = ArmController(config, MockBackend(config))
+        try:
+            controller.poll_once()
+            self.assertEqual(len(controller.state()["positions_rad"]), 4)
+            self.assertEqual(controller._validate_vector([0.0] * 4, "target"), [0.0] * 4)
+            with self.assertRaises(ValueError):
+                controller._validate_vector([0.0] * 6, "target")
+            with self.assertRaises(ValueError):
+                controller._validate_vector([0.0, 0.0, 0.0, float("nan")], "target")
+            lease, _ = controller.acquire_control("test")
+            controller.enable_motion(lease, True)
+            with self.assertRaises(ValueError):
+                controller.move_joints(lease, [100.0] * 4)
+            controller.backend.positions = [0.0] * 3
+            controller.poll_once()
+            self.assertFalse(controller.state()["feedback_valid"])
+        finally:
+            controller.shutdown()
+
+    def test_registered_model_allows_four_joint_device(self):
+        """A registered model validates and constructs its own four-joint adapter.
+
+        Returns:
+            None.
+        """
+        from embodied_nexus_arm.adapters.aubo_i5.operations import AuboOperations
+        from embodied_nexus_arm.backend import create_backend, create_model_operations
+
+        class FakeModel:
+            """Minimal provider used only to exercise model registration."""
+
+            def validate_config(self, config):
+                """Validate the test model's joint count.
+
+                Args:
+                    config: Candidate configuration.
+
+                Returns:
+                    None.
+                """
+                if len(config["joints"]["names"]) != 4:
+                    raise ValueError("test model requires four joints")
+
+            def create_backend(self, config):
+                """Create the test backend.
+
+                Args:
+                    config: Candidate configuration.
+
+                Returns:
+                    Mock backend.
+                """
+                return MockBackend(config)
+
+            def create_operations(self, backend):
+                """Create operations for the test backend.
+
+                Args:
+                    backend: Mock backend.
+
+                Returns:
+                    Operations adapter.
+                """
+                return AuboOperations(backend)
+
+        class Entry:
+            """Model entry point used by the test."""
+
+            def load(self):
+                """Load the provider class.
+
+                Returns:
+                    Fake provider class.
+                """
+                return FakeModel
+
+        class Entries:
+            """Entry point selection fixture."""
+
+            def select(self, *, group, name):
+                """Select the fixture by group and model ID.
+
+                Args:
+                    group: Entry point group.
+                    name: Requested model ID.
+
+                Returns:
+                    Matching entry points.
+                """
+                return [Entry()] if group == "embodied_nexus_arm.models" and name == "test_arm" else []
+
+        config = copy.deepcopy(self.config)
+        config["model"] = "test_arm"
+        for key in ("names", "min_rad", "max_rad"):
+            config["joints"][key] = config["joints"][key][:4]
+        with patch("embodied_nexus_arm.model_registry.entry_points", return_value=Entries()):
+            validate_config(config)
+            backend = create_backend(config)
+            self.assertIsInstance(create_model_operations(config, backend), AuboOperations)
+            controller = ArmController(config, backend)
+            try:
+                controller.poll_once()
+                lease, _ = controller.acquire_control("test")
+                controller.enable_motion(lease, True)
+                with self.assertRaises(ValueError):
+                    controller.move_joints(lease, [0.0] * 6)
+                with self.assertRaises(ValueError):
+                    controller.move_joints(lease, [float("nan")] * 4)
+                with self.assertRaises(ValueError):
+                    controller.move_joints(lease, [100.0] * 4)
+                result = controller.move_joints(lease, [0.0] * 4)
+                self.assertTrue(result["success"])
+            finally:
+                controller.shutdown()
+            config["device_id"] = "arm_second"
+            self.assertIsNot(backend, create_backend(config))
+            config["model"] = "unknown"
+            with self.assertRaises(ValueError):
+                validate_config(config)
+
     def test_simulator_profile_uses_the_pluggable_ros_backend_contract(self):
         """验证simulatorprofileusesthepluggableros后端contract。
 
@@ -84,6 +216,19 @@ class ArmControllerTests(unittest.TestCase):
         self.assertEqual(sim["backend_options"]["arm_trajectory_topic"],
                          "/sim/arachne/arm_controller/joint_trajectory")
         self.assertEqual(len(sim["joints"]["names"]), 6)
+
+    def test_unknown_backend_is_rejected_by_model_adapter(self):
+        """Reject a backend that Aubo i5 does not implement.
+
+        Returns:
+            None.
+        """
+        from embodied_nexus_arm.model_registry import resolve_model
+
+        config = copy.deepcopy(self.config)
+        config["backend"] = "unsupported_backend"
+        with self.assertRaisesRegex(ValueError, "unsupported arm backend"):
+            resolve_model(config["model"]).create_backend(config)
 
     def test_move_uses_measured_feedback_and_reports_acceptance(self):
         """验证运动usesmeasured反馈和reportsacceptance。
@@ -272,7 +417,7 @@ class ArmControllerTests(unittest.TestCase):
         lease, _ = self.controller.acquire_control("first", ttl_sec=0.05)
         with self.assertRaises(RuntimeError):
             self.controller.acquire_control("second")
-        time.sleep(0.06)
+        self.controller.lease_deadline = time.monotonic() - 1.0
         self.controller.tick()
         self.assertFalse(self.controller.lease_id)
         self.backend.config["mock"]["fail_stop"] = True

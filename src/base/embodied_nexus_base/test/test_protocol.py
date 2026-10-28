@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from embodied_nexus_base.protocol import (
+from embodied_nexus_base.adapters.scout_2.protocol import (
     CanFrame, SCOUT_MOTION_STATE_ID, SCOUT_SYSTEM_STATE_ID,
     decode_scout_frames, decode_variable_frames, encode_variable_frame, int16_to_bytes,
 )

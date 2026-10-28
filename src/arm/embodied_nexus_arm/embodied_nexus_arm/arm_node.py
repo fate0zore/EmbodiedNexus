@@ -270,7 +270,7 @@ class ArmNode(Node):
             result = self.controller.set_joint_velocity(request.lease_id, request.velocity_rad_sec)
             response.controller_accepted = result["controller_accepted"]
             response.retry_next_cycle = result.get("retry_next_cycle", False)
-            response.commanded_positions_rad = result.get("commanded_positions_rad", [0.0] * 6)
+            response.commanded_positions_rad = result.get("commanded_positions_rad", [])
             response.stationary_confirmed = result.get("stationary_confirmed", False)
             return self._ok(response)
         except Exception as exc:
@@ -344,8 +344,8 @@ class ArmNode(Node):
             本次处理产生的结果值。
         """
         try:
-            ArmController._validate_vector(request.positions_rad, "positions_rad")
-            ArmController._validate_vector([request.speed_rad_sec or self.config["motion"]["max_speed_rad_sec"]] * 6,
+            self.controller._validate_vector(request.positions_rad, "positions_rad")
+            self.controller._validate_vector([request.speed_rad_sec or self.config["motion"]["max_speed_rad_sec"]] * len(self.config["joints"]["names"]),
                                            "speed_rad_sec")
             self.controller._require_lease(request.lease_id)
             return GoalResponse.ACCEPT if self.controller.motion_enabled else GoalResponse.REJECT

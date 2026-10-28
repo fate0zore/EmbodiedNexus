@@ -3,9 +3,9 @@ from __future__ import annotations
 import copy
 import unittest
 
-from embodied_nexus_base.backend import ScoutWaveshareSerialBackend
+from embodied_nexus_base.adapters.scout_2.backend import ScoutWaveshareSerialBackend
 from embodied_nexus_base.config import DEFAULT_CONFIG
-from embodied_nexus_base.protocol import decode_variable_frames, encode_variable_frame
+from embodied_nexus_base.adapters.scout_2.protocol import decode_variable_frames, encode_variable_frame
 
 
 class FakeSerial:

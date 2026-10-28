@@ -16,7 +16,7 @@ setup(
     zip_safe=True,
     maintainer="EmbodiedNexus",
     maintainer_email="maintainer@example.com",
-    description="ROS 2 MS42DC gripper adapter and authenticated HTTP gateway",
+    description="ROS 2 gripper service with model adapters and authenticated HTTP gateway",
     license="MIT",
     entry_points={"console_scripts": [
         "gripper_node = embodied_nexus_gripper.gripper_node:main",

@@ -10,7 +10,7 @@ from embodied_nexus_lidar.config import load_config, validate_config, validate_p
 from embodied_nexus_lidar.geometry import (
     CloudFrame, downsample_cloud, filter_cloud, iter_points, make_scan, transform_cloud,
 )
-from embodied_nexus_lidar.protocol import build_motor_packet, build_speed_packet, inspect_difop
+from embodied_nexus_lidar.adapters.c16.protocol import build_motor_packet, build_speed_packet, inspect_difop
 from embodied_nexus_lidar.runtime import LidarRuntime, StreamHub, mock_cloud
 import embodied_nexus_lidar.runtime as lidar_runtime_module
 
@@ -257,6 +257,37 @@ class GeometryTests(unittest.TestCase):
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_external_topic_backend_rejects_motor_control_capability(self):
+        """Reject C16 motor commands when the ROS topic source owns no motor.
+
+        Returns:
+            None.
+        """
+        runtime = LidarRuntime(load_config(PACKAGE / "config" / "c16_topics.yaml"))
+        with self.assertRaisesRegex(RuntimeError, "motor control is unsupported"):
+            runtime.set_motor("", False)
+
+    def test_ros_topic_sensor_interruption_expires_lidar_data(self):
+        """Report a disconnected sensor after point-cloud input stops.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        config = load_config(PACKAGE / "config" / "c16_topics.yaml")
+        config["streams"]["stale_sec"] = 0.01
+        runtime = LidarRuntime(config)
+        runtime.ingest_cloud(mock_cloud(time.time()))
+        self.assertTrue(runtime.state()["connected"])
+
+        time.sleep(0.02)
+        interrupted = runtime.state()
+        self.assertFalse(interrupted["connected"])
+        self.assertFalse(interrupted["data_fresh"])
+        self.assertGreater(interrupted["pointcloud_age_sec"], config["streams"]["stale_sec"])
+
     def test_difop_and_status_remain_responsive_during_cloud_projection(self):
         """验证设备配置包和状态remainresponsiveduring点云projection。
 
@@ -295,12 +326,13 @@ class RuntimeTests(unittest.TestCase):
             cloud_thread.start()
             self.assertTrue(projection_entered.wait(1.0))
             difop_thread = threading.Thread(
-                target=lambda: (runtime.ingest_difop(difop()), difop_ingested.set()),
+                target=lambda: (runtime.ingest_device_status(difop()), difop_ingested.set()),
             )
             difop_thread.start()
             try:
                 self.assertTrue(difop_ingested.wait(0.5), "DIFOP ingestion waited behind point-cloud work")
-                self.assertLess(runtime.state()["difop_age_sec"], 0.5)
+                self.assertLess(runtime.state()["device_feedback_age_sec"], 0.5)
+                self.assertNotIn("difop_age_sec", runtime.state())
             finally:
                 continue_projection.set()
                 cloud_thread.join(2.0)
@@ -346,7 +378,7 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             runtime.set_motor(lease, True)
         self.assertEqual(sent, [])
-        runtime.ingest_difop(difop((0x01, 0x2C)))
+        runtime.ingest_device_status(difop((0x01, 0x2C)))
         result = runtime.set_motor(lease, True)
         self.assertTrue(result["command_sent"])
         speed = runtime.actual_motor_speed()
@@ -370,7 +402,7 @@ class RuntimeTests(unittest.TestCase):
         sent = []
         runtime._send_packet_locked = lambda packet: sent.append(packet)
         lease, _ = runtime.acquire("test")
-        runtime.ingest_difop(difop((0x00, 0x00)))
+        runtime.ingest_device_status(difop((0x00, 0x00)))
 
         speed = runtime.set_motor_speed(lease, 10)
         self.assertTrue(speed["command_sent"])

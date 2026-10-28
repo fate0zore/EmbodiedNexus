@@ -368,10 +368,10 @@ class RosBackendContractTests(unittest.TestCase):
         measured["velocity"] = [0.5, -0.5]
         feedback = None
         self.assertTrue(_wait(lambda: (setattr(self, "feedback", self.backend.read_feedback()) or
-                                     self.feedback.speed_raw > 0)))
+                                     self.feedback.moving)))
         feedback = self.feedback
-        self.assertEqual(feedback.reached, 0)
-        self.assertEqual(feedback.angle_raw, 9828)
+        self.assertFalse(feedback.reached)
+        self.assertFalse(feedback.stationary)
         self.assertTrue(self.backend.feedback_is_simulated)
 
 

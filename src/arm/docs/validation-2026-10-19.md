@@ -20,7 +20,7 @@
 在 Jetson 加载 Humble 与工作区后，可运行以下同类只读探测：
 
 ```bash
-timeout --signal=TERM 20s python3 src/arm/examples/probe_aubo_readonly.py \
+timeout --signal=TERM 20s python3 src/arm/embodied_nexus_arm/examples/probe_aubo_readonly.py \
   --config src/arm/embodied_nexus_arm/config/aubo_i5_real.yaml
 ```
 
