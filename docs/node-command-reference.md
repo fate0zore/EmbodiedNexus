@@ -29,8 +29,9 @@ Windows 示例：`$env:EMBODIED_NEXUS_SETUP='/root/embodied-nexus-run/install/se
 ```bash
 cd ~/EmbodiedNexus
 bash scripts/build.sh all
-source install/setup.bash
 ```
+
+构建脚本会打印工作区的 `setup.bash` 路径。仓库位于 WSL `/mnt/<盘符>/...` 时，build/install/log 默认放在 Linux 用户缓存目录，以支持 colcon symlink install。
 
 WSL 仓库若位于 Windows D 盘，路径通常类似 `/mnt/d/code/project/EmbodiedNexus`；先 `cd` 到实际仓库目录，再执行相同的 Bash 命令。
 

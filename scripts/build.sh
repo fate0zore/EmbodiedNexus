@@ -28,6 +28,7 @@ Options:
   -h, --help          Show this help
 
 The script expects ROS 2 Humble at /opt/ros/humble and runs from the repo root.
+For a repository under /mnt/<drive>, default output directories use Linux-side cache storage.
 USAGE
 }
 
@@ -89,6 +90,13 @@ fi
 source /opt/ros/humble/setup.bash
 cd "$root"
 
+if [[ "$root" == /mnt/* ]]; then
+  native_output="${XDG_CACHE_HOME:-$HOME/.cache}/embodied-nexus"
+  [[ -n "$build_base" ]] || build_base="$native_output/build"
+  [[ -n "$install_base" ]] || install_base="$native_output/install"
+  [[ -n "$log_base" ]] || log_base="$native_output/log"
+fi
+
 case "$target" in
   all) package_target="" ;;
   core) package_target="embodied_nexus_core" ;;
@@ -111,7 +119,11 @@ colcon_args=(--base-paths src --symlink-install)
 [[ -n "$install_base" ]] && colcon_args+=(--install-base "$install_base")
 [[ "$serial" == true ]] && { colcon_args+=(--executor sequential); export MAKEFLAGS=-j1; }
 
+printf 'Build output directories: build=%s install=%s log=%s\n' \
+  "${build_base:-$root/build}" "${install_base:-$root/install}" "${log_base:-$root/log}"
 if [[ -n "$log_base" ]]; then
-  exec colcon --log-base "$log_base" build "${colcon_args[@]}"
+  colcon --log-base "$log_base" build "${colcon_args[@]}"
+else
+  colcon build "${colcon_args[@]}"
 fi
-exec colcon build "${colcon_args[@]}"
+printf '\nWorkspace setup: source "%s/setup.bash"\n' "${install_base:-install}"

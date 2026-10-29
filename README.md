@@ -59,7 +59,6 @@ python3 -m pip install --user --upgrade "starlette>=1.3.1" "uvicorn>=0.15" "webs
 
 ```bash
 bash scripts/build.sh all
-source install/setup.bash
 ```
 
 增量构建、串行构建和自定义输出目录示例：
@@ -73,6 +72,8 @@ bash scripts/build.sh all --build-base /root/embodied-nexus-run/build \
 ```
 
 目标可选 `all`、`core`、`sim` 或任一 ROS 包名。Windows PowerShell 可从仓库根目录运行 `./scripts/build.ps1 all`，脚本通过 WSL 调用同一 Bash 构建入口；默认使用 `Ubuntu-22.04`，可通过 `EMBODIED_NEXUS_WSL_DISTRO` 指定发行版。更多节点生命周期和 WSL 工作区用法见[节点命令参考](docs/node-command-reference.md)。
+
+仓库位于 WSL 的 `/mnt/<盘符>/...` 时，默认 build/install/log 目录位于 `${XDG_CACHE_HOME:-~/.cache}/embodied-nexus`，避免 Windows 挂载盘不支持安装源码符号链接。构建结束会打印应 source 的工作区路径；`scripts/services.sh` 会自动找到这个默认安装目录。自定义输出目录时，可将打印路径设置到 `EMBODIED_NEXUS_SETUP` 供服务脚本使用。
 
 Web RViz 前端需要 Node.js 20+ 和 npm；运行 `bash src/core/scripts/core.sh build core` 可构建前端及 Core ROS 包。SDK 安装命令见下方。
 
