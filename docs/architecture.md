@@ -34,6 +34,7 @@
 EmbodiedNexus/
 ├── AGENTS.md
 ├── README.md
+├── scripts/       # 跨模块服务入口
 ├── docs/
 │   └── architecture.md
 ├── todo/

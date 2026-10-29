@@ -1,5 +1,25 @@
 # Core 与设备节点命令参考
 
+## 根目录统一服务脚本
+
+`scripts/services.sh` 在 Linux / WSL 使用；Windows 使用 `scripts/services.ps1`，参数相同。必须显式选择 `--mode mock|real|sim`；`sim` 需要 `--simulator gazebo`。目前只实现 Gazebo，其他仿真器会明确报错。默认通过 Core 管理，`--standalone` 直接启动独立 ROS 设备。`-all` 选择配置中的所有启用设备；设备类型名有多个实例时必须使用实例 ID。
+
+```bash
+export EMBODIED_NEXUS_SETUP=/path/to/install/setup.bash # 默认仓库 install/setup.bash
+export EMBODIED_NEXUS_CORE_TOKEN='replace-with-a-private-url-safe-token'
+bash scripts/services.sh start --mode mock base_main camera_front
+bash scripts/services.sh status --mode mock
+bash scripts/services.sh stop --mode mock -all
+bash scripts/services.sh start --mode sim --simulator gazebo -all
+bash scripts/services.sh stop --mode sim --simulator gazebo -all
+bash scripts/services.sh start --mode mock --standalone base camera
+bash scripts/services.sh stop --mode mock --standalone base camera
+```
+
+Windows 示例：`$env:EMBODIED_NEXUS_SETUP='/root/embodied-nexus-run/install/setup.bash'`，设置同一个令牌后执行 `.\scripts\services.ps1 start --mode mock -all`。`--setup` 也可直接指定 Linux 路径；`EMBODIED_NEXUS_WSL_DISTRO` 选择 WSL 发行版。软件渲染可在启动前设置 `LIBGL_ALWAYS_SOFTWARE=1` 和 `GALLIUM_DRIVER=llvmpipe`。Gazebo 默认无界面，`--gui` 打开窗口。
+
+启动和关闭为后台管理，日志及非敏感进程记录位于 `${XDG_STATE_HOME:-~/.local/state}/embodied-nexus/`。`stop -all` 会先请求设备安全关闭，然后关闭 Core 和脚本创建的仿真进程；停稳反馈无法确认时保留设备和管理入口。单设备关闭保留 Core 和仿真器。实机启动使用 `--mode real --confirm-ready`，并在执行前确认设备就绪；`--config` 可指定 mock 或 real 平台 YAML。独立仿真设备要求仿真器已就绪，可先运行 `ros2 launch embodied_nexus_sim_gazebo sim.launch.py gui:=false start_core:=false`。不得由独立入口和 Core 同时管理同一设备。
+
 本文整理 Core、底盘、机械臂、夹爪、相机、雷达和 Gazebo 仿真的 Mock/仿真启动与生命周期命令。真实硬件配置和前置检查继续以各设备指南为准：[底盘](../src/base/docs/scout-base.md)、[机械臂](../src/arm/docs/aubo-i5.md)、[夹爪](../src/gripper/docs/ms42dc-gripper.md)、[相机](../src/camera/docs/camera.md)、[雷达](../src/lidar/docs/lidar-c16.md)。
 
 ## 通用环境

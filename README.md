@@ -36,11 +36,43 @@ sdk/python/    不依赖 ROS 的统一 Python SDK
 src/core/      五类设备的统一 ROS 管理节点与 HTTP/WebSocket 入口
 docs/          总体架构与跨模块说明
 todo/          规划与工作基线
+scripts/       跨设备服务的统一启动、关闭和状态查询
 ```
 
 目录归属、迁移说明和验证命令见[架构说明](docs/architecture.md)，后续开发遵循根目录 [AGENTS.md](AGENTS.md)。
 
-SDK 在仓库根目录执行 `pip install -e sdk/python` 安装，使用 `from embodied_nexus_client import ArmClient, BaseClient, CameraClient, GripperClient, LidarClient`。ROS 2 构建使用 `colcon build --base-paths src --packages-up-to <包名>`；现有 ROS 包名和 launch 入口保持不变。
+## 本地依赖与全量构建
+
+ROS 2 工作区在 Ubuntu 22.04 / WSL2 Ubuntu-22.04 和 ROS 2 Humble 下构建。以下 Bash 命令均从仓库根目录执行。首次配置时安装构建工具和清单中声明的 ROS 依赖；`rosdep init` 只需在该发行版首次配置时执行一次：
+
+```bash
+sudo apt update
+sudo apt install -y python3-colcon-common-extensions python3-rosdep python3-pip
+sudo rosdep init
+rosdep update
+source /opt/ros/humble/setup.bash
+rosdep install --from-paths src --ignore-src --rosdistro humble -r -y
+python3 -m pip install --user --upgrade "starlette>=1.3.1" "uvicorn>=0.15" "websockets>=12"
+```
+
+若 `rosdep init` 提示已初始化，跳过该命令即可。完整 ROS 构建会递归发现设备接口、设备节点、Core、共享仿真后端和 Gazebo 仿真包：
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon list --base-paths src
+colcon build --base-paths src --symlink-install
+source install/setup.bash
+```
+
+若只需构建设备及其依赖，将最后的构建命令改为 `colcon build --base-paths src --symlink-install --packages-up-to <包名>`，例如 `embodied_nexus_base`、`embodied_nexus_core` 或 `embodied_nexus_sim_gazebo`。需要 Web RViz 时，先安装 Node.js 20+ 和 npm，再从仓库根目录执行 `bash src/core/scripts/core.sh build core`；该脚本构建 Web RViz 前端及 Core ROS 包。Windows PowerShell/WSL 调用方式和自定义工作区路径见[节点命令参考](docs/node-command-reference.md)。
+
+Python SDK 不依赖 ROS，Python 3.10+ 环境在仓库根目录安装：
+
+```bash
+python -m pip install -e sdk/python
+```
+
+安装后可通过 `from embodied_nexus_client import ArmClient, BaseClient, CameraClient, GripperClient, LidarClient` 导入。Gazebo 仿真启动与验收步骤见 [Gazebo 仿真指南](src/sim/gazebo/embodied_nexus_sim_gazebo/docs/gazebo-fortress.md)；构建和测试记录见[仿真实施记录](src/sim/README.md)。
 
 ## 第一期：相机适配
 

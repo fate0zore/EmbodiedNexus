@@ -14,7 +14,7 @@ from launch import LaunchDescription
 from launch.actions import AppendEnvironmentVariable, DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, RegisterEventHandler, SetEnvironmentVariable, TimerAction
 from launch.event_handlers import OnProcessExit, OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from embodied_nexus_sim_gazebo.camera_geometry import camera_geometry, pose_xyz_rpy
@@ -253,11 +253,14 @@ def _setup(context, *args, **kwargs):
         package="embodied_nexus_core", executable="nexus_core", name="nexus_core_sim",
         arguments=["--config", platform_file], output="screen",
     )])
-    return [cleanup_world, AppendEnvironmentVariable("IGN_GAZEBO_RESOURCE_PATH", os.path.dirname(model_share)),
+    actions = [cleanup_world, AppendEnvironmentVariable("IGN_GAZEBO_RESOURCE_PATH", os.path.dirname(model_share)),
             gz_launch, state_publisher, clock_guard, relay, *camera_info, bridge_after_spawn,
             TimerAction(period=3.0, actions=[spawn]),
             RegisterEventHandler(OnProcessExit(target_action=spawn, on_exit=[broadcaster])),
-            start_controllers, enable_core]
+            start_controllers]
+    if LaunchConfiguration("start_core").perform(context).strip().lower() in {"true", "1", "yes"}:
+        actions.append(enable_core)
+    return actions
 
 
 def generate_launch_description():
@@ -272,7 +275,9 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("gui", default_value="true"),
         DeclareLaunchArgument("performance", default_value="balanced"),
-        DeclareLaunchArgument("core_token", default_value="sim-local-token-change-me"),
+        DeclareLaunchArgument("core_token", default_value=EnvironmentVariable(
+            "EMBODIED_NEXUS_CORE_TOKEN", default_value="sim-local-token-change-me")),
+        DeclareLaunchArgument("start_core", default_value="true"),
         SetEnvironmentVariable("EMBODIED_NEXUS_CORE_TOKEN", LaunchConfiguration("core_token")),
         OpaqueFunction(function=_setup),
     ])
