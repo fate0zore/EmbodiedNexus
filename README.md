@@ -36,7 +36,7 @@ sdk/python/    不依赖 ROS 的统一 Python SDK
 src/core/      五类设备的统一 ROS 管理节点与 HTTP/WebSocket 入口
 docs/          总体架构与跨模块说明
 todo/          规划与工作基线
-scripts/       跨设备服务的统一启动、关闭和状态查询
+scripts/       全仓 ROS 构建与跨设备服务的统一管理入口
 ```
 
 目录归属、迁移说明和验证命令见[架构说明](docs/architecture.md)，后续开发遵循根目录 [AGENTS.md](AGENTS.md)。
@@ -55,16 +55,26 @@ rosdep install --from-paths src --ignore-src --rosdistro humble -r -y
 python3 -m pip install --user --upgrade "starlette>=1.3.1" "uvicorn>=0.15" "websockets>=12"
 ```
 
-若 `rosdep init` 提示已初始化，跳过该命令即可。完整 ROS 构建会递归发现设备接口、设备节点、Core、共享仿真后端和 Gazebo 仿真包：
+若 `rosdep init` 提示已初始化，跳过该命令即可。根目录 `scripts/build.sh` 是全仓 ROS 构建入口，会递归发现设备接口、设备节点、Core、共享仿真后端和 Gazebo 仿真包。默认目标是全工作区：
 
 ```bash
-source /opt/ros/humble/setup.bash
-colcon list --base-paths src
-colcon build --base-paths src --symlink-install
+bash scripts/build.sh all
 source install/setup.bash
 ```
 
-若只需构建设备及其依赖，将最后的构建命令改为 `colcon build --base-paths src --symlink-install --packages-up-to <包名>`，例如 `embodied_nexus_base`、`embodied_nexus_core` 或 `embodied_nexus_sim_gazebo`。需要 Web RViz 时，先安装 Node.js 20+ 和 npm，再从仓库根目录执行 `bash src/core/scripts/core.sh build core`；该脚本构建 Web RViz 前端及 Core ROS 包。Windows PowerShell/WSL 调用方式和自定义工作区路径见[节点命令参考](docs/node-command-reference.md)。
+增量构建、串行构建和自定义输出目录示例：
+
+```bash
+bash scripts/build.sh embodied_nexus_base
+bash scripts/build.sh sim --serial
+bash scripts/build.sh all --build-base /root/embodied-nexus-run/build \
+  --install-base /root/embodied-nexus-run/install \
+  --log-base /root/embodied-nexus-run/log
+```
+
+目标可选 `all`、`core`、`sim` 或任一 ROS 包名。Windows PowerShell 可从仓库根目录运行 `./scripts/build.ps1 all`，脚本通过 WSL 调用同一 Bash 构建入口；默认使用 `Ubuntu-22.04`，可通过 `EMBODIED_NEXUS_WSL_DISTRO` 指定发行版。更多节点生命周期和 WSL 工作区用法见[节点命令参考](docs/node-command-reference.md)。
+
+Web RViz 前端需要 Node.js 20+ 和 npm；运行 `bash src/core/scripts/core.sh build core` 可构建前端及 Core ROS 包。SDK 安装命令见下方。
 
 Python SDK 不依赖 ROS，Python 3.10+ 环境在仓库根目录安装：
 

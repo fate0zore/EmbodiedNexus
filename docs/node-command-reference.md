@@ -28,15 +28,13 @@ Windows 示例：`$env:EMBODIED_NEXUS_SETUP='/root/embodied-nexus-run/install/se
 
 ```bash
 cd ~/EmbodiedNexus
-source /opt/ros/humble/setup.bash
-bash src/core/scripts/core.sh build core
-colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_sim_gazebo
+bash scripts/build.sh all
 source install/setup.bash
 ```
 
 WSL 仓库若位于 Windows D 盘，路径通常类似 `/mnt/d/code/project/EmbodiedNexus`；先 `cd` 到实际仓库目录，再执行相同的 Bash 命令。
 
-Windows PowerShell 原生不运行本项目的 ROS 2 节点。请从 Windows PowerShell 的仓库根目录调用下面的 WSL 包装函数；后续每条 PowerShell 命令都以 `-RosCommand` 传入一条 Bash 命令：
+Windows PowerShell 原生不运行本项目的 ROS 2 节点。全仓构建使用下方根目录包装脚本；执行其他自定义 Bash 命令时，可从仓库根目录调用下面的 WSL 包装函数：
 
 ```powershell
 function Invoke-EmbodiedNexusWslCommand {
@@ -58,11 +56,11 @@ function Invoke-EmbodiedNexusWslCommand {
 }
 ```
 
-首次构建可从 PowerShell 调用 Core 包装脚本；Web RViz 前端用 Windows Node.js 构建，ROS 包仍在 WSL 编译。Gazebo 仿真构建继续通过已有 WSL 命令运行：
+根目录构建包装脚本可从 PowerShell 调用 WSL，目标支持 `all`、`core`、`sim` 或 ROS 包名：
 
 ```powershell
-& .\src\core\scripts\core.ps1 build core
-Invoke-EmbodiedNexusWslCommand -RosCommand 'colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_sim_gazebo && source install/setup.bash'
+.\scripts\build.ps1 all
+.\scripts\build.ps1 sim --serial
 ```
 
 ## 模块脚本入口
