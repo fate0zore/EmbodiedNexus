@@ -18,6 +18,14 @@ test("point layers reuse GPU storage and keep coordinates in their ROS frame", (
   assert.equal(layer.material.size, 0.05);
 });
 
+test("point sprites discard fragments outside the circular mask", () => {
+  const layer = updatePointLayer(null, { positions: new Float32Array(3), count: 1 }, new THREE.Matrix4(), 0.035);
+  const shader = { fragmentShader: THREE.ShaderLib.points.fragmentShader };
+  layer.material.onBeforeCompile(shader, null);
+  assert.match(shader.fragmentShader, /gl_PointCoord - vec2\(0\.5\)/);
+  assert.match(shader.fragmentShader, /dot\(circularPoint, circularPoint\) > 0\.25\) discard/);
+});
+
 test("point storage grows only when required and releases the old geometry", () => {
   /**
  * 创建指定点数的测试缓冲区集合。

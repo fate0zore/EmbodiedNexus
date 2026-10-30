@@ -1,5 +1,18 @@
 import * as THREE from "three";
 
+/**
+ * 在点精灵片元着色器中裁剪圆形外的像素。
+ * @param {{ fragmentShader: string }} shader - Three.js 点材质的着色器程序。
+ * @returns {void} 无返回值；直接更新着色器源码。
+ */
+function applyCircularPointMask(shader) {
+  const mainDeclaration = "void main() {";
+  const circularMask = `${mainDeclaration}
+  vec2 circularPoint = gl_PointCoord - vec2(0.5);
+  if (dot(circularPoint, circularPoint) > 0.25) discard;`;
+  shader.fragmentShader = shader.fragmentShader.replace(mainDeclaration, circularMask);
+}
+
 // Keep GPU objects alive between frames; only grow storage when needed.
 /**
  * 更新三维场景中的点云图层。
@@ -12,9 +25,11 @@ import * as THREE from "three";
  */
 export function updatePointLayer(object, buffers, pose, size, color = null) {
   if (!object) {
-    object = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({
+    const material = new THREE.PointsMaterial({
       size, vertexColors: color === null, color: color ?? 0xffffff, sizeAttenuation: true,
-    }));
+    });
+    material.onBeforeCompile = applyCircularPointMask;
+    object = new THREE.Points(new THREE.BufferGeometry(), material);
     object.matrixAutoUpdate = false;
     object.frustumCulled = false;
   }
