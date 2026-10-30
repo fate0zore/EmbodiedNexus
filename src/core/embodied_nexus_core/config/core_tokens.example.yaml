@@ -1,0 +1,6 @@
+# Copy to core_tokens.local.yaml and choose URL-safe tokens for each environment.
+mock: change-mock-token
+real: null
+sim:
+  gazebo: change-gazebo-token
+  mujoco: change-mujoco-token

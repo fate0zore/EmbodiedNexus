@@ -1,6 +1,6 @@
 # 仿真实施状态
 
-仿真器无关的后端契约与设备适配器位于 `common/embodied_nexus_sim/`，固定复用 Arachne 提交 `41caa564204eb5f6a39200ce2600ed052ab517b0` 的模型包位于 `common/third_party/embodied_nexus_sim_description/`。Fortress 场景、控制器、传感器桥接、启动配置和 SDK 验收程序位于 `gazebo/embodied_nexus_sim_gazebo/`。后续模拟器使用 `src/sim/<仿真器名>/` 独立接入共享模型和标准 ROS 契约。
+仿真器无关的后端契约与设备适配器位于 `common/embodied_nexus_sim/`，固定复用 Arachne 提交 `41caa564204eb5f6a39200ce2600ed052ab517b0` 的模型包位于 `common/third_party/embodied_nexus_sim_description/`。MuJoCo ROS bridge 位于 `mujoco/embodied_nexus_sim_mujoco/`；Fortress 场景、控制器、传感器桥接、启动配置和 SDK 验收程序位于 `gazebo/embodied_nexus_sim_gazebo/`。两个模拟器都通过共享模型和标准 ROS 契约连接设备与 Core。
 
 ROS 仿真设备适配器按型号保存在 `common/embodied_nexus_sim/embodied_nexus_sim/adapters/`：分别为 `aubo_i5`、`scout_2` 和 `ms42dc`。它们的后端 entry point 名称包含型号（例如 `aubo_i5.ros2_sim`），与设备配置中的 `model`、`backend: ros2_sim` 对应。变更后需重新构建并 source 工作区，以更新已安装的 entry point；原来的单一 `ros2_sim` entry point 不再使用。
 

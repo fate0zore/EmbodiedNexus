@@ -41,7 +41,7 @@ pointcloud:
   output_fps: 5.0
   roi: []
 calibration:
-  factory_file: ""
+  factory_file: gemini335_factory_calibration.json
   custom_file: ""
   history_file: config/gemini335_intrinsics/intrinsics_history.json
   depth_scale_m: 0.001

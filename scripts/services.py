@@ -22,6 +22,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "embodied-nexus"
 STATE = STATE_DIR / "services.json"
+TOKEN_FILE = ROOT / "src/core/embodied_nexus_core/config/core_tokens.local.yaml"
 TYPES = {"base": ("bases", "Base"), "arm": ("arms", "Arm"),
          "gripper": ("grippers", "Gripper"), "camera": ("cameras", "Camera"),
          "lidar": ("lidars", "Lidar")}
@@ -40,7 +41,7 @@ def arguments(argv):
     parser.add_argument("action", choices=("start", "stop", "status"))
     parser.add_argument("devices", nargs="*")
     parser.add_argument("--mode", choices=("mock", "real", "sim"), required=True)
-    parser.add_argument("--simulator")
+    parser.add_argument("--simulator", choices=("gazebo", "mujoco"))
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--managed", action="store_true")
     group.add_argument("--standalone", action="store_true")
@@ -54,10 +55,10 @@ def arguments(argv):
         parser.error("--simulator is required for sim mode")
     if args.mode != "sim" and args.simulator:
         parser.error("--simulator is only valid in sim mode")
-    if args.mode == "sim" and args.simulator != "gazebo":
-        parser.error(f"simulator {args.simulator!r} is not implemented")
+    if args.mode == "sim" and args.simulator not in {"gazebo", "mujoco"}:
+        parser.error("sim mode requires --simulator gazebo or mujoco")
     if args.mode == "sim" and args.config:
-        parser.error("--config is not supported for Gazebo")
+        parser.error("--config is not supported for built-in simulator profiles")
     if args.action == "start" and args.mode == "real" and not args.confirm_ready:
         parser.error("real startup requires --confirm-ready")
     if args.all and args.devices:
@@ -214,7 +215,7 @@ def platform(args):
         Tuple of platform path and parsed YAML.
     """
     if args.mode == "sim":
-        path = ROOT / "src/sim/gazebo/embodied_nexus_sim_gazebo/config/platform_sim.yaml"
+        path = ROOT / f"src/sim/{args.simulator}/embodied_nexus_sim_{args.simulator}/config/platform_sim.yaml"
     else:
         path = Path(args.config).resolve() if args.config else ROOT / f"src/core/embodied_nexus_core/config/platform_{args.mode}.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -275,6 +276,34 @@ def api(path, token, body=None, timeout=45):
         raise RuntimeError(f"Core unavailable: {exc.reason}") from exc
 
 
+def core_token(args):
+    """Resolve the Core token for the selected environment.
+
+    Args:
+        args: Parsed service arguments containing the mode and simulator.
+
+    Returns:
+        The URL-safe token from the environment or local configuration file.
+    """
+    name = "EMBODIED_NEXUS_CORE_TOKEN"
+    if name in os.environ:
+        token = os.environ[name]
+    else:
+        if not TOKEN_FILE.is_file():
+            raise ValueError(f"configure {TOKEN_FILE} or set {name}")
+        data = yaml.safe_load(TOKEN_FILE.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"invalid token configuration: {TOKEN_FILE}")
+        value = data.get(args.mode)
+        if args.mode == "sim":
+            value = value.get(args.simulator) if isinstance(value, dict) else None
+        token = value
+    if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9._~-]+", token):
+        profile = f"sim.{args.simulator}" if args.mode == "sim" else args.mode
+        raise ValueError(f"configure a non-empty URL-safe Core token for {profile} in {TOKEN_FILE}, or set {name}")
+    return token
+
+
 def port_busy():
     """Check whether the local Core TCP port is occupied.
 
@@ -311,10 +340,27 @@ def service_exists(name):
     Returns:
         True if ROS lists the service.
     """
-    result = ros(["service", "list"])
+    result = ros(["service", "list", "--no-daemon"])
     if result.returncode:
         raise RuntimeError(result.stderr or "cannot list ROS services")
     return name in result.stdout.splitlines()
+
+
+def simulator_ready(simulator):
+    """Check that the requested simulator has published its readiness endpoint.
+
+    Args:
+        simulator: Built-in simulator name, either gazebo or mujoco.
+
+    Returns:
+        True when its controller manager or simulator node is available.
+    """
+    if simulator == "gazebo":
+        return service_exists("/sim/arachne/controller_manager/list_controllers")
+    result = ros(["node", "list", "--no-daemon"])
+    if result.returncode:
+        raise RuntimeError(result.stderr or "cannot list ROS nodes")
+    return "/sim/arachne/mujoco" in result.stdout.splitlines()
 
 
 def wait_for(check, process, name, seconds=90):
@@ -464,7 +510,7 @@ def run(args, state):
     Returns:
         None; raises on unsafe or unsuccessful operations.
     """
-    if args.mode == "sim":
+    if args.mode == "sim" and args.simulator == "gazebo":
         os.environ.setdefault("ROS_LOCALHOST_ONLY", "1")
     path, data = platform(args)
     devices = select_devices(args, data)
@@ -482,19 +528,20 @@ def run(args, state):
             print("No session recorded")
             return
         print(json.dumps({"mode": args.mode, "manager": mode,
+                          "simulator": args.simulator,
                           "processes": {name: {**rec, "running": alive(rec)} for name, rec in session["processes"].items()}}, indent=2))
         if mode == "managed" and port_busy():
-            print(json.dumps(api("/api/v1/core/status", os.environ.get("EMBODIED_NEXUS_CORE_TOKEN", "")), indent=2))
+            print(json.dumps(api("/api/v1/core/status", core_token(args)), indent=2))
         return
     if args.action == "start":
-        if mode == "managed" and not os.environ.get("EMBODIED_NEXUS_CORE_TOKEN"):
-            raise ValueError("set EMBODIED_NEXUS_CORE_TOKEN")
+        token = core_token(args) if mode == "managed" else ""
         configs = {item["id"]: validate_device_config(item, path, args.mode) for item in devices}
         if session is None:
             session = {"config": path, "processes": {}}
         processes = session["processes"]
         env = os.environ.copy()
-        token = env.get("EMBODIED_NEXUS_CORE_TOKEN", "")
+        if mode == "managed":
+            env["EMBODIED_NEXUS_CORE_TOKEN"] = token
         if mode == "standalone" and port_busy():
             raise RuntimeError("Core is running; standalone devices cannot be started safely")
         if mode == "managed" and not alive(processes.get("system")):
@@ -506,13 +553,18 @@ def run(args, state):
                 if service_exists(readiness_service(item)):
                     raise RuntimeError(f"{item['id']} is already managed by another process")
             if args.mode == "sim":
-                if service_exists("/sim/arachne/controller_manager/list_controllers"):
-                    raise RuntimeError("a Gazebo controller manager already exists")
-                env.setdefault("ROS_LOCALHOST_ONLY", "1")
-                if not env.get("IGN_IP"):
-                    result = subprocess.run(["hostname", "-I"], capture_output=True, text=True, check=True)
-                    env["IGN_IP"] = result.stdout.split()[0]
-                command = ["ros2", "launch", "embodied_nexus_sim_gazebo", "sim.launch.py", f"gui:={str(args.gui).lower()}"]
+                if args.simulator == "gazebo":
+                    env.setdefault("ROS_LOCALHOST_ONLY", "1")
+                    if not env.get("IGN_IP"):
+                        result = subprocess.run(["hostname", "-I"], capture_output=True, text=True, check=True)
+                        env["IGN_IP"] = result.stdout.split()[0]
+                elif args.simulator == "mujoco":
+                    env.setdefault("MUJOCO_GL", "egl")
+                if simulator_ready(args.simulator):
+                    raise RuntimeError(f"a {args.simulator} simulator is already running")
+                package = f"embodied_nexus_sim_{args.simulator}"
+                command = ["ros2", "launch", package, "sim.launch.py",
+                           f"gui:={str(args.gui).lower()}", f"start_core:={str(mode == 'managed').lower()}"]
             else:
                 command = ["ros2", "run", "embodied_nexus_core", "nexus_core", "--config", path]
             processes["system"] = launch(command, key.replace(":", "-"), env)
@@ -520,8 +572,7 @@ def run(args, state):
             save_state(state)
             try:
                 if args.mode == "sim":
-                    wait_for(lambda: service_exists("/sim/arachne/controller_manager/list_controllers"),
-                             processes["system"], "Gazebo")
+                    wait_for(lambda: simulator_ready(args.simulator), processes["system"], args.simulator)
                 wait_for(lambda: core_ready(token), processes["system"], "Core")
             except Exception:
                 terminate(processes["system"])
@@ -529,8 +580,8 @@ def run(args, state):
                 save_state(state)
                 raise
         if mode == "managed":
-            if args.mode == "sim" and not service_exists("/sim/arachne/controller_manager/list_controllers"):
-                raise RuntimeError("Gazebo controller manager is not available; Core remains running")
+            if args.mode == "sim" and not simulator_ready(args.simulator):
+                raise RuntimeError(f"{args.simulator} is not available; Core remains running")
             current = {item["id"]: item for item in api("/api/v1/core/status", token)["devices"]}
             for item in devices:
                 existing = current.get(item["id"], {})
@@ -541,8 +592,8 @@ def run(args, state):
                     raise RuntimeError(f"failed to start {item['id']}: {result}")
                 print(f"started {item['id']}")
         else:
-            if args.mode == "sim" and not service_exists("/sim/arachne/controller_manager/list_controllers"):
-                raise RuntimeError("Gazebo controller manager is not ready")
+            if args.mode == "sim" and not simulator_ready(args.simulator):
+                raise RuntimeError(f"{args.simulator} is not ready")
             for item in devices:
                 if not alive(processes.get(item["id"])) and service_exists(readiness_service(item)):
                     raise RuntimeError(f"{item['id']} is already managed by another process")
@@ -570,7 +621,7 @@ def run(args, state):
     if mode == "managed":
         if not alive(processes.get("system")):
             raise RuntimeError("owned system process is not running; refusing to operate on another Core")
-        token = os.environ.get("EMBODIED_NEXUS_CORE_TOKEN", "")
+        token = core_token(args)
         for item in devices:
             result = api(f"/api/v1/core/devices/{quote(item['id'], safe='')}", token, {"action": "shutdown"})
             if not result.get("success"):

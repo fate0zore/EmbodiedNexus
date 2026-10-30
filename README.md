@@ -16,7 +16,7 @@
 
 Gemini335 相机、MS42DC 夹爪和 C16 雷达已完成各自适配。Scout 2.0 底盘与 Aubo i5 机械臂提供独立 ROS 2、HTTP/WebSocket、Python SDK 和 mock 实现；WASD 图形示例位于底盘模块 `examples/`。机械臂默认启动 mock，实机只读与动作验收状态见[机械臂指南](src/arm/docs/aubo-i5.md)。
 
-`src/sim/` 提供 Gazebo Fortress 场景、Arachne 移动机械臂模型，以及通用 `ros2_sim` 底盘、机械臂和夹爪后端；RGB-D 相机和 16 线雷达也通过标准 ROS 话题接入。五类设备已在 WSL2 Ubuntu 22.04 / ROS 2 Humble 中完成本机 SDK 联调。安装、构建和验收步骤见 [Gazebo 仿真指南](src/sim/gazebo/embodied_nexus_sim_gazebo/docs/gazebo-fortress.md)；测试结果和适用范围见 [仿真实施记录](src/sim/README.md)。
+`src/sim/` 提供 MuJoCo 与 Gazebo 仿真入口、共享 Arachne 移动机械臂模型，以及通用 `ros2_sim` 底盘、机械臂和夹爪后端；RGB-D 相机和 16 线雷达通过标准 ROS 话题接入。五类设备已完成 Gazebo 本机 SDK 联调；MuJoCo 支持同一设备平台和 Core 生命周期。安装、构建与启动步骤见 [MuJoCo 仿真指南](src/sim/mujoco/README.md) 和 [Gazebo 仿真指南](src/sim/gazebo/embodied_nexus_sim_gazebo/docs/gazebo-fortress.md)，仿真记录见 [仿真实施记录](src/sim/README.md)。
 
 ## 工作基线
 

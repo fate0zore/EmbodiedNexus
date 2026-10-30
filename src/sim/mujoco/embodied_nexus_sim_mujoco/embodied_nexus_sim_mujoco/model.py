@@ -20,12 +20,13 @@ def _pose(element):
     return {"pos": element.get("xyz", "0 0 0"), "euler": element.get("rpy", "0 0 0")}
 
 
-def make_scene(urdf, description_dir):
+def make_scene(urdf, description_dir, camera_calibration=None):
     """Convert expanded Arachne URDF collision geometry and dynamics to MJCF.
 
     Args:
         urdf: Expanded URDF XML text.
         description_dir: Installed shared description package directory.
+        camera_calibration: Optional shared Gemini 335 calibration data.
 
     Returns:
         MJCF XML text with a free mobile base and workcell geometry.
@@ -36,8 +37,12 @@ def make_scene(urdf, description_dir):
     for joint in robot.findall("joint"):
         children.setdefault(joint.find("parent").attrib["link"], []).append(joint)
     scene = ET.Element("mujoco", {"model": "arachne"})
-    ET.SubElement(scene, "compiler", {"angle": "radian", "autolimits": "true", "balanceinertia": "true"})
-    ET.SubElement(scene, "option", {"timestep": "0.002", "gravity": "0 0 -9.8"})
+    # URDF RPY rotates about fixed X, Y, Z axes; MuJoCo's uppercase sequence
+    # uses those same fixed axes for every imported joint and geometry origin.
+    ET.SubElement(scene, "compiler", {"angle": "radian", "eulerseq": "XYZ",
+                                     "autolimits": "true", "balanceinertia": "true"})
+    ET.SubElement(scene, "option", {"timestep": "0.002", "gravity": "0 0 -9.8",
+                                     "integrator": "implicitfast"})
     asset = ET.SubElement(scene, "asset")
     world = ET.SubElement(scene, "worldbody")
     ET.SubElement(world, "light", {"pos": "0 0 8", "dir": "-0.4 0.2 -0.9"})
@@ -59,6 +64,8 @@ def make_scene(urdf, description_dir):
         """
         nonlocal mesh_index
         attrs = {"name": link_name}
+        if link_name.startswith(("aubo_", "ms42dc_")):
+            attrs["gravcomp"] = "1"
         if joint is None:
             attrs["pos"] = "0 0 0.236"
         else:
@@ -72,7 +79,8 @@ def make_scene(urdf, description_dir):
                 raise ValueError(f"unsupported joint type: {kind}")
             axis = joint.find("axis")
             ja = {"name": joint.attrib["name"], "type": "slide" if kind == "prismatic" else "hinge",
-                  "axis": axis.get("xyz", "1 0 0") if axis is not None else "1 0 0", "damping": "1"}
+                  "axis": axis.get("xyz", "1 0 0") if axis is not None else "1 0 0",
+                  "damping": "4", "armature": "0.1"}
             limit = joint.find("limit")
             if kind != "continuous" and limit is not None:
                 ja["range"] = f"{limit.attrib['lower']} {limit.attrib['upper']}"
@@ -80,7 +88,9 @@ def make_scene(urdf, description_dir):
             if "wheel" in ja["name"]:
                 ET.SubElement(actuator, "velocity", {"name": ja["name"], "joint": ja["name"], "kv": "20", "forcelimited": "true", "forcerange": "-100 100"})
             else:
-                ET.SubElement(actuator, "position", {"name": ja["name"], "joint": ja["name"], "kp": "200", "kv": "20", "forcelimited": "true", "forcerange": "-133 133"})
+                ET.SubElement(actuator, "position", {"name": ja["name"], "joint": ja["name"],
+                                                       "kp": "50", "kv": "10", "forcelimited": "true",
+                                                       "forcerange": "-300 300"})
         link = links[link_name]
         inertial = link.find("inertial")
         # Scout places the chassis inertia on a fixed, coincident child link.
@@ -96,7 +106,8 @@ def make_scene(urdf, description_dir):
             ET.SubElement(body, "inertial", ia)
         for collision in link.findall("collision"):
             geometry = collision.find("geometry")
-            ga = {"rgba": "0.55 0.58 0.62 1", "mass": "0", "group": "1"}
+            ga = {"rgba": "0.55 0.58 0.62 1", "mass": "0", "group": "1",
+                  "contype": "0", "conaffinity": "0"}
             ga.update(_pose(collision.find("origin")))
             shape = geometry[0]
             if shape.tag == "mesh":
@@ -121,9 +132,22 @@ def make_scene(urdf, description_dir):
             else:
                 raise ValueError(f"unsupported geometry: {shape.tag}")
             ET.SubElement(body, "geom", ga)
-        if link_name == "ee_camera_link":
-            # MuJoCo camera looks along -Z with +Y up; ROS camera looks along +X.
-            ET.SubElement(body, "camera", {"name": "camera", "xyaxes": "0 -1 0 0 0 1", "fovy": "50"})
+        if camera_calibration is not None and link_name in {"camera_color_frame", "camera_depth_frame"}:
+            channel = "color" if link_name == "camera_color_frame" else "depth"
+            stream = camera_calibration["streams"][channel]
+            width, height = stream["width"], stream["height"]
+            # MuJoCo camera local +X is right, +Y is up, and -Z is forward.
+            # The URDF camera frame is +X forward, +Y left, and +Z up.
+            # MuJoCo principalpixel is a displacement of the frustum from
+            # image center, with Y pointing up; CameraInfo uses top-left pixels.
+            ET.SubElement(body, "camera", {
+                "name": f"camera_{channel}",
+                "xyaxes": "0 -1 0 0 0 1",
+                "resolution": f"{width} {height}",
+                "sensorsize": f"{width} {height}",
+                "focalpixel": f"{stream['fx']} {stream['fy']}",
+                "principalpixel": f"{width / 2 - stream['cx']} {stream['cy'] - height / 2}",
+            })
         for child in children.get(link_name, []):
             if link_name == "base_link" and child.find("child").get("link") == "inertial_link":
                 continue

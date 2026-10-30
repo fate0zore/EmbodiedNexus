@@ -97,24 +97,32 @@ if [[ "$root" == /mnt/* ]]; then
   [[ -n "$log_base" ]] || log_base="$native_output/log"
 fi
 
+package_targets=()
+package_target=""
 case "$target" in
   all) package_target="" ;;
   core) package_target="embodied_nexus_core" ;;
-  sim) package_target="embodied_nexus_sim_gazebo" ;;
-  *) package_target="$target" ;;
+  sim) package_targets=(embodied_nexus_sim_gazebo embodied_nexus_sim_mujoco) ;;
+  *) package_targets=("$target") ;;
 esac
 
-if [[ -n "$package_target" ]]; then
+if [[ -n "${package_target:-}" ]]; then
+  package_targets=("$package_target")
+fi
+
+if ((${#package_targets[@]})); then
   packages="$(colcon list --base-paths src | awk '{print $1}')"
-  if ! grep -Fxq -- "$package_target" <<<"$packages"; then
-    echo "Unknown ROS package target: $target" >&2
-    echo "Discover packages with: colcon list --base-paths src" >&2
-    exit 2
-  fi
+  for package_target in "${package_targets[@]}"; do
+    if ! grep -Fxq -- "$package_target" <<<"$packages"; then
+      echo "Unknown ROS package target: $package_target" >&2
+      echo "Discover packages with: colcon list --base-paths src" >&2
+      exit 2
+    fi
+  done
 fi
 
 colcon_args=(--base-paths src --symlink-install)
-[[ -n "$package_target" ]] && colcon_args+=(--packages-up-to "$package_target")
+((${#package_targets[@]})) && colcon_args+=(--packages-up-to "${package_targets[@]}")
 [[ -n "$build_base" ]] && colcon_args+=(--build-base "$build_base")
 [[ -n "$install_base" ]] && colcon_args+=(--install-base "$install_base")
 [[ "$serial" == true ]] && { colcon_args+=(--executor sequential); export MAKEFLAGS=-j1; }

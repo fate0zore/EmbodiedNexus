@@ -13,3 +13,4 @@ src/core/embodied_nexus_core/web_rviz/dist/
 recordings/camera_calibration/
 *.token
 *.secret
+src/core/embodied_nexus_core/config/core_tokens.local.yaml

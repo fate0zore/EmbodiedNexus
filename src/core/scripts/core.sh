@@ -54,7 +54,7 @@ case "$command_name" in
         colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_core
         ;;
       sim)
-        colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_sim_gazebo
+        colcon build --base-paths src --symlink-install --packages-up-to embodied_nexus_sim_gazebo embodied_nexus_sim_mujoco
         ;;
       *)
         echo "build target must be core or sim" >&2
