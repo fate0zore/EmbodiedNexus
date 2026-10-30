@@ -56,7 +56,7 @@ Windows 下对应命令为 `.\scripts\services.ps1 stop --mode sim --simulator m
 ## 模型范围
 
 - 底盘按命令速度更新里程计和模型根位姿；轮子关节同步响应，但底盘运动为运动学更新。
-- 机械臂和夹爪通过 MuJoCo 位置执行器运行，并启用重力补偿；接触碰撞响应关闭，以保证共享 URDF 简化模型的关节状态稳定。输入命令仍由各自设备服务执行校验、租约与停止逻辑。
+- 机械臂和夹爪通过 MuJoCo 位置执行器运行，并启用重力补偿；Control 滑块使用 URDF 关节限位作为目标范围。转动关节的角度单位为 rad，移动关节使用 m；接触碰撞响应关闭，以保证共享 URDF 简化模型的关节状态稳定。输入命令仍由各自设备服务执行校验、租约与停止逻辑。
 - RGB-D 相机与 Gazebo 共用 `embodied_nexus_sim_description/config/gemini335_extrinsics.json` 中的实测安装外参，以及 `embodied_nexus_camera/config/gemini335_factory_calibration.json` 中的 RGB-D 内参和深度到彩色相机变换。MuJoCo 分别渲染彩色和深度视角，并用相同数据发布 CameraInfo 与机器人 TF；仿真图像为理想针孔图像，畸变设为零，与 Gazebo 仿真配置一致。
 - 雷达使用水平 360 度 MuJoCo 射线检测发布点云。
 - URDF 转换使用碰撞网格和基本形状，没有转换 DAE 可视网格。渲染依赖 OpenGL；若运行环境没有可用的 MuJoCo 渲染上下文，ROS 相机话题会发出占位帧并在日志中报告初始化错误。

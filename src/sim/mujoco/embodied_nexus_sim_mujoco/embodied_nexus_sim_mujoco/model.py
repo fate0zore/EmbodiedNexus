@@ -88,9 +88,12 @@ def make_scene(urdf, description_dir, camera_calibration=None):
             if "wheel" in ja["name"]:
                 ET.SubElement(actuator, "velocity", {"name": ja["name"], "joint": ja["name"], "kv": "20", "forcelimited": "true", "forcerange": "-100 100"})
             else:
-                ET.SubElement(actuator, "position", {"name": ja["name"], "joint": ja["name"],
-                                                       "kp": "50", "kv": "10", "forcelimited": "true",
-                                                       "forcerange": "-300 300"})
+                position_actuator = {"name": ja["name"], "joint": ja["name"],
+                                     "kp": "50", "kv": "10", "forcelimited": "true",
+                                     "forcerange": "-300 300"}
+                if "range" in ja:
+                    position_actuator.update({"ctrllimited": "true", "ctrlrange": ja["range"]})
+                ET.SubElement(actuator, "position", position_actuator)
         link = links[link_name]
         inertial = link.find("inertial")
         # Scout places the chassis inertia on a fixed, coincident child link.
