@@ -200,6 +200,25 @@ class CoreManagerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "visualization.port"):
             load_platform(platform_path, check_packages=False)
 
+    def test_scene_editor_config_defaults_and_validation(self):
+        """Load an optional scene editor provider and reject invalid activation settings.
+
+        Returns:
+            None.
+        """
+        platform_path = self.make_platform(ids=("base_one",))
+        platform = load_platform(platform_path, check_packages=False)
+        self.assertEqual(platform["scene_editor"], {"enabled": False, "provider": ""})
+        data = yaml.safe_load(platform_path.read_text(encoding="utf-8"))
+        data["scene_editor"] = {"enabled": True, "provider": "mujoco"}
+        platform_path.write_text(yaml.safe_dump(data), encoding="utf-8")
+        platform = load_platform(platform_path, check_packages=False)
+        self.assertEqual(platform["scene_editor"], {"enabled": True, "provider": "mujoco"})
+        data["scene_editor"] = {"enabled": True}
+        platform_path.write_text(yaml.safe_dump(data), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "provider is required"):
+            load_platform(platform_path, check_packages=False)
+
     def test_visualization_runtime_filters_topics_and_can_be_disabled(self):
         """验证visualizationruntimefilterstopics和canbedisabled。
 

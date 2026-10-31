@@ -26,6 +26,7 @@ from rosgraph_msgs.msg import Clock as ClockMessage
 from sensor_msgs.msg import CameraInfo, Image, JointState, PointCloud2
 from sensor_msgs_py import point_cloud2
 from trajectory_msgs.msg import JointTrajectory
+from embodied_nexus_sim_mujoco_interfaces.srv import ApplyScene
 
 from .camera_calibration import apply_camera_calibration, load_camera_calibration
 from .control import COMMAND_TIMEOUT, Trajectory, make_trajectory, wheel_speeds
@@ -110,12 +111,26 @@ class MujocoSimulation(Node):
         super().__init__("mujoco", namespace=SIM_NAMESPACE,
                          parameter_overrides=[Parameter("use_sim_time", value=True)])
         self.declare_parameter("gui", False)
+        self.declare_parameter("scene", "default")
+        self.declare_parameter("scene_directory", "")
         description = Path(get_package_share_directory("embodied_nexus_sim_description"))
         camera_package = Path(get_package_share_directory("embodied_nexus_camera"))
+        self._description_directory = description
         self._camera_calibration = load_camera_calibration(description, camera_package)
         robot_description = _expanded_urdf(description, self._camera_calibration)
+        self._robot_description = robot_description
+        from .scene import SceneLibrary
+        scene_directory = self.get_parameter("scene_directory").get_parameter_value().string_value
+        if not scene_directory:
+            scene_directory = str(Path(get_package_share_directory("embodied_nexus_sim_mujoco"))
+                                  / "config" / "scenes")
+        self._scene_directory = scene_directory
+        self._scene_library = SceneLibrary(scene_directory)
+        scene_name = self.get_parameter("scene").get_parameter_value().string_value
+        scene_config = self._scene_library.get_scene(scene_name)
         self.model = mujoco.MjModel.from_xml_string(
-            make_scene(robot_description, description, self._camera_calibration))
+            make_scene(robot_description, description, self._camera_calibration,
+                       scene_config, scene_directory))
         self.get_logger().info(
             "Gemini 335 calibration loaded: "
             f"mount={self._camera_calibration['mount_name']}, "
@@ -123,18 +138,8 @@ class MujocoSimulation(Node):
         )
         self.data = mujoco.MjData(self.model)
         mujoco.mj_forward(self.model, self.data)
-        self._root_qpos = self._joint_qpos("root")
-        self._root_qvel = self._joint_qvel("root")
-        self._joint_names, self._joint_qpos_addrs, self._joint_qvel_addrs = self._movable_joints()
-        self._actuators = {
-            name: _name_id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
-            for name in (*WHEEL_JOINTS, *ARM_JOINTS, *GRIPPER_JOINTS)
-        }
-        self._joint_ids = {
-            name: _name_id(self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
-            for name in (*WHEEL_JOINTS, *ARM_JOINTS, *GRIPPER_JOINTS)
-        }
-        self._lidar_body = _name_id(self.model, mujoco.mjtObj.mjOBJ_BODY, "lidar_link")
+        self._set_model_indices(self._model_indices(self.model))
+        self._scene_name = scene_name
         self._base_x = float(self.data.qpos[self._root_qpos])
         self._base_y = float(self.data.qpos[self._root_qpos + 1])
         self._base_yaw = 0.0
@@ -146,6 +151,7 @@ class MujocoSimulation(Node):
         self._next_lidar = 0.0
         self._last_odom = 0.0
         self._renderer = None
+        self._renderer_model = None
         self._renderer_failed = False
         self._camera_reported = False
         self._lidar_reported = False
@@ -154,6 +160,8 @@ class MujocoSimulation(Node):
         self._sensor_stop = object()
         self._sensor_inputs: Queue[object] = Queue(maxsize=1)
         self._sensor_outputs: Queue[object] = Queue(maxsize=1)
+        self._model_generation = 0
+        self._sensor_publish_lock = threading.Lock()
         self._sensor_thread = threading.Thread(
             target=self._sensor_worker, name="mujoco-sensors", daemon=False)
         self._viewer = None
@@ -169,16 +177,16 @@ class MujocoSimulation(Node):
                                  self._on_arm_trajectory, 10)
         self.create_subscription(JointTrajectory, f"{SIM_NAMESPACE}/gripper_controller/joint_trajectory",
                                  self._on_gripper_trajectory, 10)
+        self._apply_scene_service = self.create_service(
+            ApplyScene, f"{SIM_NAMESPACE}/mujoco/apply_scene", self._apply_scene)
         if self.get_parameter("gui").get_parameter_value().bool_value:
             self._viewer = viewer.launch_passive(self.model, self.data)
-            self._viewer_sync_thread = threading.Thread(
-                target=self._viewer_sync_worker, name="mujoco-viewer-sync", daemon=False)
-            self._viewer_sync_thread.start()
+            self._start_viewer_sync()
         self._sensor_thread.start()
         self._sensor_publish_thread.start()
         self._timer = self.create_timer(0.01, self._tick, clock=Clock(clock_type=ClockType.STEADY_TIME))
         self.get_logger().info(
-            f"MuJoCo Arachne scene ready: {self.model.nbody} bodies, "
+            f"MuJoCo scene '{scene_name}' ready: {self.model.nbody} bodies, "
             f"{self.model.njnt} joints, {self.model.ngeom} collision geoms"
         )
 
@@ -226,24 +234,238 @@ class MujocoSimulation(Node):
         joint = _name_id(self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
         return int(self.model.jnt_dofadr[joint])
 
-    def _movable_joints(self) -> tuple[list[str], list[int], list[int]]:
+    def _movable_joints(self, model: mujoco.MjModel | None = None) -> tuple[list[str], list[int], list[int]]:
         """Collect all scalar model joints for ROS joint-state feedback.
+
+        Args:
+            model: Optional compiled model; defaults to the active model.
+
+        Returns:
+            Joint names and corresponding position and velocity indices.
+        """
+        model = model or self.model
+        names, positions, velocities = [], [], []
+        for index in range(model.njnt):
+            if model.jnt_type[index] == mujoco.mjtJoint.mjJNT_FREE:
+                continue
+            name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, index)
+            names.append(name)
+            positions.append(int(model.jnt_qposadr[index]))
+            velocities.append(int(model.jnt_dofadr[index]))
+        return names, positions, velocities
+
+    def _model_indices(self, model: mujoco.MjModel) -> dict[str, object]:
+        """Resolve all named indices needed by the simulation for one model.
+
+        Args:
+            model: Compiled MuJoCo model whose names should be indexed.
+
+        Returns:
+            A cache of root, joint, actuator, and lidar indices for that model.
+        """
+        root_joint = _name_id(model, mujoco.mjtObj.mjOBJ_JOINT, "root")
+        return {
+            "root_qpos": int(model.jnt_qposadr[root_joint]),
+            "root_qvel": int(model.jnt_dofadr[root_joint]),
+            "joints": self._movable_joints(model),
+            "actuators": {
+                name: _name_id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+                for name in (*WHEEL_JOINTS, *ARM_JOINTS, *GRIPPER_JOINTS)
+            },
+            "joint_ids": {
+                name: _name_id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+                for name in (*WHEEL_JOINTS, *ARM_JOINTS, *GRIPPER_JOINTS)
+            },
+            "lidar_body": _name_id(model, mujoco.mjtObj.mjOBJ_BODY, "lidar_link"),
+        }
+
+    def _set_model_indices(self, indices: dict[str, object]) -> None:
+        """Install a previously resolved model index cache on the simulation.
+
+        Args:
+            indices: Model index cache returned by ``_model_indices``.
+
+        Returns:
+            None.
+        """
+        self._root_qpos = indices["root_qpos"]
+        self._root_qvel = indices["root_qvel"]
+        self._joint_names, self._joint_qpos_addrs, self._joint_qvel_addrs = indices["joints"]
+        self._actuators = indices["actuators"]
+        self._joint_ids = indices["joint_ids"]
+        self._lidar_body = indices["lidar_body"]
+
+    def _apply_scene(self, request: ApplyScene.Request, response: ApplyScene.Response) -> ApplyScene.Response:
+        """Compile and activate a saved scene while preserving robot state and sim time.
+
+        Args:
+            request: Service request naming the saved scene to activate.
+            response: Service response populated with the apply result and model counts.
+
+        Returns:
+            The populated service response.
+        """
+        try:
+            scene = self._scene_library.get_scene(request.scene_id)
+            xml = make_scene(self._robot_description, self._description_directory,
+                             self._camera_calibration, scene, self._scene_directory)
+            candidate_model = mujoco.MjModel.from_xml_string(xml)
+            candidate_data = mujoco.MjData(candidate_model)
+            candidate_indices = self._model_indices(candidate_model)
+            self._copy_robot_state(candidate_model, candidate_data, candidate_indices)
+            mujoco.mj_forward(candidate_model, candidate_data)
+            self._replace_viewer(candidate_model, candidate_data)
+        except Exception as exc:
+            response.success = False
+            response.message = f"场景应用失败，运行模型未切换：{exc}"
+            return response
+
+        self.model = candidate_model
+        self.data = candidate_data
+        self._set_model_indices(candidate_indices)
+        self._scene_name = request.scene_id
+        self._base_velocity = (0.0, 0.0)
+        self._base_command_time = time.monotonic()
+        self._arm_trajectory = None
+        self._gripper_trajectory = None
+        self._next_camera = float(self.data.time)
+        self._next_lidar = float(self.data.time)
+        self._last_odom = float(self.data.time)
+        with self._sensor_publish_lock:
+            self._model_generation += 1
+            self._discard_pending_sensor_work()
+        response.success = True
+        response.message = f"场景 {request.scene_id} 已应用"
+        response.body_count = candidate_model.nbody
+        response.geom_count = candidate_model.ngeom
+        self.get_logger().info(
+            f"Applied MuJoCo scene '{request.scene_id}': "
+            f"{candidate_model.nbody} bodies, {candidate_model.ngeom} geoms"
+        )
+        return response
+
+    def _copy_robot_state(self, model: mujoco.MjModel, data: mujoco.MjData,
+                          indices: dict[str, object]) -> None:
+        """Copy robot joint positions into a newly compiled model and clear motion targets.
+
+        Args:
+            model: Candidate model that will replace the active model.
+            data: New state object initialized from the candidate model.
+            indices: Candidate model index cache.
+
+        Returns:
+            None.
+        """
+        old_model, old_data = self.model, self.data
+        names = ("root", *WHEEL_JOINTS, *ARM_JOINTS, *GRIPPER_JOINTS)
+        for name in names:
+            old_joint = _name_id(old_model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            new_joint = _name_id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            joint_type = int(old_model.jnt_type[old_joint])
+            if joint_type != model.jnt_type[new_joint]:
+                raise ValueError(f"robot joint {name!r} changed type in candidate model")
+            qpos_size, qvel_size = {
+                int(mujoco.mjtJoint.mjJNT_FREE): (7, 6),
+                int(mujoco.mjtJoint.mjJNT_BALL): (4, 3),
+                int(mujoco.mjtJoint.mjJNT_SLIDE): (1, 1),
+                int(mujoco.mjtJoint.mjJNT_HINGE): (1, 1),
+            }[joint_type]
+            old_qpos = int(old_model.jnt_qposadr[old_joint])
+            new_qpos = int(model.jnt_qposadr[new_joint])
+            old_qvel = int(old_model.jnt_dofadr[old_joint])
+            new_qvel = int(model.jnt_dofadr[new_joint])
+            data.qpos[new_qpos:new_qpos + qpos_size] = old_data.qpos[old_qpos:old_qpos + qpos_size]
+            data.qvel[new_qvel:new_qvel + qvel_size] = old_data.qvel[old_qvel:old_qvel + qvel_size]
+
+        root_qpos = indices["root_qpos"]
+        root_qvel = indices["root_qvel"]
+        data.qpos[root_qpos:root_qpos + 3] = (self._base_x, self._base_y, 0.236)
+        data.qpos[root_qpos + 3:root_qpos + 7] = (
+            math.cos(self._base_yaw / 2), 0.0, 0.0, math.sin(self._base_yaw / 2))
+        data.qvel[root_qvel:root_qvel + 6] = 0.0
+        data.time = float(old_data.time)
+        actuators = indices["actuators"]
+        joint_ids = indices["joint_ids"]
+        for name in WHEEL_JOINTS:
+            data.ctrl[actuators[name]] = 0.0
+        for name in (*ARM_JOINTS, *GRIPPER_JOINTS):
+            joint = joint_ids[name]
+            qpos = int(model.jnt_qposadr[joint])
+            data.ctrl[actuators[name]] = data.qpos[qpos]
+
+    def _discard_pending_sensor_work(self) -> None:
+        """Remove queued frames from models that have just been replaced.
 
         Args:
             None.
 
         Returns:
-            Joint names and corresponding position and velocity indices.
+            None.
         """
-        names, positions, velocities = [], [], []
-        for index in range(self.model.njnt):
-            if self.model.jnt_type[index] == mujoco.mjtJoint.mjJNT_FREE:
-                continue
-            name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, index)
-            names.append(name)
-            positions.append(int(self.model.jnt_qposadr[index]))
-            velocities.append(int(self.model.jnt_dofadr[index]))
-        return names, positions, velocities
+        for pending in (self._sensor_inputs, self._sensor_outputs):
+            while True:
+                try:
+                    pending.get_nowait()
+                except Empty:
+                    break
+
+    def _start_viewer_sync(self) -> None:
+        """Start the background synchronization loop for the current passive viewer.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        if self._viewer is None:
+            return
+        self._viewer_sync_stop = threading.Event()
+        self._viewer_sync_reported = False
+        self._viewer_sync_thread = threading.Thread(
+            target=self._viewer_sync_worker, name="mujoco-viewer-sync", daemon=False)
+        self._viewer_sync_thread.start()
+
+    def _stop_viewer_sync(self) -> None:
+        """Stop and join the current viewer synchronization loop.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        self._viewer_sync_stop.set()
+        if self._viewer_sync_thread is not None:
+            self._viewer_sync_thread.join()
+            self._viewer_sync_thread = None
+
+    def _replace_viewer(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        """Reopen the passive viewer for a candidate model, restoring it on failure.
+
+        Args:
+            model: Candidate model to display after the hot apply.
+            data: Candidate model state to display after the hot apply.
+
+        Returns:
+            None.
+        """
+        if self._viewer is None:
+            return
+        old_viewer = self._viewer
+        self._stop_viewer_sync()
+        self._viewer = None
+        try:
+            old_viewer.close()
+            self._viewer = viewer.launch_passive(model, data)
+        except Exception:
+            try:
+                self._viewer = viewer.launch_passive(self.model, self.data)
+                self._start_viewer_sync()
+            except Exception as restore_error:
+                self.get_logger().error(f"Could not restore MuJoCo viewer after apply failure: {restore_error}")
+            raise
+        self._start_viewer_sync()
 
     def _on_base_command(self, message: TwistStamped) -> None:
         """Store the most recent chassis velocity command.
@@ -355,7 +577,8 @@ class MujocoSimulation(Node):
             None.
         """
         snapshot = copy.copy(self.data)
-        self._replace_latest(self._sensor_inputs, (float(snapshot.time), self._base_yaw, snapshot))
+        self._replace_latest(self._sensor_inputs, (
+            self._model_generation, self.model, float(snapshot.time), self._base_yaw, snapshot))
 
     @staticmethod
     def _replace_latest(target: Queue[object], item: object) -> None:
@@ -393,11 +616,14 @@ class MujocoSimulation(Node):
                 if job is self._sensor_stop:
                     break
                 try:
-                    sim_time, base_yaw, snapshot = job
+                    generation, model, sim_time, base_yaw, snapshot = job
+                    if generation != self._model_generation:
+                        continue
                     stamp = _stamp(sim_time)
-                    color, depth, color_info, depth_info = self._render_camera_messages(snapshot, stamp)
+                    color, depth, color_info, depth_info = self._render_camera_messages(
+                        model, snapshot, stamp)
                     try:
-                        lidar = self._build_lidar_message(snapshot, base_yaw, stamp)
+                        lidar = self._build_lidar_message(model, snapshot, base_yaw, stamp)
                     except Exception as exc:
                         lidar = None
                         if not self._lidar_reported:
@@ -409,7 +635,8 @@ class MujocoSimulation(Node):
                         self._sensor_worker_reported = True
                     continue
                 self._replace_latest(
-                    self._sensor_outputs, (sim_time, color, depth, color_info, depth_info, lidar))
+                    self._sensor_outputs,
+                    (generation, sim_time, color, depth, color_info, depth_info, lidar))
         finally:
             if self._renderer is not None:
                 try:
@@ -417,6 +644,7 @@ class MujocoSimulation(Node):
                 except Exception as exc:
                     self.get_logger().error(f"MuJoCo camera renderer shutdown failed: {exc}")
                 self._renderer = None
+                self._renderer_model = None
 
     def _sensor_publisher_worker(self) -> None:
         """Publish completed sensor frames without blocking the physics timer.
@@ -431,18 +659,21 @@ class MujocoSimulation(Node):
             result = self._sensor_outputs.get()
             if result is self._sensor_stop:
                 return
-            _, color, depth, color_info, depth_info, lidar = result
-            try:
-                self._color_pub.publish(color)
-                self._depth_pub.publish(depth)
-                self._color_info_pub.publish(color_info)
-                self._depth_info_pub.publish(depth_info)
-                if lidar is not None:
-                    self._lidar_pub.publish(lidar)
-            except Exception as exc:
-                if not self._sensor_publish_reported:
-                    self.get_logger().error(f"MuJoCo sensor message publication failed: {exc}")
-                    self._sensor_publish_reported = True
+            generation, _, color, depth, color_info, depth_info, lidar = result
+            with self._sensor_publish_lock:
+                if generation != self._model_generation:
+                    continue
+                try:
+                    self._color_pub.publish(color)
+                    self._depth_pub.publish(depth)
+                    self._color_info_pub.publish(color_info)
+                    self._depth_info_pub.publish(depth_info)
+                    if lidar is not None:
+                        self._lidar_pub.publish(lidar)
+                except Exception as exc:
+                    if not self._sensor_publish_reported:
+                        self.get_logger().error(f"MuJoCo sensor message publication failed: {exc}")
+                        self._sensor_publish_reported = True
 
     def _advance(self) -> None:
         """Step the model and apply commanded chassis and joint motion.
@@ -539,10 +770,12 @@ class MujocoSimulation(Node):
         message.twist.twist.linear.x, message.twist.twist.angular.z = self._base_velocity
         self._odom_pub.publish(message)
 
-    def _render_camera_messages(self, data: mujoco.MjData, stamp: Time) -> tuple[Image, Image, CameraInfo, CameraInfo]:
+    def _render_camera_messages(self, model: mujoco.MjModel, data: mujoco.MjData,
+                                stamp: Time) -> tuple[Image, Image, CameraInfo, CameraInfo]:
         """Render an RGB-D frame and build its calibration messages.
 
         Args:
+            model: Compiled model corresponding to the copied sensor state.
             data: Independent MuJoCo state copied for this sensor frame.
             stamp: Simulation timestamp copied with the state.
 
@@ -552,9 +785,14 @@ class MujocoSimulation(Node):
         color_stream = self._camera_calibration["streams"]["color"]
         depth_stream = self._camera_calibration["streams"]["depth"]
         try:
+            if self._renderer is not None and self._renderer_model is not model:
+                self._renderer.close()
+                self._renderer = None
+                self._renderer_model = None
             if self._renderer is None:
                 self._renderer = mujoco.Renderer(
-                    self.model, height=color_stream["height"], width=color_stream["width"])
+                    model, height=color_stream["height"], width=color_stream["width"])
+                self._renderer_model = model
             self._renderer.disable_depth_rendering()
             self._renderer.update_scene(data, camera="camera_color")
             color = np.asarray(self._renderer.render(), dtype=np.uint8).copy()
@@ -564,6 +802,7 @@ class MujocoSimulation(Node):
         except Exception as exc:
             renderer = self._renderer
             self._renderer = None
+            self._renderer_model = None
             if renderer is not None:
                 try:
                     renderer.close()
@@ -637,10 +876,12 @@ class MujocoSimulation(Node):
         message.p = [fx, 0.0, cx, 0.0, 0.0, fy, cy, 0.0, 0.0, 0.0, 1.0, 0.0]
         return message
 
-    def _build_lidar_message(self, data: mujoco.MjData, base_yaw: float, stamp: Time) -> PointCloud2:
+    def _build_lidar_message(self, model: mujoco.MjModel, data: mujoco.MjData,
+                             base_yaw: float, stamp: Time) -> PointCloud2:
         """Ray-cast a horizontal scan and build its XYZ point cloud message.
 
         Args:
+            model: Compiled model corresponding to the copied sensor state.
             data: Independent MuJoCo state copied for this sensor frame.
             base_yaw: Chassis yaw captured with the state.
             stamp: Simulation timestamp copied with the state.
@@ -648,13 +889,14 @@ class MujocoSimulation(Node):
         Returns:
             The stamped lidar point cloud message.
         """
-        origin = data.xpos[self._lidar_body].copy()
+        lidar_body = _name_id(model, mujoco.mjtObj.mjOBJ_BODY, "lidar_link")
+        origin = data.xpos[lidar_body].copy()
         hits = []
         geom = np.zeros(1, dtype=np.int32)
         for index in range(LIDAR_RAYS):
             angle = 2.0 * math.pi * index / LIDAR_RAYS + base_yaw
             direction = np.array([math.cos(angle), math.sin(angle), 0.0], dtype=np.float64)
-            distance = mujoco.mj_ray(self.model, data, origin, direction, None, 1, -1, geom)
+            distance = mujoco.mj_ray(model, data, origin, direction, None, 1, -1, geom)
             if 1.0 <= distance <= 18.0:
                 hits.append((origin + distance * direction).tolist())
         return point_cloud2.create_cloud_xyz32(
@@ -688,10 +930,7 @@ class MujocoSimulation(Node):
         self._replace_latest(self._sensor_outputs, self._sensor_stop)
         if self._sensor_publish_thread.is_alive():
             self._sensor_publish_thread.join()
-        self._viewer_sync_stop.set()
-        if self._viewer_sync_thread is not None:
-            self._viewer_sync_thread.join()
-            self._viewer_sync_thread = None
+        self._stop_viewer_sync()
         if self._viewer is not None:
             self._viewer.close()
             self._viewer = None

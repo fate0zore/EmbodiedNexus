@@ -29,6 +29,7 @@ DEFAULT_VISUALIZATION = {
         "embodied_nexus_gripper", "embodied_nexus_camera", "embodied_nexus_lidar",
     ],
 }
+DEFAULT_SCENE_EDITOR = {"enabled": False, "provider": ""}
 DEVICE_TYPES = {
     "base": ("embodied_nexus_base", "base.launch.py", "device_id", "bases"),
     "arm": ("embodied_nexus_arm", "arm.launch.py", "device_id", "arms"),
@@ -101,8 +102,8 @@ def load_platform(path: str | Path | None = None, *, check_packages: bool = True
     """
     platform_path = Path(path or default_config_path()).expanduser().resolve()
     raw = yaml.safe_load(platform_path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict) or set(raw) - {"core", "devices", "visualization"} or not {"core", "devices"}.issubset(raw):
-        raise ValueError("platform root must contain 'core' and 'devices', with optional 'visualization'")
+    if not isinstance(raw, dict) or set(raw) - {"core", "devices", "visualization", "scene_editor"} or not {"core", "devices"}.issubset(raw):
+        raise ValueError("platform root must contain 'core' and 'devices', with optional 'visualization' and 'scene_editor'")
     core = dict(DEFAULT_CORE)
     if not isinstance(raw["core"], dict) or set(raw["core"]) - set(DEFAULT_CORE):
         raise ValueError("core config contains unknown fields")
@@ -177,8 +178,20 @@ def load_platform(path: str | Path | None = None, *, check_packages: bool = True
     if not isinstance(packages, list) or any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name) for name in packages):
         raise ValueError("visualization.resource_packages must be a list of ROS package names")
     visualization["resource_packages"] = list(dict.fromkeys(packages))
+    raw_scene_editor = raw.get("scene_editor", {})
+    if not isinstance(raw_scene_editor, dict) or set(raw_scene_editor) - set(DEFAULT_SCENE_EDITOR):
+        raise ValueError("scene_editor config contains unknown fields")
+    scene_editor = dict(DEFAULT_SCENE_EDITOR)
+    scene_editor.update(raw_scene_editor)
+    if not isinstance(scene_editor["enabled"], bool):
+        raise ValueError("scene_editor.enabled must be boolean")
+    if (not isinstance(scene_editor["provider"], str) or
+            (scene_editor["provider"] and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", scene_editor["provider"]))):
+        raise ValueError("scene_editor.provider must be an editor provider name")
+    if scene_editor["enabled"] and not scene_editor["provider"]:
+        raise ValueError("scene_editor.provider is required when scene editing is enabled")
     return {"config_file": str(platform_path), "core": core, "devices": devices,
-            "visualization": visualization}
+            "visualization": visualization, "scene_editor": scene_editor}
 
 
 def _validate_ros_package(kind: str) -> None:

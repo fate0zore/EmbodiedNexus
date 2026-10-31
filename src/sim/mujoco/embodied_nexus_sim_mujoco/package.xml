@@ -30,5 +30,6 @@
   <exec_depend>embodied_nexus_lidar</exec_depend>
   <exec_depend>embodied_nexus_sim</exec_depend>
   <exec_depend>embodied_nexus_sim_description</exec_depend>
+  <exec_depend>embodied_nexus_sim_mujoco_interfaces</exec_depend>
   <export><build_type>ament_python</build_type></export>
 </package>

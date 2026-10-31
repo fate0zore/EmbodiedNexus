@@ -42,6 +42,7 @@ def arguments(argv):
     parser.add_argument("devices", nargs="*")
     parser.add_argument("--mode", choices=("mock", "real", "sim"), required=True)
     parser.add_argument("--simulator", choices=("gazebo", "mujoco"))
+    parser.add_argument("--scene", help="Named MuJoCo scene from config/scenes")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--managed", action="store_true")
     group.add_argument("--standalone", action="store_true")
@@ -59,6 +60,10 @@ def arguments(argv):
         parser.error("sim mode requires --simulator gazebo or mujoco")
     if args.mode == "sim" and args.config:
         parser.error("--config is not supported for built-in simulator profiles")
+    if args.scene and (args.mode != "sim" or args.simulator != "mujoco"):
+        parser.error("--scene is only valid with --mode sim --simulator mujoco")
+    if args.scene and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", args.scene):
+        parser.error("--scene must start with a letter and contain only letters, digits, '_' or '-'")
     if args.action == "start" and args.mode == "real" and not args.confirm_ready:
         parser.error("real startup requires --confirm-ready")
     if args.all and args.devices:
@@ -516,6 +521,7 @@ def run(args, state):
     devices = select_devices(args, data)
     mode = "standalone" if args.standalone else "managed"
     key = f"{args.mode}:{args.simulator or '-'}:{mode}"
+    selected_scene = (args.scene or "default") if args.simulator == "mujoco" else None
     session = state.get(key)
     if session and not session.get("processes"):
         del state[key]
@@ -523,12 +529,16 @@ def run(args, state):
         session = None
     if session and session.get("config") != path:
         raise RuntimeError("configuration differs from the recorded session")
+    if (session and args.action == "start" and args.simulator == "mujoco" and
+            session.get("scene", "default") != selected_scene):
+        raise RuntimeError("MuJoCo scene differs from the recorded session; stop the current session before changing scenes")
     if args.action == "status":
         if not session:
             print("No session recorded")
             return
         print(json.dumps({"mode": args.mode, "manager": mode,
                           "simulator": args.simulator,
+                          "scene": session.get("scene", "default") if args.simulator == "mujoco" else None,
                           "processes": {name: {**rec, "running": alive(rec)} for name, rec in session["processes"].items()}}, indent=2))
         if mode == "managed" and port_busy():
             print(json.dumps(api("/api/v1/core/status", core_token(args)), indent=2))
@@ -537,7 +547,7 @@ def run(args, state):
         token = core_token(args) if mode == "managed" else ""
         configs = {item["id"]: validate_device_config(item, path, args.mode) for item in devices}
         if session is None:
-            session = {"config": path, "processes": {}}
+            session = {"config": path, "processes": {}, "scene": selected_scene}
         processes = session["processes"]
         env = os.environ.copy()
         if mode == "managed":
@@ -565,6 +575,9 @@ def run(args, state):
                 package = f"embodied_nexus_sim_{args.simulator}"
                 command = ["ros2", "launch", package, "sim.launch.py",
                            f"gui:={str(args.gui).lower()}", f"start_core:={str(mode == 'managed').lower()}"]
+                if args.simulator == "mujoco":
+                    scene_directory = ROOT / "src/sim/mujoco/embodied_nexus_sim_mujoco/config/scenes"
+                    command.extend([f"scene:={selected_scene}", f"scene_directory:={scene_directory}"])
             else:
                 command = ["ros2", "run", "embodied_nexus_core", "nexus_core", "--config", path]
             processes["system"] = launch(command, key.replace(":", "-"), env)

@@ -2,6 +2,9 @@ core:
   bind_host: 0.0.0.0
   port: 8780
   auth_token_env: EMBODIED_NEXUS_CORE_TOKEN
+scene_editor:
+  enabled: true
+  provider: mujoco
 visualization:
   enabled: true
   port: 9091

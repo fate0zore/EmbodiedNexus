@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>MuJoCo 场景编辑器 · EmbodiedNexus</title>
+  </head>
+  <body>
+    <main class="editor-shell">
+      <header class="editor-topbar">
+        <a class="brand" href="/"><span class="brand-mark">EN</span><span>MuJoCo 场景编辑器</span></a>
+        <div class="scene-actions">
+          <select id="scene-select" aria-label="已保存场景"></select>
+          <button id="open-scene" type="button">打开</button>
+          <button id="new-scene" type="button">新建</button>
+          <button id="save-scene" type="button">保存</button>
+          <button id="apply-scene" class="primary" type="button">应用场景</button>
+          <button id="save-as" type="button">另存为</button>
+          <button id="rename-scene" type="button">重命名</button>
+          <button id="delete-scene" class="danger" type="button">删除</button>
+        </div>
+      </header>
+      <section class="editor-main">
+        <aside class="left-panel">
+          <label class="scene-name">场景名称<input id="scene-name" maxlength="80" /></label>
+          <div class="panel-title">添加物体</div>
+          <div class="add-grid">
+            <button data-shape="box" type="button">＋ 盒子</button>
+            <button data-shape="sphere" type="button">＋ 球体</button>
+            <button data-shape="cylinder" type="button">＋ 圆柱</button>
+          </div>
+          <label class="upload-button">导入 STL / OBJ<input id="mesh-file" type="file" accept=".stl,.obj" /></label>
+          <div class="panel-title object-title">场景物体 <span id="object-count">0</span></div>
+          <div id="object-list" class="object-list"></div>
+          <p class="sidebar-note">点击“应用场景”会先校验并保存当前草稿，再热更新运行中的 MuJoCo。Viewer 窗口会短暂重新打开。</p>
+        </aside>
+        <section class="viewport-panel">
+          <div class="viewport-toolbar">
+            <button id="translate-mode" class="tool active" type="button" title="平移">移动</button>
+            <button id="rotate-mode" class="tool" type="button" title="旋转">旋转</button>
+            <span id="editor-status" role="status">正在连接 Core…</span>
+          </div>
+          <div id="viewport" aria-label="MuJoCo 工作区三维预览"></div>
+          <footer><span>左键旋转视角 · 滚轮缩放 · 拖动手柄摆放物体</span><span>单位：m / °</span></footer>
+        </section>
+        <aside class="right-panel">
+          <div class="panel-title">物体属性</div>
+          <p id="empty-selection" class="empty-selection">选择一个场景物体以编辑属性。</p>
+          <div id="properties" hidden>
+            <label>物体 ID<input id="object-id" maxlength="48" /></label>
+            <label>形状<select id="object-shape"><option value="box">盒子</option><option value="sphere">球体</option><option value="cylinder">圆柱</option><option value="mesh">导入网格</option></select></label>
+            <div class="field-heading">位置（m）</div>
+            <div class="vector-fields"><label>X<input id="pos-x" type="number" step="0.01" /></label><label>Y<input id="pos-y" type="number" step="0.01" /></label><label>Z<input id="pos-z" type="number" step="0.01" /></label></div>
+            <div class="field-heading">姿态（°）</div>
+            <div class="vector-fields"><label>Rx<input id="rot-x" type="number" step="1" /></label><label>Ry<input id="rot-y" type="number" step="1" /></label><label>Rz<input id="rot-z" type="number" step="1" /></label></div>
+            <div id="box-fields" class="field-block"><div class="field-heading">尺寸（m）</div><div class="vector-fields"><label>X<input id="size-x" type="number" min="0.001" step="0.01" /></label><label>Y<input id="size-y" type="number" min="0.001" step="0.01" /></label><label>Z<input id="size-z" type="number" min="0.001" step="0.01" /></label></div></div>
+            <div id="round-fields" class="field-block" hidden><div class="field-heading">半径 / 高度（m）</div><div class="vector-fields"><label>半径<input id="radius" type="number" min="0.001" step="0.01" /></label><label id="height-field">高度<input id="height" type="number" min="0.001" step="0.01" /></label></div></div>
+            <div id="mesh-fields" class="field-block" hidden><div class="field-heading">网格缩放</div><div class="vector-fields"><label>X<input id="scale-x" type="number" min="0.001" step="0.01" /></label><label>Y<input id="scale-y" type="number" min="0.001" step="0.01" /></label><label>Z<input id="scale-z" type="number" min="0.001" step="0.01" /></label></div><p id="mesh-path" class="mesh-path"></p></div>
+            <label class="color-field">颜色<input id="object-color" type="color" /></label>
+            <label>物理属性<select id="object-motion"><option value="static">静态</option><option value="dynamic">动态（受重力）</option></select></label>
+            <label id="mass-field">质量（kg）<input id="object-mass" type="number" min="0.001" step="0.1" /></label>
+            <button id="remove-object" class="remove-object" type="button">删除此物体</button>
+          </div>
+        </aside>
+      </section>
+    </main>
+    <script type="module" src="../src/scene-editor.js"></script>
+  </body>
+</html>

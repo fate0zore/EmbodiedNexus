@@ -27,6 +27,64 @@ class SceneConversionTests(unittest.TestCase):
         self.assertEqual(scene.find(".//joint[@name='arm_joint']").get("range"), "-1 2")
         self.assertEqual(scene.find(".//body[@name='arm']/geom").get("size"), "1.0 2.0 3.0")
 
+    def test_scene_config_converts_actual_sizes_and_dynamic_bodies(self):
+        """Convert configured workcell geometry and dynamic mass to MJCF attributes.
+
+        Returns:
+            None.
+        """
+        urdf = """<robot name="test"><link name="base_link"/>
+        <link name="arm"/><joint name="arm_joint" type="fixed">
+        <parent link="base_link"/><child link="arm"/></joint></robot>"""
+        configured = {"name": "Test", "ground": {"size": [8, 6, 0.1]}, "objects": [
+            {"id": "workbench", "shape": "box", "position": [1, 2, 0.4], "rotation": [0, 0, 0],
+             "size": [2, 1, 0.8], "rgba": [0.2, 0.3, 0.4, 1], "motion": "static"},
+            {"id": "ball", "shape": "sphere", "position": [0, 0, 1], "rotation": [0, 0, 0],
+             "radius": 0.25, "rgba": [1, 0, 0, 1], "motion": "dynamic", "mass_kg": 0.7},
+        ]}
+        mjcf = ET.fromstring(make_scene(urdf, ".", scene_config=configured))
+        self.assertEqual(mjcf.find("./worldbody/geom[@name='workbench_geom']").get("size"), "1.0 0.5 0.4")
+        self.assertEqual(mjcf.find("./worldbody/body[@name='ball_body']/freejoint").get("name"), "ball_free")
+        self.assertEqual(mjcf.find("./worldbody/body[@name='ball_body']/geom").get("mass"), "0.7")
+        self.assertEqual(mjcf.find("./worldbody/geom[@name='ground']").get("size"), "8 6 0.1")
+
+    @unittest.skipUnless(importlib.util.find_spec("mujoco"), "MuJoCo is required")
+    def test_compile_configured_static_dynamic_and_uploaded_mesh_objects(self):
+        """Compile a scene with static and dynamic primitives and an OBJ collision mesh.
+
+        Returns:
+            None.
+        """
+        import tempfile
+        import mujoco
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            assets = root / "assets" / "test"
+            assets.mkdir(parents=True)
+            (assets / "tetra.obj").write_text(
+                "v 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\nf 1 3 2\nf 1 2 4\nf 2 3 4\nf 3 1 4\n",
+                encoding="utf-8",
+            )
+            urdf = """<robot name="test"><link name="base_link"><inertial><origin xyz="0 0 0"/>
+            <mass value="5"/><inertia ixx="1" iyy="1" izz="1"/></inertial></link></robot>"""
+            configured = {"name": "Compiled", "objects": [
+                {"id": "static_box", "shape": "box", "position": [1, 0, 0.5], "rotation": [0, 0, 0],
+                 "size": [1, 1, 1], "rgba": [0, 1, 0, 1], "motion": "static"},
+                {"id": "dynamic_ball", "shape": "sphere", "position": [0, 0, 1], "rotation": [0, 0, 0],
+                 "radius": 0.2, "rgba": [1, 0, 0, 1], "motion": "dynamic", "mass_kg": 0.4},
+                {"id": "mesh_body", "shape": "mesh", "position": [0, 1, 0.5], "rotation": [0, 0, 0],
+                 "mesh": "assets/test/tetra.obj", "scale": [0.2, 0.2, 0.2], "rgba": [0, 0, 1, 1],
+                 "motion": "dynamic", "mass_kg": 0.6},
+            ]}
+            model = mujoco.MjModel.from_xml_string(make_scene(urdf, ".", scene_config=configured,
+                                                               scene_directory=root))
+            dynamic_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "dynamic_ball_body")
+            mesh_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "mesh_body_body")
+            self.assertAlmostEqual(float(model.body_mass[dynamic_id]), 0.4)
+            self.assertAlmostEqual(float(model.body_mass[mesh_id]), 0.6)
+            self.assertGreaterEqual(model.ngeom, 4)
+
     @unittest.skipUnless(importlib.util.find_spec("mujoco"), "MuJoCo is required")
     def test_urdf_fixed_axis_rpy_is_preserved(self):
         """Preserve a noncommuting URDF joint and collision rotation.

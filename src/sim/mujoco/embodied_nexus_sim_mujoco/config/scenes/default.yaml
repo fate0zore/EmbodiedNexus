@@ -1,0 +1,50 @@
+name: Default
+ground:
+  size:
+  - 20
+  - 20
+  - 0.1
+  rgba:
+  - 0.75
+  - 0.75
+  - 0.75
+  - 1
+objects:
+- id: obstacle
+  shape: box
+  position:
+  - 2.6
+  - 1.2
+  - 1
+  rotation:
+  - 0
+  - 0
+  - 0
+  size:
+  - 0.35
+  - 0.8
+  - 2
+  rgba:
+  - 0.8
+  - 0.15
+  - 0.08
+  - 1
+  motion: static
+- id: cylinder-3
+  shape: cylinder
+  position:
+  - 4.413331509002736
+  - -2
+  - 0.2
+  rotation:
+  - 0.5224236582233448
+  - -0.7508939422247668
+  - 0.6864737781576078
+  rgba:
+  - 0.21568627450980393
+  - 0.023529411764705882
+  - 0.06274509803921569
+  - 1
+  motion: static
+  radius: 0.2
+  height: 0.6

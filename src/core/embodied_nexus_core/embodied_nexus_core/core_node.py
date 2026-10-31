@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import inspect
 import json
 import os
@@ -45,13 +46,30 @@ class CoreNode(Node):
         self.visualization = RosbridgeRuntime(
             self.manager.platform["visualization"], self.get_topic_names_and_types,
         )
+        self.declare_parameter("scene_directory", "")
+        self.scene_editor = None
+        scene_config = self.manager.platform.get("scene_editor", {"enabled": False})
+        if scene_config["enabled"]:
+            provider = scene_config["provider"]
+            available = importlib.metadata.entry_points(group="embodied_nexus_core.scene_editors")
+            match = next((item for item in available if item.name == provider), None)
+            if match is None:
+                self.visualization.close()
+                raise RuntimeError(f"scene editor provider is not installed: {provider}")
+            try:
+                editor_class = match.load()
+                self.scene_editor = editor_class(
+                    self.get_parameter("scene_directory").value, ros_node=self)
+            except Exception:
+                self.visualization.close()
+                raise
         if self.visualization.enabled and not self.visualization.ready():
             self.get_logger().warning(self.visualization.info()["error"])
         token = os.environ.get(str(core["auth_token_env"]), "")
         if not token or not re.fullmatch(r"[A-Za-z0-9._~-]+", token):
             self.visualization.close()
             raise RuntimeError(f"set {core['auth_token_env']} before starting the core")
-        self.app = create_app(self.manager, token, self.visualization)
+        self.app = create_app(self.manager, token, self.visualization, self.scene_editor)
         web_options = {
             "host": str(core["bind_host"]),
             "port": int(core["port"]),

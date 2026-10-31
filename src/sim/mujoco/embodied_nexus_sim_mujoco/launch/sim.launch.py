@@ -27,6 +27,10 @@ def _setup(context):
     description_share = Path(get_package_share_directory("embodied_nexus_sim_description"))
     camera_share = Path(get_package_share_directory("embodied_nexus_camera"))
     package_share = Path(get_package_share_directory("embodied_nexus_sim_mujoco"))
+    scene = LaunchConfiguration("scene").perform(context).strip()
+    scene_directory = LaunchConfiguration("scene_directory").perform(context).strip()
+    if not scene_directory:
+        scene_directory = str(package_share / "config" / "scenes")
     camera_calibration = load_camera_calibration(description_share, camera_share)
     from xacro import process_file
 
@@ -39,7 +43,8 @@ def _setup(context):
     simulation = Node(
         package="embodied_nexus_sim_mujoco", executable="mujoco_sim", name="mujoco",
         namespace="/sim/arachne", output="screen",
-        parameters=[{"gui": LaunchConfiguration("gui"), "use_sim_time": True}],
+        parameters=[{"gui": LaunchConfiguration("gui"), "scene": scene,
+                     "scene_directory": scene_directory, "use_sim_time": True}],
     )
     state_publisher = Node(
         package="robot_state_publisher", executable="robot_state_publisher",
@@ -55,7 +60,7 @@ def _setup(context):
         core = Node(
             package="embodied_nexus_core", executable="nexus_core", name="nexus_core_sim",
             arguments=["--config", platform_path], output="screen",
-            parameters=[{"use_sim_time": True}],
+            parameters=[{"use_sim_time": True, "scene_directory": scene_directory}],
         )
         actions.append(TimerAction(period=4.0, actions=[core]))
     return actions
@@ -72,6 +77,8 @@ def generate_launch_description():
     """
     return LaunchDescription([
         DeclareLaunchArgument("gui", default_value="false"),
+        DeclareLaunchArgument("scene", default_value="default"),
+        DeclareLaunchArgument("scene_directory", default_value=""),
         DeclareLaunchArgument("start_core", default_value="true"),
         DeclareLaunchArgument("core_token", default_value=EnvironmentVariable(
             "EMBODIED_NEXUS_CORE_TOKEN", default_value="sim-local-token-change-me")),

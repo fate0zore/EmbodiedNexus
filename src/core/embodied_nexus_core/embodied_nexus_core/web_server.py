@@ -39,13 +39,15 @@ def _authorized(request: StarletteRequest, token: str) -> bool:
     return hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {token}")
 
 
-def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette:
+def create_app(manager: Any, token: str, visualization: Any = None,
+               scene_editor: Any = None) -> Starlette:
     """创建app。
 
     Args:
         manager: manager，作为创建app所需的输入。 类型为 Any。
         token: 用于身份验证的访问令牌。 类型为 str。
         visualization: visualization，作为创建app所需的输入。 类型为 Any。
+        scene_editor: Optional scene library provider for the authenticated scene editor.
 
     Returns:
         构造或创建完成的对象或资源。 返回类型为 Starlette。
@@ -75,7 +77,9 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
         """
         if denied := await auth(request):
             return denied
-        return JSONResponse(await asyncio.to_thread(manager.status))
+        payload = await asyncio.to_thread(manager.status)
+        payload["scene_editor"] = {"enabled": scene_editor is not None}
+        return JSONResponse(payload)
 
     async def devices(request: StarletteRequest):
         """设备列表当前设备或操作。
@@ -175,6 +179,176 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
                             headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
         except (ImportError, FileNotFoundError, ValueError, OSError):
             return JSONResponse({"error": "model resource not found"}, status_code=404)
+
+    async def scene_list(request: StarletteRequest):
+        """Return saved scene summaries to an authenticated browser client.
+
+        Args:
+            request: Incoming Starlette request.
+
+        Returns:
+            JSON scene summaries, or an authorization or unavailable response.
+        """
+        if denied := await auth(request):
+            return denied
+        if scene_editor is None:
+            return JSONResponse({"error": "scene editor is not enabled"}, status_code=404)
+        return JSONResponse({"scenes": await asyncio.to_thread(scene_editor.list_scenes)})
+
+    async def scene_robot_description(request: StarletteRequest):
+        """Return the robot URDF used by the MuJoCo preview.
+
+        Args:
+            request: Incoming Starlette request.
+
+        Returns:
+            The calibrated URDF XML, or an authorization or unavailable response.
+        """
+        if denied := await auth(request):
+            return denied
+        if scene_editor is None:
+            return JSONResponse({"error": "scene editor is not enabled"}, status_code=404)
+        return Response(await asyncio.to_thread(scene_editor.robot_model), media_type="application/xml",
+                        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+    async def scene_get(request: StarletteRequest):
+        """Load one named scene for the browser editor.
+
+        Args:
+            request: Incoming Starlette request.
+
+        Returns:
+            The requested scene mapping or a JSON error response.
+        """
+        if denied := await auth(request):
+            return denied
+        if scene_editor is None:
+            return JSONResponse({"error": "scene editor is not enabled"}, status_code=404)
+        try:
+            scene = await asyncio.to_thread(scene_editor.get_scene, request.path_params["scene_id"])
+            return JSONResponse(scene)
+        except FileNotFoundError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+    async def scene_validate(request: StarletteRequest):
+        """Validate scene YAML structure and compile the corresponding MJCF.
+
+        Args:
+            request: Incoming Starlette request containing a scene JSON mapping.
+
+        Returns:
+            A validation result, or a JSON error response.
+        """
+        if denied := await auth(request):
+            return denied
+        if scene_editor is None:
+            return JSONResponse({"error": "scene editor is not enabled"}, status_code=404)
+        try:
+            body = await request.json()
+            result = await asyncio.to_thread(
+                scene_editor.validate_scene, request.path_params["scene_id"], body,
+            )
+            return JSONResponse(result)
+        except Exception as exc:
+            return JSONResponse({"valid": False, "error": str(exc)}, status_code=400)
+
+    async def scene_save(request: StarletteRequest):
+        """Validate and atomically save one named scene.
+
+        Args:
+            request: Incoming Starlette request containing a scene JSON mapping.
+
+        Returns:
+            The saved scene summary, or a JSON error response.
+        """
+        if denied := await auth(request):
+            return denied
+        if scene_editor is None:
+            return JSONResponse({"error": "scene editor is not enabled"}, status_code=404)
+        try:
+            body = await request.json()
+            result = await asyncio.to_thread(
+                scene_editor.save_scene, request.path_params["scene_id"], body,
+            )
+            return JSONResponse(result)
+        except Exception as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+    async def scene_apply(request: StarletteRequest):
+        """Validate and save a scene draft, then apply it in the running simulator.
+
+        Args:
+            request: Authenticated request containing the current scene draft.
+
+        Returns:
+            Saved and applied scene status, or a JSON error response.
+        """
+        if denied := await auth(request):
+            return denied
+        if scene_editor is None:
+            return JSONResponse({"error": "scene editor is not enabled"}, status_code=404)
+        try:
+            body = await request.json()
+            result = await asyncio.to_thread(
+                scene_editor.save_and_apply_scene, request.path_params["scene_id"], body,
+            )
+            return JSONResponse(result, status_code=200 if result["applied"] else 503)
+        except Exception as exc:
+            return JSONResponse(
+                {"saved": False, "applied": False, "error": str(exc)}, status_code=400)
+
+    async def scene_delete(request: StarletteRequest):
+        """Delete a named scene through the scene library provider.
+
+        Args:
+            request: Incoming Starlette request naming the scene to delete.
+
+        Returns:
+            An empty success response or a JSON error response.
+        """
+        if denied := await auth(request):
+            return denied
+        if scene_editor is None:
+            return JSONResponse({"error": "scene editor is not enabled"}, status_code=404)
+        try:
+            await asyncio.to_thread(scene_editor.delete_scene, request.path_params["scene_id"])
+            return Response(status_code=204)
+        except FileNotFoundError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+    async def scene_asset(request: StarletteRequest):
+        """Upload or read a scene-owned STL or OBJ asset.
+
+        Args:
+            request: Incoming Starlette request containing an asset name and optional bytes.
+
+        Returns:
+            Asset metadata or bytes, or a JSON error response.
+        """
+        if denied := await auth(request):
+            return denied
+        if scene_editor is None:
+            return JSONResponse({"error": "scene editor is not enabled"}, status_code=404)
+        scene_id, filename = request.path_params["scene_id"], request.path_params["filename"]
+        try:
+            if request.method == "PUT":
+                contents = await request.body()
+                if len(contents) > 100 * 1024 * 1024:
+                    return JSONResponse({"error": "mesh upload exceeds 100 MiB"}, status_code=413)
+                result = await asyncio.to_thread(scene_editor.upload_asset, scene_id, filename, contents)
+                return JSONResponse(result)
+            contents, extension = await asyncio.to_thread(scene_editor.read_asset, scene_id, filename)
+            mime = "model/stl" if extension == ".stl" else "text/plain; charset=utf-8"
+            return Response(contents, media_type=mime, headers={"Cache-Control": "no-store",
+                                                                 "X-Content-Type-Options": "nosniff"})
+        except FileNotFoundError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
+        except (ValueError, OSError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
 
     async def visualization_ws(websocket: WebSocket):
         """执行 visualization_ws 对应的处理流程。
@@ -526,6 +700,15 @@ def create_app(manager: Any, token: str, visualization: Any = None) -> Starlette
                 pass
 
     routes = [
+        Route("/api/v1/core/scenes", scene_list, methods=["GET"]),
+        Route("/api/v1/core/scenes/robot-description", scene_robot_description, methods=["GET"]),
+        Route("/api/v1/core/scenes/{scene_id:str}/assets/{filename:str}", scene_asset,
+              methods=["GET", "PUT"]),
+        Route("/api/v1/core/scenes/{scene_id:str}/validate", scene_validate, methods=["POST"]),
+        Route("/api/v1/core/scenes/{scene_id:str}/apply", scene_apply, methods=["POST"]),
+        Route("/api/v1/core/scenes/{scene_id:str}", scene_get, methods=["GET"]),
+        Route("/api/v1/core/scenes/{scene_id:str}", scene_save, methods=["PUT"]),
+        Route("/api/v1/core/scenes/{scene_id:str}", scene_delete, methods=["DELETE"]),
         Route("/api/v1/core/visualization", visualization_info, methods=["GET"]),
         Route("/api/v1/core/visualization/resources/{package:str}/{path:path}", visualization_resource,
               methods=["GET"]),

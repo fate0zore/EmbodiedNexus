@@ -1,0 +1,6 @@
+string scene_id
+---
+bool success
+string message
+uint32 body_count
+uint32 geom_count

@@ -53,6 +53,29 @@ bash scripts/services.sh stop --mode sim --simulator mujoco -all
 
 Windows 下对应命令为 `.\scripts\services.ps1 stop --mode sim --simulator mujoco -all`。Core 默认地址为 `http://127.0.0.1:8780`；启动日志和进程记录位于 `${XDG_STATE_HOME:-~/.local/state}/embodied-nexus/`。
 
+## 场景配置与图形编辑
+
+Core 启动后，在 `http://127.0.0.1:8780/` 使用相同 Core token 登录，再打开“MuJoCo 场景编辑器”。编辑器入口仅在 MuJoCo 平台配置中启用。场景以 YAML 保存到 `src/sim/mujoco/embodied_nexus_sim_mujoco/config/scenes/`；上传的 STL/OBJ 文件保存在对应的 `assets/<scene-id>/` 子目录，可与 YAML 一起提交到 Git。
+
+默认场景由 `config/scenes/default.yaml` 管理，机器人仍从共享 Arachne URDF 加载。场景物体可使用 `box`、`sphere`、`cylinder` 或导入网格，并配置位置、姿态、颜色和静态/动态属性。盒子的 `size` 是完整 X/Y/Z 尺寸；球和圆柱使用 `radius`，圆柱另有完整 `height`。动态物体须给出正数 `mass_kg`。配置中的姿态 `rotation` 使用弧度；编辑器属性面板以度显示并在保存时换算。动态导入网格使用 MuJoCo 网格碰撞近似。
+
+从仓库根目录按场景启动：
+
+```powershell
+.\scripts\services.ps1 start --mode sim --simulator mujoco --scene default -all
+```
+
+`--scene` 接受 YAML 文件名对应的场景 ID。编辑器预览不会修改运行场景。点击“应用场景”会校验并保存当前草稿，再请求运行中的 MuJoCo 节点重新编译并切换模型；MuJoCo 与 ROS 节点进程、仿真时间和机器人位姿保持不变，场景动态物体回到 YAML 中的初始位姿，进行中的底盘、机械臂和夹爪运动命令会清除。Viewer 绑定创建时的模型，热更新期间窗口会短暂关闭并重新打开。校验失败不会覆盖 YAML；若运行时服务不可达或应用失败，YAML 已保存，原运行模型继续工作。不使用图形编辑器时，也可以停止并用新场景重新启动：
+
+```powershell
+.\scripts\services.ps1 stop --mode sim --simulator mujoco -all
+.\scripts\services.ps1 start --mode sim --simulator mujoco --scene lab-a --gui -all
+```
+
+直接使用 ROS launch 时可指定 `scene:=lab-a`；如需让 Core 编辑器保存回仓库而不是安装目录，传入 `scene_directory:=<仓库>/src/sim/mujoco/embodied_nexus_sim_mujoco/config/scenes`。服务脚本会自动将该仓库目录同时传给 MuJoCo 和 Core。
+
+Core 的认证 REST API 位于 `/api/v1/core/scenes`：`GET` 列表，`GET /{id}` 读取，`POST /{id}/validate` 校验，`PUT /{id}` 校验后原子保存，`POST /{id}/apply` 校验、保存并热应用当前草稿，`DELETE /{id}` 删除；`PUT/GET /{id}/assets/{filename}` 上传或读取场景内 STL/OBJ。所有接口使用 Core `Authorization: Bearer <token>`。Core 通过 `embodied_nexus_sim_mujoco_interfaces/srv/ApplyScene` 将应用请求转发给 MuJoCo 节点；当前机器人碰撞几何仍关闭接触响应，本期场景动态物体只与地面及其他场景物体交互。
+
 ## 模型范围
 
 - 底盘按命令速度更新里程计和模型根位姿；轮子关节同步响应，但底盘运动为运动学更新。

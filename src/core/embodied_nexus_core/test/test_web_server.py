@@ -300,6 +300,165 @@ class CoreGatewayTests(unittest.TestCase):
         except urllib.error.HTTPError as exc:
             return exc
 
+    def test_scene_editor_routes_require_auth_and_support_scene_and_asset_operations(self):
+        """Protect the scene editor API and forward CRUD and mesh operations.
+
+        Returns:
+            None.
+        """
+        class SceneEditor:
+            """Small scene provider fake for Core route tests."""
+
+            def __init__(self):
+                """Initialize in-memory scene and asset records.
+
+                Args:
+                    None.
+
+                Returns:
+                    None.
+                """
+                self.scenes = {"default": {"name": "Default", "objects": []}}
+                self.assets = {}
+
+            def list_scenes(self):
+                """Return saved scene summaries.
+
+                Args:
+                    None.
+
+                Returns:
+                    Scene identifier and display name pairs.
+                """
+                return [{"id": key, "name": value["name"]} for key, value in self.scenes.items()]
+
+            def get_scene(self, scene_id):
+                """Return one scene mapping.
+
+                Args:
+                    scene_id: Stable scene identifier.
+
+                Returns:
+                    A copied scene mapping.
+                """
+                if scene_id not in self.scenes:
+                    raise FileNotFoundError(scene_id)
+                return dict(self.scenes[scene_id])
+
+            def validate_scene(self, scene_id, scene):
+                """Reject invalid candidates and return compilation metadata.
+
+                Args:
+                    scene_id: Stable scene identifier.
+                    scene: Candidate scene mapping.
+
+                Returns:
+                    A compilation summary.
+                """
+                if scene.get("name") == "Invalid":
+                    raise ValueError("invalid scene")
+                return {"valid": True, "body_count": 3, "geom_count": 4}
+
+            def save_scene(self, scene_id, scene):
+                """Validate and retain a scene mapping.
+
+                Args:
+                    scene_id: Stable scene identifier.
+                    scene: Candidate scene mapping.
+
+                Returns:
+                    The saved scene summary.
+                """
+                self.validate_scene(scene_id, scene)
+                self.scenes[scene_id] = dict(scene)
+                return {"id": scene_id, "name": scene["name"]}
+
+            def delete_scene(self, scene_id):
+                """Delete one saved scene.
+
+                Args:
+                    scene_id: Stable scene identifier.
+
+                Returns:
+                    None.
+                """
+                if scene_id == "default":
+                    raise ValueError("default scene cannot be deleted")
+                if scene_id not in self.scenes:
+                    raise FileNotFoundError(scene_id)
+                del self.scenes[scene_id]
+
+            def upload_asset(self, scene_id, filename, contents):
+                """Retain raw uploaded mesh bytes.
+
+                Args:
+                    scene_id: Stable scene identifier.
+                    filename: Asset basename.
+                    contents: Raw asset bytes.
+
+                Returns:
+                    A scene-relative asset path.
+                """
+                self.assets[(scene_id, filename)] = contents
+                return {"path": f"assets/{scene_id}/{filename}"}
+
+            def read_asset(self, scene_id, filename):
+                """Return stored mesh bytes and format.
+
+                Args:
+                    scene_id: Stable scene identifier.
+                    filename: Asset basename.
+
+                Returns:
+                    Raw bytes and lowercase extension.
+                """
+                return self.assets[(scene_id, filename)], ".obj"
+
+            def robot_model(self):
+                """Return a small URDF document for preview route testing.
+
+                Args:
+                    None.
+
+                Returns:
+                    URDF XML string.
+                """
+                return "<robot name='test'/>"
+
+        provider = SceneEditor()
+        server = _Server(create_app(self.manager, "core-secret", scene_editor=provider))
+        self.addCleanup(server.close)
+        base = f"http://127.0.0.1:{server.port}/api/v1/core/scenes"
+        with self.assertRaises(urllib.error.HTTPError) as unauthorized:
+            urllib.request.urlopen(base)
+        self.assertEqual(unauthorized.exception.code, 401)
+
+        editor_list_request = urllib.request.Request(base, headers={"Authorization": "Bearer core-secret"})
+        self.assertEqual(json.loads(urllib.request.urlopen(editor_list_request).read())["scenes"][0]["id"], "default")
+        status_request = urllib.request.Request(f"http://127.0.0.1:{server.port}/api/v1/core/status",
+                                                headers={"Authorization": "Bearer core-secret"})
+        self.assertTrue(json.loads(urllib.request.urlopen(status_request).read())["scene_editor"]["enabled"])
+
+        editor_request = urllib.request.Request(f"{base}/room-a", data=json.dumps({"name": "Room A", "objects": []}).encode(),
+                                                method="PUT", headers={"Authorization": "Bearer core-secret", "Content-Type": "application/json"})
+        self.assertEqual(json.loads(urllib.request.urlopen(editor_request).read())["id"], "room-a")
+        validate = urllib.request.Request(f"{base}/room-a/validate", data=json.dumps({"name": "Room A", "objects": []}).encode(),
+                                          method="POST", headers={"Authorization": "Bearer core-secret", "Content-Type": "application/json"})
+        self.assertTrue(json.loads(urllib.request.urlopen(validate).read())["valid"])
+        invalid = urllib.request.Request(f"{base}/room-a/validate", data=json.dumps({"name": "Invalid"}).encode(),
+                                         method="POST", headers={"Authorization": "Bearer core-secret", "Content-Type": "application/json"})
+        with self.assertRaises(urllib.error.HTTPError) as invalid_response:
+            urllib.request.urlopen(invalid)
+        self.assertEqual(invalid_response.exception.code, 400)
+
+        upload = urllib.request.Request(f"{base}/room-a/assets/table.obj", data=b"v 0 0 0\n", method="PUT",
+                                        headers={"Authorization": "Bearer core-secret"})
+        self.assertEqual(json.loads(urllib.request.urlopen(upload).read())["path"], "assets/room-a/table.obj")
+        download = urllib.request.Request(f"{base}/room-a/assets/table.obj", headers={"Authorization": "Bearer core-secret"})
+        self.assertEqual(urllib.request.urlopen(download).read(), b"v 0 0 0\n")
+        delete = urllib.request.Request(f"{base}/room-a", method="DELETE", headers={"Authorization": "Bearer core-secret"})
+        self.assertEqual(urllib.request.urlopen(delete).status, 204)
+
     def test_core_auth_and_http_proxy_preserve_device_body_and_query(self):
         """验证coreauth和httpproxypreserve设备请求体和查询。
 

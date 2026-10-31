@@ -273,6 +273,8 @@
  */
   function renderStatus(status) {
     latestStatus = status;
+    const sceneEditorLink = byId("scene-editor-link");
+    if (sceneEditorLink) sceneEditorLink.hidden = status.scene_editor?.enabled !== true;
     setConnection(true, "Core 在线");
     if (notice.textContent.startsWith("正在连接 Core") ||
         notice.textContent.startsWith("读取 Core 状态失败")) setNotice("");
