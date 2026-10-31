@@ -34,6 +34,7 @@ window.addEventListener("error", (event) => { if (event.error) showRuntimeError(
 window.addEventListener("unhandledrejection", (event) => showRuntimeError(event.reason));
 const TOKEN_KEY = "embodiedNexusCoreToken";
 const apiUrl = "/api/v1/core/visualization";
+const diagnosticsEnabled = new URLSearchParams(location.search).get("diagnostics") === "1";
 const token = localStorage.getItem(TOKEN_KEY) || "";
 const topicSelectors = {
   description: $("description-topic"), cloud: $("cloud-topic"), cameraCloud: $("camera-cloud-topic"), scan: $("scan-topic"),
@@ -48,8 +49,7 @@ const latest = new Map();
 const topicStats = new Map();
 const fallbackDecoder = new Decoder({ useRecords: false, mapsAsObjects: true });
 let decoderWorker = null;
-try { decoderWorker = new Worker(new URL("./cbor-worker.js", import.meta.url), { type: "module" }); }
-catch { /* decode sensor data on the main thread if workers are unavailable */ }
+let sensorGeneration = 0;
 let topics = [];
 let resourcePackages = [];
 let explicitQos = false;
@@ -69,6 +69,7 @@ let depthRange = 6;
 let lastClock = 0;
 const staticTf = new Map();
 const dynamicTf = new Map();
+const jointSamples = [];
 const observedSensorFrames = new Set();
 const transformCache = new Map();
 const preparedData = new Map();
@@ -77,7 +78,11 @@ let frameSignature = "";
 let tfDirty = false;
 let renderFrameId = 0;
 let lastRenderTime = Number.NEGATIVE_INFINITY;
-const renderIntervalMs = 1000 / 30;
+let renderedFrameCount = 0;
+let renderedFps = 0;
+let fpsWindowStartedAt = performance.now();
+const renderIntervalMs = 1000 / 25;
+const jointInterpolationDelayMs = 1000 / 30;
 
 /**
  * 请求渲染下一帧三维场景。
@@ -96,8 +101,8 @@ let renderer = null;
 let controls = null;
 let rendererError = "";
 try {
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+  renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: "default" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.0));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.setAttribute("aria-label", "ROS 3D 可视化场景");
   $("three-canvas").prepend(renderer.domElement);
@@ -243,7 +248,9 @@ function populateTopics(preset, applyPreset = false) {
 function optionsFor(topic) {
   const base = { op: "subscribe", topic: topic.name, type: topic.type, compression: "cbor", queue_length: 1 };
   const options = topic.type === "tf2_msgs/msg/TFMessage"
-    ? { ...base, queue_length: 10, throttle_rate: topic.name === "/tf_static" ? 0 : 100 }
+    ? { ...base, queue_length: 10, throttle_rate: topic.name === "/tf_static" ? 0 : 50 }
+    : topic.type === "sensor_msgs/msg/JointState"
+      ? { ...base, throttle_rate: 33 }
     : { ...base, throttle_rate: topic.type === "std_msgs/msg/String" ? 0 : 200 };
   if (explicitQos) {
     if (topic.type === "tf2_msgs/msg/TFMessage") {
@@ -356,6 +363,8 @@ function setSelectedTopic(key, value) {
 function disconnect() {
   clearTimeout(reconnectTimer); clearTimeout(wsConnectTimer);
   reconnectTimer = null;
+  sensorGeneration += 1;
+  decoderWorker?.postMessage({ op: "reset", generation: sensorGeneration });
   for (const socket of [ws, sensorWs]) if (socket) {
     socket.onopen = socket.onmessage = socket.onclose = socket.onerror = null;
     socket.close();
@@ -396,7 +405,7 @@ function connect() {
   wsConnectTimer = window.setTimeout(() => {
     if ([ws, sensorWs].some((socket) => socket?.readyState !== WebSocket.OPEN)) connectionClosed();
   }, 8000);
-  staticTf.clear(); dynamicTf.clear(); transformCache.clear(); lastClock = 0; tfDirty = true;
+  staticTf.clear(); dynamicTf.clear(); transformCache.clear(); jointSamples.length = 0; lastClock = 0; tfDirty = true;
   for (const kind of ["lidar", "camera"]) setPointLayerStale(geometryObjects.get(kind), true);
   removeGeometry("scan");
   for (const [key, select] of Object.entries(topicSelectors)) latest.set(`selected-${key}`, select.value);
@@ -416,10 +425,17 @@ function connect() {
     socket.onmessage = ({ data }) => {
       if (document.hidden || pageLeaving) return;
       if (typeof data === "string") {
-        try { handleRosMessage(JSON.parse(data)); } catch (error) { showRuntimeError(error); }
-      } else if (socket === sensorWs && decoderWorker) decoderWorker.postMessage(data, [data]);
+        const receivedAt = socket === sensorWs ? performance.now() : null;
+        try { handleRosMessage(JSON.parse(data), null, receivedAt); }
+        catch (error) { showRuntimeError(error); }
+      } else if (socket === sensorWs && decoderWorker) {
+        decoderWorker.postMessage({
+          op: "frame", generation: sensorGeneration, receivedAt: performance.now(), frame: data,
+        }, [data]);
+      }
       else {
-        try { handleRosMessage(decodeCborFrame(fallbackDecoder, data)); }
+        const receivedAt = socket === sensorWs ? performance.now() : null;
+        try { handleRosMessage(decodeCborFrame(fallbackDecoder, data), null, receivedAt); }
         catch (error) { showRuntimeError(error); }
       }
     };
@@ -428,18 +444,44 @@ function connect() {
   }
 }
 
-if (decoderWorker) {
-  decoderWorker.onmessage = ({ data }) => {
-    if (document.hidden || pageLeaving) return;
-    if (data.ok) handleRosMessage(data.message, data.prepared);
-    else showRuntimeError(`CBOR 解码失败：${data.error}`);
-  };
-  decoderWorker.onerror = () => {
-    decoderWorker.terminate();
-    decoderWorker = null;
-    $("scene-message").textContent = "CBOR Worker 不可用，已切换主线程解码";
-  };
+/**
+ * 创建传感器解码 Worker，并拒绝旧连接代次返回的结果。
+ * @returns {void} 无返回值；Worker 不可用时保留主线程解码路径。
+ */
+function createDecoderWorker() {
+  if (decoderWorker || typeof Worker === "undefined") return;
+  try {
+    const worker = new Worker(new URL("./cbor-worker.js", import.meta.url), { type: "module" });
+    worker.onmessage = ({ data }) => {
+      if (data.generation !== sensorGeneration || document.hidden || pageLeaving) return;
+      if (data.ok) handleRosMessage(data.message, data.prepared, data.receivedAt);
+      else showRuntimeError(`CBOR 解码失败：${data.error}`);
+    };
+    worker.onerror = () => {
+      if (decoderWorker !== worker) return;
+      worker.terminate();
+      decoderWorker = null;
+      $("scene-message").textContent = "CBOR Worker 不可用，已切换主线程解码";
+    };
+    decoderWorker = worker;
+    worker.postMessage({ op: "reset", generation: sensorGeneration });
+    worker.postMessage({ op: "configure", maxPoints, depthRange });
+  } catch { /* decode sensor data on the main thread if workers are unavailable */ }
 }
+
+/**
+ * 终止传感器解码 Worker，丢弃页面隐藏期间排队的传感器帧。
+ * @returns {void} 无返回值；已创建的 Worker 会被终止并清空引用。
+ */
+function stopDecoderWorker() {
+  if (!decoderWorker) return;
+  decoderWorker.onmessage = null;
+  decoderWorker.onerror = null;
+  decoderWorker.terminate();
+  decoderWorker = null;
+}
+
+createDecoderWorker();
 
 /**
  * 向数据解码工作线程发送当前配置。
@@ -469,6 +511,7 @@ function updateTf(message, isStatic) {
     const stamp = stampSeconds(entry.header?.stamp);
     if (!isStatic && stamp && lastClock && stamp < lastClock - 1) {
       dynamicTf.clear();
+      jointSamples.length = 0;
       lastClock = stamp;
     } else if (!isStatic && stamp) lastClock = Math.max(lastClock, stamp);
     const item = { parent, child, stamp, static: isStatic,
@@ -649,6 +692,7 @@ function loadRobotDescription(xml) {
     robot.visible = $("model-toggle").checked;
     $("model-state").textContent = "URDF 已解析，等待 TF";
     controls?.target.set(0, 0, 0.45);
+    applyJointPose(performance.now() - jointInterpolationDelayMs);
     updateModelPose();
     requestRender();
   } catch (error) {
@@ -749,11 +793,50 @@ async function loadAuthorizedMesh(path, manager, done) {
  * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
  */
 function updateJoints(message) {
-  if (!currentModel) return;
   const positions = Object.fromEntries((message.name || []).map((name, index) => [name, message.position?.[index]]));
-  let changed = false;
-  for (const [name, position] of Object.entries(positions)) if (Number.isFinite(position)) changed = currentModel.setJointValue(name, position) || changed;
-  if (changed) requestRender();
+  const stampValue = message.header?.stamp;
+  const stamp = stampValue && (stampValue.sec !== undefined || stampValue.nanosec !== undefined)
+    ? stampSeconds(stampValue) : null;
+  const previous = jointSamples.at(-1);
+  if (stamp !== null && previous?.stamp !== null && previous?.stamp !== undefined && stamp < previous.stamp) {
+    jointSamples.length = 0;
+  }
+  jointSamples.push({ positions, stamp, receivedAt: performance.now() });
+  if (jointSamples.length > 2) jointSamples.shift();
+  if (!currentModel) return;
+  requestRender();
+}
+
+/**
+ * 按浏览器接收时间插值显示最近两帧关节状态，不对最新状态外推。
+ * @param {number} displayTime - 需要显示的浏览器单调时钟时间戳。
+ * @returns {boolean} 显示时间是否仍早于最新关节帧，因而还需要动画帧。
+ */
+function applyJointPose(displayTime) {
+  if (!currentModel || !jointSamples.length) return false;
+  let before = jointSamples[0];
+  let after = before;
+  if (jointSamples.length > 1) {
+    after = jointSamples[1];
+    if (displayTime >= after.receivedAt) before = after;
+    else if (displayTime > before.receivedAt) {
+      const ratio = (displayTime - before.receivedAt) / (after.receivedAt - before.receivedAt);
+      const names = new Set([...Object.keys(before.positions), ...Object.keys(after.positions)]);
+      for (const name of names) {
+        const start = before.positions[name];
+        const end = after.positions[name];
+        const position = Number.isFinite(start) && Number.isFinite(end)
+          ? start + (end - start) * ratio
+          : Number.isFinite(end) ? end : start;
+        if (Number.isFinite(position)) currentModel.setJointValue(name, position);
+      }
+      return displayTime < after.receivedAt;
+    }
+  }
+  for (const [name, position] of Object.entries(before.positions)) {
+    if (Number.isFinite(position)) currentModel.setJointValue(name, position);
+  }
+  return jointSamples.length > 1 && displayTime < jointSamples[1].receivedAt;
 }
 
 /**
@@ -863,15 +946,17 @@ function showImage(canvas, message, stateId, converted = imagePixels(message, de
  * 根据 ROS 消息类型分发传感器数据处理。
  * @param {*} message - 要发送或处理的消息内容。
  * @param {*} prepared - 工作线程预先处理好的消息数据。
+ * @param {number | null} receivedAt - 浏览器收到传感器帧时的单调时钟时间戳。
  * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
  */
-function handleRosMessage(message, prepared = null) {
+function handleRosMessage(message, prepared = null, receivedAt = null) {
   if (message.op === "core_error") { $("scene-message").textContent = message.error || "ROS subscription error"; return; }
   if (message.op !== "publish") return;
   const topic = message.topic, payload = message.msg || {};
   if (!selection.has(topic)) return;
   const stat = topicStats.get(topic) || { count: 0, last: 0 };
   stat.count++; stat.last = Date.now(); topicStats.set(topic, stat);
+  if (isSensorTopic(topic) && Number.isFinite(receivedAt)) stat.sensorReceivedAt = receivedAt;
   latest.set(topic, payload);
   if (prepared) preparedData.set(topic, prepared);
   else preparedData.delete(topic);
@@ -896,6 +981,11 @@ function flushSensors() {
     if (topic === topicSelectors.scan.value) handleScan(message);
     if (topic === topicSelectors.rgb.value) showImage($("rgb-image"), message, "rgb-state", prepared);
     if (topic === topicSelectors.depth.value) showImage($("depth-image"), message, "depth-state", prepared);
+    const stat = topicStats.get(topic);
+    if (diagnosticsEnabled && Number.isFinite(stat?.sensorReceivedAt)) {
+      stat.sensorRenderLatencyMs = Math.max(0, performance.now() - stat.sensorReceivedAt);
+      stat.sensorReceivedAt = null;
+    }
   }
   pendingSensors.clear();
 }
@@ -909,8 +999,12 @@ function updateStatusPanel() {
   const rows = active.map((name) => {
     const stat = topicStats.get(name);
     const age = stat ? `${Math.max(0, Date.now() - stat.last)} ms` : "等待第一帧";
-    return `<p><span>${escapeHtml(name.split("/").filter(Boolean).at(-1) || name)}</span><b>${stat ? `${stat.count} 帧 · ${age}` : age}</b></p>`;
+    const frameAge = stat ? `${stat.count} 帧 · ${age}` : age;
+    const renderDelay = diagnosticsEnabled && Number.isFinite(stat?.sensorRenderLatencyMs)
+      ? ` · 到显示处理 ${stat.sensorRenderLatencyMs.toFixed(0)} ms` : "";
+    return `<p><span>${escapeHtml(name.split("/").filter(Boolean).at(-1) || name)}</span><b>${frameAge}${renderDelay}</b></p>`;
   });
+  if (diagnosticsEnabled) rows.unshift(`<p><span>3D 渲染</span><b>${renderedFps.toFixed(1)} FPS / 25</b></p>`);
   if ([ws, sensorWs].some((socket) => socket?.readyState !== WebSocket.OPEN)) rows.unshift("<p class=\"status-error\">ROS bridge 未连接</p>");
   if (!currentModel) rows.unshift("<p><span>机器人模型</span><b>等待 URDF</b></p>");
   $("data-status").innerHTML = rows.join("") || "<p>请选择需要查看的 ROS 话题。</p>";
@@ -995,9 +1089,20 @@ function animate(timestamp) {
     tfDirty = false;
     refreshFrameOptions(); updateModelPose(); updateFrameAxes(); refreshPausedLayers();
   }
+  const jointsAnimating = applyJointPose(timestamp - jointInterpolationDelayMs);
   flushSensors();
   controls?.update();
   renderer?.render(scene, camera);
+  if (renderer) {
+    renderedFrameCount += 1;
+    const fpsWindowMs = timestamp - fpsWindowStartedAt;
+    if (fpsWindowMs >= 1000) {
+      renderedFps = renderedFrameCount * 1000 / fpsWindowMs;
+      renderedFrameCount = 0;
+      fpsWindowStartedAt = timestamp;
+    }
+  }
+  if (jointsAnimating) requestRender();
 }
 
 /**
@@ -1046,6 +1151,7 @@ async function refresh() {
       const previousJoint = latest.get("subscribed-joints") || "";
       const selectedJoint = latest.get("selected-joints") || "";
       if (previousJoint !== selectedJoint) {
+        jointSamples.length = 0;
         if (previousJoint) unsubscribe(previousJoint);
         if (selectedJoint) subscribe(selectedJoint);
         latest.set("subscribed-joints", selectedJoint);
@@ -1106,12 +1212,21 @@ $("depth-range").addEventListener("input", (event) => {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     disconnect();
+    stopDecoderWorker();
     cancelAnimationFrame(renderFrameId); renderFrameId = 0;
+    renderedFrameCount = 0; renderedFps = 0; fpsWindowStartedAt = performance.now();
     setConnection(false, "页面已隐藏，订阅暂停");
-  } else { refresh(); requestRender(); }
+  } else {
+    renderedFrameCount = 0; renderedFps = 0; fpsWindowStartedAt = performance.now();
+    createDecoderWorker(); refresh(); requestRender();
+  }
 });
-window.addEventListener("pagehide", () => { pageLeaving = true; disconnect(); });
-window.addEventListener("pageshow", () => { pageLeaving = false; if (token) refresh(); requestRender(); });
+window.addEventListener("pagehide", () => { pageLeaving = true; disconnect(); stopDecoderWorker(); });
+window.addEventListener("pageshow", () => {
+  pageLeaving = false;
+  if (token) { createDecoderWorker(); refresh(); }
+  requestRender();
+});
 
 $("viewer-status").classList.remove("is-online");
 $("empty-state").textContent = rendererError || (token ? "正在连接 ROS graph…" : "请先回到 Core 页面登录。");

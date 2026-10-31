@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import copy
 import math
 import subprocess
+import threading
 import time
+from queue import Empty, Full, Queue
 from pathlib import Path
 
 import mujoco
@@ -39,6 +42,7 @@ WHEEL_JOINTS = ("front_left_wheel", "rear_left_wheel",
                 "front_right_wheel", "rear_right_wheel")
 CAMERA_RATE_HZ = 10.0
 LIDAR_RATE_HZ = 10.0
+VIEWER_SYNC_RATE_HZ = 30.0
 LIDAR_RAYS = 360
 
 
@@ -144,7 +148,20 @@ class MujocoSimulation(Node):
         self._renderer = None
         self._renderer_failed = False
         self._camera_reported = False
+        self._lidar_reported = False
+        self._sensor_worker_reported = False
+        self._sensor_publish_reported = False
+        self._sensor_stop = object()
+        self._sensor_inputs: Queue[object] = Queue(maxsize=1)
+        self._sensor_outputs: Queue[object] = Queue(maxsize=1)
+        self._sensor_thread = threading.Thread(
+            target=self._sensor_worker, name="mujoco-sensors", daemon=False)
         self._viewer = None
+        self._viewer_sync_stop = threading.Event()
+        self._viewer_sync_thread: threading.Thread | None = None
+        self._viewer_sync_reported = False
+        self._sensor_publish_thread = threading.Thread(
+            target=self._sensor_publisher_worker, name="mujoco-sensor-publisher", daemon=False)
         self._initialize_publishers()
         self.create_subscription(TwistStamped, f"{SIM_NAMESPACE}/base_controller/cmd_vel",
                                  self._on_base_command, 10)
@@ -154,6 +171,11 @@ class MujocoSimulation(Node):
                                  self._on_gripper_trajectory, 10)
         if self.get_parameter("gui").get_parameter_value().bool_value:
             self._viewer = viewer.launch_passive(self.model, self.data)
+            self._viewer_sync_thread = threading.Thread(
+                target=self._viewer_sync_worker, name="mujoco-viewer-sync", daemon=False)
+            self._viewer_sync_thread.start()
+        self._sensor_thread.start()
+        self._sensor_publish_thread.start()
         self._timer = self.create_timer(0.01, self._tick, clock=Clock(clock_type=ClockType.STEADY_TIME))
         self.get_logger().info(
             f"MuJoCo Arachne scene ready: {self.model.nbody} bodies, "
@@ -293,14 +315,134 @@ class MujocoSimulation(Node):
             if self.data.time - self._last_odom >= 0.05:
                 self._publish_odometry()
                 self._last_odom = self.data.time
-            if self.data.time >= self._next_camera:
-                self._publish_camera()
+            camera_due = self.data.time >= self._next_camera
+            lidar_due = self.data.time >= self._next_lidar
+            if camera_due:
                 self._next_camera = self.data.time + 1.0 / CAMERA_RATE_HZ
-            if self.data.time >= self._next_lidar:
-                self._publish_lidar()
+            if lidar_due:
                 self._next_lidar = self.data.time + 1.0 / LIDAR_RATE_HZ
-            if self._viewer is not None:
-                self._viewer.sync()
+            if camera_due or lidar_due:
+                self._queue_sensor_snapshot()
+    def _viewer_sync_worker(self) -> None:
+        """Synchronize GUI state at a bounded rate outside the ROS timer callback.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        interval = 1.0 / VIEWER_SYNC_RATE_HZ
+        while not self._viewer_sync_stop.wait(interval):
+            viewer_handle = self._viewer
+            if viewer_handle is None:
+                return
+            try:
+                viewer_handle.sync()
+            except Exception as exc:
+                if not self._viewer_sync_reported:
+                    self.get_logger().error(f"MuJoCo viewer synchronization failed: {exc}")
+                    self._viewer_sync_reported = True
+                return
+
+    def _queue_sensor_snapshot(self) -> None:
+        """Copy the current physics state and replace any waiting sensor snapshot.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        snapshot = copy.copy(self.data)
+        self._replace_latest(self._sensor_inputs, (float(snapshot.time), self._base_yaw, snapshot))
+
+    @staticmethod
+    def _replace_latest(target: Queue[object], item: object) -> None:
+        """Store one item in a bounded queue, discarding its older waiting item.
+
+        Args:
+            target: One-item queue to update.
+            item: Newest snapshot or sensor result to retain.
+
+        Returns:
+            None.
+        """
+        while True:
+            try:
+                target.put_nowait(item)
+                return
+            except Full:
+                try:
+                    target.get_nowait()
+                except Empty:
+                    continue
+
+    def _sensor_worker(self) -> None:
+        """Render camera and lidar messages from the latest copied simulation state.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        try:
+            while True:
+                job = self._sensor_inputs.get()
+                if job is self._sensor_stop:
+                    break
+                try:
+                    sim_time, base_yaw, snapshot = job
+                    stamp = _stamp(sim_time)
+                    color, depth, color_info, depth_info = self._render_camera_messages(snapshot, stamp)
+                    try:
+                        lidar = self._build_lidar_message(snapshot, base_yaw, stamp)
+                    except Exception as exc:
+                        lidar = None
+                        if not self._lidar_reported:
+                            self.get_logger().error(f"MuJoCo lidar ray casting failed: {exc}")
+                            self._lidar_reported = True
+                except Exception as exc:
+                    if not self._sensor_worker_reported:
+                        self.get_logger().error(f"MuJoCo sensor processing failed: {exc}")
+                        self._sensor_worker_reported = True
+                    continue
+                self._replace_latest(
+                    self._sensor_outputs, (sim_time, color, depth, color_info, depth_info, lidar))
+        finally:
+            if self._renderer is not None:
+                try:
+                    self._renderer.close()
+                except Exception as exc:
+                    self.get_logger().error(f"MuJoCo camera renderer shutdown failed: {exc}")
+                self._renderer = None
+
+    def _sensor_publisher_worker(self) -> None:
+        """Publish completed sensor frames without blocking the physics timer.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        while True:
+            result = self._sensor_outputs.get()
+            if result is self._sensor_stop:
+                return
+            _, color, depth, color_info, depth_info, lidar = result
+            try:
+                self._color_pub.publish(color)
+                self._depth_pub.publish(depth)
+                self._color_info_pub.publish(color_info)
+                self._depth_info_pub.publish(depth_info)
+                if lidar is not None:
+                    self._lidar_pub.publish(lidar)
+            except Exception as exc:
+                if not self._sensor_publish_reported:
+                    self.get_logger().error(f"MuJoCo sensor message publication failed: {exc}")
+                    self._sensor_publish_reported = True
 
     def _advance(self) -> None:
         """Step the model and apply commanded chassis and joint motion.
@@ -397,16 +539,16 @@ class MujocoSimulation(Node):
         message.twist.twist.linear.x, message.twist.twist.angular.z = self._base_velocity
         self._odom_pub.publish(message)
 
-    def _publish_camera(self) -> None:
-        """Render and publish RGB, depth, and camera calibration messages.
+    def _render_camera_messages(self, data: mujoco.MjData, stamp: Time) -> tuple[Image, Image, CameraInfo, CameraInfo]:
+        """Render an RGB-D frame and build its calibration messages.
 
         Args:
-            None.
+            data: Independent MuJoCo state copied for this sensor frame.
+            stamp: Simulation timestamp copied with the state.
 
         Returns:
-            None.
+            RGB, depth, color calibration, and depth calibration messages.
         """
-        stamp = _stamp(float(self.data.time))
         color_stream = self._camera_calibration["streams"]["color"]
         depth_stream = self._camera_calibration["streams"]["depth"]
         try:
@@ -414,15 +556,19 @@ class MujocoSimulation(Node):
                 self._renderer = mujoco.Renderer(
                     self.model, height=color_stream["height"], width=color_stream["width"])
             self._renderer.disable_depth_rendering()
-            self._renderer.update_scene(self.data, camera="camera_color")
+            self._renderer.update_scene(data, camera="camera_color")
             color = np.asarray(self._renderer.render(), dtype=np.uint8).copy()
             self._renderer.enable_depth_rendering()
-            self._renderer.update_scene(self.data, camera="camera_depth")
+            self._renderer.update_scene(data, camera="camera_depth")
             depth = np.asarray(self._renderer.render(), dtype=np.float32).copy()
         except Exception as exc:
-            if self._renderer is not None:
-                self._renderer.close()
-                self._renderer = None
+            renderer = self._renderer
+            self._renderer = None
+            if renderer is not None:
+                try:
+                    renderer.close()
+                except Exception as close_error:
+                    self.get_logger().error(f"MuJoCo camera renderer close failed: {close_error}")
             if not self._renderer_failed:
                 self.get_logger().error(f"MuJoCo camera rendering failed: {exc}")
                 self._renderer_failed = True
@@ -433,13 +579,12 @@ class MujocoSimulation(Node):
         depth_mm = np.clip(np.nan_to_num(depth * 1000.0, nan=0.0, posinf=0.0), 0, 65535).astype(np.uint16)
         depth_message = self._image(
             stamp, "camera_depth_optical_frame", "16UC1", depth_mm.tobytes(), "depth", 2)
-        self._color_pub.publish(color_message)
-        self._depth_pub.publish(depth_message)
-        self._color_info_pub.publish(self._camera_info(stamp, "camera_color_optical_frame", "color"))
-        self._depth_info_pub.publish(self._camera_info(stamp, "camera_depth_optical_frame", "depth"))
+        color_info = self._camera_info(stamp, "camera_color_optical_frame", "color")
+        depth_info = self._camera_info(stamp, "camera_depth_optical_frame", "depth")
         if not self._camera_reported:
             self.get_logger().info("MuJoCo RGB-D camera topics are publishing")
             self._camera_reported = True
+        return color_message, depth_message, color_info, depth_info
 
     def _image(self, stamp: Time, frame: str, encoding: str, data: bytes,
                channel: str, bytes_per_pixel: int) -> Image:
@@ -492,27 +637,28 @@ class MujocoSimulation(Node):
         message.p = [fx, 0.0, cx, 0.0, 0.0, fy, cy, 0.0, 0.0, 0.0, 1.0, 0.0]
         return message
 
-    def _publish_lidar(self) -> None:
-        """Ray-cast a horizontal 360 degree scan and publish XYZ points.
+    def _build_lidar_message(self, data: mujoco.MjData, base_yaw: float, stamp: Time) -> PointCloud2:
+        """Ray-cast a horizontal scan and build its XYZ point cloud message.
 
         Args:
-            None.
+            data: Independent MuJoCo state copied for this sensor frame.
+            base_yaw: Chassis yaw captured with the state.
+            stamp: Simulation timestamp copied with the state.
 
         Returns:
-            None.
+            The stamped lidar point cloud message.
         """
-        origin = self.data.xpos[self._lidar_body].copy()
+        origin = data.xpos[self._lidar_body].copy()
         hits = []
         geom = np.zeros(1, dtype=np.int32)
         for index in range(LIDAR_RAYS):
-            angle = 2.0 * math.pi * index / LIDAR_RAYS + self._base_yaw
+            angle = 2.0 * math.pi * index / LIDAR_RAYS + base_yaw
             direction = np.array([math.cos(angle), math.sin(angle), 0.0], dtype=np.float64)
-            distance = mujoco.mj_ray(self.model, self.data, origin, direction, None, 1, -1, geom)
+            distance = mujoco.mj_ray(self.model, data, origin, direction, None, 1, -1, geom)
             if 1.0 <= distance <= 18.0:
                 hits.append((origin + distance * direction).tolist())
-        message = point_cloud2.create_cloud_xyz32(
-            header=self._sensor_header(_stamp(float(self.data.time)), "lidar_link"), points=hits)
-        self._lidar_pub.publish(message)
+        return point_cloud2.create_cloud_xyz32(
+            header=self._sensor_header(stamp, "lidar_link"), points=hits)
 
     def _sensor_header(self, stamp: Time, frame: str):
         """Construct the common stamped header used by sensor messages.
@@ -536,12 +682,19 @@ class MujocoSimulation(Node):
         Returns:
             None.
         """
+        if self._sensor_thread.is_alive():
+            self._replace_latest(self._sensor_inputs, self._sensor_stop)
+            self._sensor_thread.join()
+        self._replace_latest(self._sensor_outputs, self._sensor_stop)
+        if self._sensor_publish_thread.is_alive():
+            self._sensor_publish_thread.join()
+        self._viewer_sync_stop.set()
+        if self._viewer_sync_thread is not None:
+            self._viewer_sync_thread.join()
+            self._viewer_sync_thread = None
         if self._viewer is not None:
             self._viewer.close()
             self._viewer = None
-        if self._renderer is not None:
-            self._renderer.close()
-            self._renderer = None
 
 
 class _NullContext:
