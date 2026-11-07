@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import math
 import subprocess
 import threading
@@ -16,7 +17,7 @@ import numpy as np
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from builtin_interfaces.msg import Time
-from geometry_msgs.msg import TwistStamped
+from geometry_msgs.msg import Pose, TwistStamped
 from nav_msgs.msg import Odometry
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
@@ -25,12 +26,15 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profi
 from rosgraph_msgs.msg import Clock as ClockMessage
 from sensor_msgs.msg import CameraInfo, Image, JointState, PointCloud2
 from sensor_msgs_py import point_cloud2
+from std_msgs.msg import Bool, String
 from trajectory_msgs.msg import JointTrajectory
+from embodied_nexus_sim_mujoco_interfaces.msg import SceneObjectStates
 from embodied_nexus_sim_mujoco_interfaces.srv import ApplyScene
 
 from .camera_calibration import apply_camera_calibration, load_camera_calibration
 from .control import COMMAND_TIMEOUT, Trajectory, make_trajectory, wheel_speeds
 from .model import make_scene
+from .fin_ray import configure_fin_ray
 
 
 SIM_NAMESPACE = "/sim/arachne"
@@ -77,6 +81,124 @@ def _stamp(seconds: float) -> Time:
     return Time(sec=int(whole), nanosec=int(round((seconds - whole) * 1e9)))
 
 
+def _contact_finger_side(model: mujoco.MjModel, contact, side: int) -> str | None:
+    """Identify the finger attached to one rigid or flexible contact participant.
+
+    Args:
+        model: MuJoCo model containing finger bodies and optional pads.
+        contact: MuJoCo contact containing geom and flex participant IDs.
+        side: Participant index, either 0 or 1.
+
+    Returns:
+        Finger link name, or None when this participant is not a finger.
+    """
+    flex_id = int(contact.flex[side])
+    if flex_id >= 0:
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_FLEX, flex_id) or ""
+        for finger in ("left", "right"):
+            if name == f"ms42dc_{finger}_pad" or name.startswith(f"ms42dc_{finger}_pad_"):
+                return f"ms42dc_{finger}_finger_link"
+    geom_id = int(contact.geom[side])
+    if geom_id < 0 or geom_id >= model.ngeom:
+        return None
+    body_id = int(model.geom_bodyid[geom_id])
+    name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id) or ""
+    return name if name in ("ms42dc_left_finger_link", "ms42dc_right_finger_link") else None
+
+
+def _bilateral_finger_contacts(model: mujoco.MjModel, data: mujoco.MjData,
+                               object_ids: set[str]) -> set[str]:
+    """Return scene objects simultaneously touched by both gripper fingers.
+
+    Args:
+        model: Active MuJoCo model containing the two named finger bodies.
+        data: Current MuJoCo state and contact manifold.
+        object_ids: IDs of scene objects eligible for grasp contact reporting.
+
+    Returns:
+        Scene object IDs with at least one contact on each finger.
+    """
+    object_ids_by_finger = {name: set() for name in
+                            ("ms42dc_left_finger_link", "ms42dc_right_finger_link")}
+    for index in range(data.ncon):
+        contact = data.contact[index]
+        for finger_side, object_side in ((0, 1), (1, 0)):
+            finger_name = _contact_finger_side(model, contact, finger_side)
+            object_geom = int(contact.geom[object_side])
+            if finger_name is None or object_geom < 0 or object_geom >= model.ngeom:
+                continue
+            geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, object_geom) or ""
+            object_id = geom_name[:-5] if geom_name.endswith("_geom") else ""
+            if object_id in object_ids:
+                object_ids_by_finger[finger_name].add(object_id)
+    left, right = object_ids_by_finger.values()
+    return left & right
+
+
+def _finger_visualization(model: mujoco.MjModel, data: mujoco.MjData) -> dict:
+    """Describe actual finger collision boxes and contacts in each link frame.
+
+    Args:
+        model: Active MuJoCo model with finger bodies and collision geometry.
+        data: Current MuJoCo transforms and contact manifold.
+
+    Returns:
+        JSON-serializable finger geometry and current contact positions.
+    """
+    fingers = []
+    for name in ("ms42dc_left_finger_link", "ms42dc_right_finger_link"):
+        body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+        if body_id < 0:
+            continue
+        boxes, contacts, pads = [], [], []
+        for geom_id in range(model.ngeom):
+            if (int(model.geom_bodyid[geom_id]) != body_id or
+                    not (model.geom_contype[geom_id] or model.geom_conaffinity[geom_id]) or
+                    int(model.geom_type[geom_id]) != int(mujoco.mjtGeom.mjGEOM_BOX)):
+                continue
+            quat = model.geom_quat[geom_id]
+            boxes.append({"position": model.geom_pos[geom_id].tolist(),
+                          "quaternion": [float(quat[1]), float(quat[2]), float(quat[3]), float(quat[0])],
+                          "size": (2.0 * model.geom_size[geom_id]).tolist()})
+        rotation = data.xmat[body_id].reshape(3, 3)
+        flex_prefix = name.replace("_finger_link", "_pad")
+        for flex_id in range(model.nflex):
+            flex_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_FLEX, flex_id) or ""
+            if flex_name != flex_prefix and not flex_name.startswith(flex_prefix + "_"):
+                continue
+            start = int(model.flex_vertadr[flex_id])
+            count = int(model.flex_vertnum[flex_id])
+            vertices = (data.flexvert_xpos[start:start + count] - data.xpos[body_id]) @ rotation
+            if int(model.flex_dim[flex_id]) == 2:
+                elem = int(model.flex_elemdataadr[flex_id])
+                triangles = model.flex_elem[elem:elem + 3 * int(model.flex_elemnum[flex_id])]
+            else:
+                shell = int(model.flex_shelldataadr[flex_id])
+                triangles = model.flex_shell[shell:shell + 3 * int(model.flex_shellnum[flex_id])]
+            edge = int(model.flex_edgeadr[flex_id])
+            edge_count = int(model.flex_edgenum[flex_id])
+            displacement = np.abs(data.flexedge_length[edge:edge + edge_count] -
+                                  model.flexedge_length0[edge:edge + edge_count])
+            pads.append({"name": flex_name, "vertices": vertices.tolist(),
+                         "triangles": triangles.reshape(-1, 3).tolist(),
+                         "max_edge_length_change_m": float(np.max(displacement)) if edge_count else 0.0})
+        for index in range(data.ncon):
+            contact = data.contact[index]
+            for finger_side, other_side in ((0, 1), (1, 0)):
+                if _contact_finger_side(model, contact, finger_side) != name:
+                    continue
+                position = rotation.T @ (contact.pos - data.xpos[body_id])
+                other_geom = int(contact.geom[other_side])
+                force = np.zeros(6, dtype=float)
+                mujoco.mj_contactForce(model, data, index, force)
+                contacts.append({"position": position.tolist(), "other":
+                                 (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, other_geom) or "")
+                                 if other_geom >= 0 else "",
+                                 "normal_force_n": float(force[0]), "distance_m": float(contact.dist)})
+        fingers.append({"link": name, "boxes": boxes, "contacts": contacts, "pads": pads})
+    return {"fingers": fingers}
+
+
 def _expanded_urdf(description: Path, camera_calibration: dict[str, object]) -> str:
     """Expand the shared robot Xacro and apply the shared camera calibration.
 
@@ -113,6 +235,12 @@ class MujocoSimulation(Node):
         self.declare_parameter("gui", False)
         self.declare_parameter("scene", "default")
         self.declare_parameter("scene_directory", "")
+        self.declare_parameter("simplified_finger_collision", True)
+        self.declare_parameter("finger_contact_box_half_size_m", [0.023, 0.052, 0.012])
+        self._simplified_finger_collision = bool(
+            self.get_parameter("simplified_finger_collision").value)
+        self._finger_contact_box_half_size_m = tuple(
+            float(value) for value in self.get_parameter("finger_contact_box_half_size_m").value)
         description = Path(get_package_share_directory("embodied_nexus_sim_description"))
         camera_package = Path(get_package_share_directory("embodied_nexus_camera"))
         self._description_directory = description
@@ -130,26 +258,37 @@ class MujocoSimulation(Node):
         scene_config = self._scene_library.get_scene(scene_name)
         self.model = mujoco.MjModel.from_xml_string(
             make_scene(robot_description, description, self._camera_calibration,
-                       scene_config, scene_directory))
+                       scene_config, scene_directory, self._simplified_finger_collision,
+                       self._finger_contact_box_half_size_m))
+        configure_fin_ray(
+            self.model,
+            out_of_plane_stiffness_n_m=float(scene_config.get("finger_flex_pads", {}).get(
+                "fin_ray_out_of_plane_stiffness_n_m", 500.0)))
         self.get_logger().info(
             "Gemini 335 calibration loaded: "
             f"mount={self._camera_calibration['mount_name']}, "
             f"intrinsics={self._camera_calibration['factory_calibration_id']}"
         )
         self.data = mujoco.MjData(self.model)
-        mujoco.mj_forward(self.model, self.data)
         self._set_model_indices(self._model_indices(self.model))
+        self._apply_initial_arm_pose(scene_config)
+        mujoco.mj_forward(self.model, self.data)
         self._scene_name = scene_name
+        self._scene_objects = list(scene_config.get("objects", []))
         self._base_x = float(self.data.qpos[self._root_qpos])
         self._base_y = float(self.data.qpos[self._root_qpos + 1])
         self._base_yaw = 0.0
         self._base_velocity = (0.0, 0.0)
         self._base_command_time = 0.0
         self._arm_trajectory: Trajectory | None = None
+        self._arm_trajectory_sequence = 0
+        self._last_arm_trajectory_event: dict | None = None
+        self._last_flex_diagnostic_log = 0.0
         self._gripper_trajectory: Trajectory | None = None
         self._next_camera = 0.0
         self._next_lidar = 0.0
         self._last_odom = 0.0
+        self._last_scene_state = -1.0
         self._renderer = None
         self._renderer_model = None
         self._renderer_failed = False
@@ -181,6 +320,11 @@ class MujocoSimulation(Node):
             ApplyScene, f"{SIM_NAMESPACE}/mujoco/apply_scene", self._apply_scene)
         if self.get_parameter("gui").get_parameter_value().bool_value:
             self._viewer = viewer.launch_passive(self.model, self.data)
+            if scene_config.get("finger_flex_pads", {}).get("style") == "fin_ray":
+                self._viewer.cam.lookat[:] = (0.55, 0.0, 0.24)
+                self._viewer.cam.distance = 1.55
+                self._viewer.cam.azimuth = 135
+                self._viewer.cam.elevation = -22
             self._start_viewer_sync()
         self._sensor_thread.start()
         self._sensor_publish_thread.start()
@@ -203,6 +347,15 @@ class MujocoSimulation(Node):
                                durability=DurabilityPolicy.VOLATILE)
         self._clock_pub = self.create_publisher(ClockMessage, "/clock", clock_qos)
         self._joint_pub = self.create_publisher(JointState, f"{SIM_NAMESPACE}/joint_states", 10)
+        self._scene_state_pub = self.create_publisher(
+            SceneObjectStates, f"{SIM_NAMESPACE}/ground_truth/scene_objects", 10)
+        self._contact_pub = self.create_publisher(Bool, f"{SIM_NAMESPACE}/gripper/contact", 10)
+        self._contact_state_pub = self.create_publisher(
+            String, f"{SIM_NAMESPACE}/gripper/contact_state", 10)
+        self._finger_visualization_pub = self.create_publisher(
+            String, f"{SIM_NAMESPACE}/gripper/collision_visualization", 10)
+        self._arm_diagnostics_pub = self.create_publisher(
+            String, f"{SIM_NAMESPACE}/mujoco/arm_diagnostics", 10)
         self._odom_pub = self.create_publisher(Odometry, f"{SIM_NAMESPACE}/base_controller/odom", 10)
         self._color_pub = self.create_publisher(Image, f"{SIM_NAMESPACE}/camera/image_raw", qos_profile_sensor_data)
         self._depth_pub = self.create_publisher(Image, f"{SIM_NAMESPACE}/camera/depth_image_raw", qos_profile_sensor_data)
@@ -235,7 +388,7 @@ class MujocoSimulation(Node):
         return int(self.model.jnt_dofadr[joint])
 
     def _movable_joints(self, model: mujoco.MjModel | None = None) -> tuple[list[str], list[int], list[int]]:
-        """Collect all scalar model joints for ROS joint-state feedback.
+        """Collect named scalar model joints for ROS joint-state feedback.
 
         Args:
             model: Optional compiled model; defaults to the active model.
@@ -249,6 +402,8 @@ class MujocoSimulation(Node):
             if model.jnt_type[index] == mujoco.mjtJoint.mjJNT_FREE:
                 continue
             name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, index)
+            if not name:
+                continue
             names.append(name)
             positions.append(int(model.jnt_qposadr[index]))
             velocities.append(int(model.jnt_dofadr[index]))
@@ -295,6 +450,37 @@ class MujocoSimulation(Node):
         self._joint_ids = indices["joint_ids"]
         self._lidar_body = indices["lidar_body"]
 
+    def _apply_initial_arm_pose(self, scene_config: dict[str, object]) -> None:
+        """Apply optional scene-specific arm positions before the first physics step.
+
+        Args:
+            scene_config: Parsed MuJoCo scene configuration.
+
+        Returns:
+            None.
+        """
+        positions = scene_config.get("initial_arm_joint_positions_rad", {})
+        if not isinstance(positions, dict):
+            raise ValueError("initial_arm_joint_positions_rad must be a joint-to-position mapping")
+        unknown = sorted(set(positions) - set(ARM_JOINTS))
+        if unknown:
+            raise ValueError(f"scene initial arm pose contains unknown joints: {unknown}")
+        for name, raw_position in positions.items():
+            position = float(raw_position)
+            if not math.isfinite(position):
+                raise ValueError(f"scene initial arm position for {name!r} must be finite")
+            joint_id = self._joint_ids[name]
+            if self.model.jnt_limited[joint_id]:
+                lower, upper = self.model.jnt_range[joint_id]
+                if not float(lower) <= position <= float(upper):
+                    raise ValueError(
+                        f"scene initial arm position for {name!r} is outside [{lower}, {upper}]")
+            qpos = self._joint_qpos(name)
+            qvel = int(self.model.jnt_dofadr[joint_id])
+            self.data.qpos[qpos] = position
+            self.data.qvel[qvel] = 0.0
+            self.data.ctrl[self._actuators[name]] = position
+
     def _apply_scene(self, request: ApplyScene.Request, response: ApplyScene.Response) -> ApplyScene.Response:
         """Compile and activate a saved scene while preserving robot state and sim time.
 
@@ -308,8 +494,14 @@ class MujocoSimulation(Node):
         try:
             scene = self._scene_library.get_scene(request.scene_id)
             xml = make_scene(self._robot_description, self._description_directory,
-                             self._camera_calibration, scene, self._scene_directory)
+                             self._camera_calibration, scene, self._scene_directory,
+                             self._simplified_finger_collision,
+                             self._finger_contact_box_half_size_m)
             candidate_model = mujoco.MjModel.from_xml_string(xml)
+            configure_fin_ray(
+                candidate_model,
+                out_of_plane_stiffness_n_m=float(scene.get("finger_flex_pads", {}).get(
+                    "fin_ray_out_of_plane_stiffness_n_m", 500.0)))
             candidate_data = mujoco.MjData(candidate_model)
             candidate_indices = self._model_indices(candidate_model)
             self._copy_robot_state(candidate_model, candidate_data, candidate_indices)
@@ -324,13 +516,24 @@ class MujocoSimulation(Node):
         self.data = candidate_data
         self._set_model_indices(candidate_indices)
         self._scene_name = request.scene_id
+        self._scene_objects = list(scene.get("objects", []))
         self._base_velocity = (0.0, 0.0)
         self._base_command_time = time.monotonic()
+        if self._arm_trajectory is not None and self._last_arm_trajectory_event is not None:
+            self._last_arm_trajectory_event = {
+                **self._last_arm_trajectory_event,
+                "state": "cleared_by_scene_apply",
+                "cleared_simulation_time_sec": float(self.data.time),
+            }
+            self.get_logger().warning(
+                f"MuJoCo arm trajectory cleared by scene apply: "
+                f"{json.dumps(self._last_arm_trajectory_event, sort_keys=True)}")
         self._arm_trajectory = None
         self._gripper_trajectory = None
         self._next_camera = float(self.data.time)
         self._next_lidar = float(self.data.time)
         self._last_odom = float(self.data.time)
+        self._last_scene_state = -1.0
         with self._sensor_publish_lock:
             self._model_generation += 1
             self._discard_pending_sensor_work()
@@ -488,7 +691,29 @@ class MujocoSimulation(Node):
         Returns:
             None.
         """
-        self._arm_trajectory = self._trajectory(message, ARM_JOINTS)
+        previous = self._arm_trajectory
+        try:
+            trajectory = self._trajectory(message, ARM_JOINTS)
+        except (ValueError, TypeError) as exc:
+            self.get_logger().error(f"MuJoCo arm trajectory rejected: {exc}")
+            raise
+        self._arm_trajectory_sequence += 1
+        stamp = message.header.stamp
+        event = {
+            "sequence": self._arm_trajectory_sequence,
+            "state": "accepted" if trajectory is not None else "cleared",
+            "message_stamp_sec": float(stamp.sec) + float(stamp.nanosec) * 1e-9,
+            "received_simulation_time_sec": float(self.data.time),
+            "point_count": len(message.points),
+            "replaced_active_trajectory": previous is not None,
+            "previous_sequence": (self._last_arm_trajectory_event or {}).get("sequence"),
+            "duration_sec": trajectory.duration if trajectory is not None else None,
+            "start_rad": dict(zip(ARM_JOINTS, trajectory.start)) if trajectory is not None else None,
+            "endpoint_rad": dict(zip(ARM_JOINTS, trajectory.waypoints[-1])) if trajectory is not None else None,
+        }
+        self._last_arm_trajectory_event = event
+        self._arm_trajectory = trajectory
+        self.get_logger().info(f"MuJoCo arm trajectory received: {json.dumps(event, sort_keys=True)}")
 
     def _on_gripper_trajectory(self, message: JointTrajectory) -> None:
         """Validate and schedule the requested gripper joint trajectory.
@@ -513,13 +738,14 @@ class MujocoSimulation(Node):
         """
         if not message.points:
             return None
-        point = message.points[0]
-        duration = float(point.time_from_start.sec) + point.time_from_start.nanosec * 1e-9
-        if duration <= 0:
-            duration = 0.2
+        positions = [list(point.positions) for point in message.points]
+        durations = [float(point.time_from_start.sec) + point.time_from_start.nanosec * 1e-9
+                     for point in message.points]
+        if len(durations) == 1 and durations[0] <= 0:
+            durations[0] = 0.2
         measured = [self.data.qpos[self._joint_qpos(name)] for name in expected]
-        return make_trajectory(message.joint_names, point.positions, expected, measured,
-                               float(self.data.time), duration)
+        return make_trajectory(message.joint_names, positions, expected, measured,
+                               float(self.data.time), durations)
 
     def _tick(self) -> None:
         """Advance physics and publish the current ROS simulation state.
@@ -537,6 +763,9 @@ class MujocoSimulation(Node):
             if self.data.time - self._last_odom >= 0.05:
                 self._publish_odometry()
                 self._last_odom = self.data.time
+            if self.data.time - self._last_scene_state >= 0.05:
+                self._publish_scene_state()
+                self._last_scene_state = self.data.time
             camera_due = self.data.time >= self._next_camera
             lidar_due = self.data.time >= self._next_lidar
             if camera_due:
@@ -695,8 +924,7 @@ class MujocoSimulation(Node):
         self._apply_trajectory(self._arm_trajectory, ARM_JOINTS)
         self._apply_trajectory(self._gripper_trajectory, GRIPPER_JOINTS)
         steps = max(1, round(dt / self.model.opt.timestep))
-        for _ in range(steps):
-            mujoco.mj_step(self.model, self.data)
+        mujoco.mj_step(self.model, self.data, nstep=steps)
         self._base_yaw += angular * dt
         self._base_x += linear * math.cos(self._base_yaw) * dt
         self._base_y += linear * math.sin(self._base_yaw) * dt
@@ -725,6 +953,17 @@ class MujocoSimulation(Node):
             self.data.ctrl[self._actuators[name]] = target
         if self.data.time >= trajectory.start_time + trajectory.duration:
             if names == ARM_JOINTS:
+                if self._last_arm_trajectory_event is not None:
+                    self._last_arm_trajectory_event = {
+                        **self._last_arm_trajectory_event,
+                        "state": "targets_finished",
+                        "finished_simulation_time_sec": float(self.data.time),
+                        "finished_positions_rad": {
+                            name: float(self.data.qpos[self._joint_qpos(name)]) for name in names},
+                    }
+                    self.get_logger().info(
+                        f"MuJoCo arm trajectory targets finished: "
+                        f"{json.dumps(self._last_arm_trajectory_event, sort_keys=True)}")
                 self._arm_trajectory = None
             else:
                 self._gripper_trajectory = None
@@ -748,6 +987,135 @@ class MujocoSimulation(Node):
         message.position = [float(self.data.qpos[index]) for index in self._joint_qpos_addrs]
         message.velocity = [float(self.data.qvel[index]) for index in self._joint_qvel_addrs]
         self._joint_pub.publish(message)
+
+    def _publish_scene_state(self) -> None:
+        """Publish simulator-only object truth and gripper contact diagnostics.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        stamp = _stamp(float(self.data.time))
+        object_ids = {str(item["id"]) for item in self._scene_objects}
+        contacts = _bilateral_finger_contacts(self.model, self.data, object_ids)
+        state = SceneObjectStates()
+        state.header.stamp = stamp
+        state.header.frame_id = "mujoco_world"
+        grasp_body = _name_id(self.model, mujoco.mjtObj.mjOBJ_BODY, "grasp_frame")
+        grasp_position = self.data.xpos[grasp_body]
+        grasp_quaternion = self.data.xquat[grasp_body]
+        state.gripper_pose.position.x, state.gripper_pose.position.y, state.gripper_pose.position.z = (
+            float(value) for value in grasp_position)
+        state.gripper_pose.orientation.w = float(grasp_quaternion[0])
+        state.gripper_pose.orientation.x = float(grasp_quaternion[1])
+        state.gripper_pose.orientation.y = float(grasp_quaternion[2])
+        state.gripper_pose.orientation.z = float(grasp_quaternion[3])
+        for object_id in sorted(object_ids):
+            body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"{object_id}_body")
+            pose = Pose()
+            if body_id >= 0:
+                position = self.data.xpos[body_id]
+                quaternion = self.data.xquat[body_id]
+            else:
+                geom_id = _name_id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f"{object_id}_geom")
+                position = self.data.geom_xpos[geom_id]
+                quaternion = np.empty(4, dtype=float)
+                mujoco.mju_mat2Quat(quaternion, self.data.geom_xmat[geom_id])
+            pose.position.x, pose.position.y, pose.position.z = (float(value) for value in position)
+            pose.orientation.w = float(quaternion[0])
+            pose.orientation.x = float(quaternion[1])
+            pose.orientation.y = float(quaternion[2])
+            pose.orientation.z = float(quaternion[3])
+            state.object_ids.append(object_id)
+            state.poses.append(pose)
+        state.gripper_contact_object_ids = sorted(contacts)
+        state.gripper_contact = bool(contacts)
+        self._scene_state_pub.publish(state)
+        self._contact_pub.publish(Bool(data=bool(contacts)))
+        finger_visualization = _finger_visualization(self.model, self.data)
+        pad_diagnostics = [{"link": finger["link"], "contacts": finger["contacts"],
+                            "pads": [{"name": pad["name"], "max_edge_length_change_m":
+                                      pad["max_edge_length_change_m"]} for pad in finger["pads"]]}
+                           for finger in finger_visualization["fingers"]]
+        self._contact_state_pub.publish(String(data=json.dumps({
+            "valid": True,
+            "contact": bool(contacts),
+            "object_ids": sorted(contacts),
+            "fingers": pad_diagnostics,
+        }, separators=(",", ":"))))
+        self._finger_visualization_pub.publish(String(data=json.dumps(
+            finger_visualization, separators=(",", ":"))))
+        now = time.monotonic()
+        if (any(finger["pads"] for finger in pad_diagnostics) and
+                (contacts or self._gripper_trajectory is not None) and
+                now - self._last_flex_diagnostic_log >= 0.5):
+            self.get_logger().info("MuJoCo flexible finger contact: " + json.dumps({
+                "simulation_time_sec": float(self.data.time), "object_ids": sorted(contacts),
+                "fingers": pad_diagnostics}, separators=(",", ":")))
+            self._last_flex_diagnostic_log = now
+        self._publish_arm_diagnostics(stamp)
+
+    def _publish_arm_diagnostics(self, stamp: Time) -> None:
+        """Publish measured arm state, actuator effort, saturation, and contacts.
+
+        Args:
+            stamp: Current MuJoCo simulation timestamp.
+
+        Returns:
+            None.
+        """
+        joints = {}
+        for name in ARM_JOINTS:
+            actuator_id = self._actuators[name]
+            joint_id = self._joint_ids[name]
+            limited = bool(self.model.actuator_forcelimited[actuator_id])
+            force_range = ([float(value) for value in self.model.actuator_forcerange[actuator_id]]
+                           if limited else None)
+            force = float(self.data.actuator_force[actuator_id])
+            force_limit = max(abs(value) for value in force_range) if force_range else None
+            joints[name] = {
+                "target_rad": float(self.data.ctrl[actuator_id]),
+                "position_rad": float(self.data.qpos[self._joint_qpos(name)]),
+                "error_rad": float(self.data.ctrl[actuator_id] - self.data.qpos[self._joint_qpos(name)]),
+                "velocity_rad_sec": float(self.data.qvel[self._joint_qvel(name)]),
+                "actuator_force_nm": force,
+                "force_range_nm": force_range,
+                "force_saturated": bool(force_limit is not None and
+                                         abs(force) >= 0.98 * force_limit),
+                "joint_limited": bool(self.model.jnt_limited[joint_id]),
+            }
+        contacts = []
+        for index in range(min(int(self.data.ncon), 40)):
+            contact = self.data.contact[index]
+            force = np.zeros(6, dtype=float)
+            mujoco.mj_contactForce(self.model, self.data, index, force)
+            participants = []
+            for side in (0, 1):
+                geom_id, flex_id = int(contact.geom[side]), int(contact.flex[side])
+                if geom_id >= 0:
+                    participants.append(mujoco.mj_id2name(
+                        self.model, mujoco.mjtObj.mjOBJ_GEOM, geom_id) or str(geom_id))
+                elif flex_id >= 0:
+                    participants.append(mujoco.mj_id2name(
+                        self.model, mujoco.mjtObj.mjOBJ_FLEX, flex_id) or f"flex:{flex_id}")
+                else:
+                    participants.append("")
+            contacts.append({"geom1": participants[0], "geom2": participants[1],
+                             "elements": [int(value) for value in contact.elem],
+                             "distance_m": float(contact.dist),
+                             "normal_force_n": float(force[0])})
+        self._arm_diagnostics_pub.publish(String(data=json.dumps({
+            "simulation_time_sec": float(stamp.sec) + float(stamp.nanosec) * 1e-9,
+            "scene": self._scene_name,
+            "arm_trajectory": self._last_arm_trajectory_event,
+            "arm_trajectory_active": self._arm_trajectory is not None,
+            "joints": joints,
+            "contacts": contacts,
+            "contact_count": int(self.data.ncon),
+            "contacts_truncated": int(self.data.ncon) > len(contacts),
+        }, separators=(",", ":"))))
 
     def _publish_odometry(self) -> None:
         """Publish the kinematic chassis pose and commanded twist.

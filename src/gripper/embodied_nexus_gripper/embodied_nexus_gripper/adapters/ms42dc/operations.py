@@ -114,6 +114,9 @@ class MS42DCOperations:
             "feedback_moving": bool(feedback and feedback.moving),
             "feedback_reached": bool(feedback and feedback.reached),
             "feedback_stationary": bool(feedback and feedback.stationary),
+            "feedback_contact_valid": bool(feedback and feedback.contact_valid),
+            "feedback_contact_detected": bool(feedback and feedback.contact_detected),
+            "feedback_contact_object_ids": list(feedback.contact_object_ids) if feedback else [],
         }
 
     def plan(self, config, command, angle_degrees):

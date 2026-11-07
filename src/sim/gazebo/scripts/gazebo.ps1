@@ -17,3 +17,4 @@ try {
     $exitCode = $LASTEXITCODE
 } finally { $env:WSLENV = $oldWslEnv }
 if ($exitCode -ne 0) { throw "Gazebo WSL script failed with exit code $exitCode." }
+

@@ -151,6 +151,21 @@ class AuboOperations:
         """
         return self.backend.execute("MotionControl.moveJoint", [target, acceleration, speed, 0.0, 0.0])
 
+    def execute_trajectory(self, trajectory):
+        """Execute a timed multi-point trajectory when the backend supports it.
+
+        Args:
+            trajectory: Validated trajectory_msgs/JointTrajectory.
+
+        Returns:
+            The backend's command-acceptance result.
+        """
+        executor = getattr(self.backend, "execute_trajectory", None)
+        if not callable(executor):
+            raise NotImplementedError(
+                "time-parameterized trajectories are available only on supported simulation backends")
+        return executor(trajectory)
+
     def lifecycle(self, command):
         """Send a power or startup command.
 

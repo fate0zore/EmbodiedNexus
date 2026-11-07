@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import math
 import threading
 import time
@@ -45,6 +46,7 @@ class ArmController:
         self.stop_requested = False
         self.controller_accepted = False
         self.stationary_confirmed = False
+        self.last_trajectory_error_rad = 0.0
         self.feedback: dict[str, Any] = {}
         self.feedback_time = 0.0
         self.payload, self.tcp_offset = self.operations.optional_metadata()
@@ -372,6 +374,7 @@ class ArmController:
             self.controller_accepted = False
             self.stop_requested = False
             self.stationary_confirmed = False
+            self.last_trajectory_error_rad = 0.0
         stop_requested = False
         accepted = False
         last_error = max(abs(a - b) for a, b in zip(target, state["positions_rad"]))
@@ -448,6 +451,248 @@ class ArmController:
                     velocities = self.feedback.get("velocities_rad_sec")
                     self.stationary_confirmed = bool(velocities) and all(
                         abs(float(v)) <= 0.01 for v in velocities)
+
+    @staticmethod
+    def _shift_equivalent_trajectory_angles(positions, measured, limits):
+        """Shift each complete simulated joint path to its nearest feasible 2-pi branch.
+
+        Args:
+            positions: Ordered joint position rows for the trajectory.
+            measured: Current joint positions in the same joint order.
+            limits: Effective lower and upper joint limits as two vectors.
+
+        Returns:
+            Tuple containing shifted position rows and one constant angle shift per joint.
+        """
+        if not positions:
+            return [], []
+        period = 2.0 * math.pi
+        shifts = [0.0] * len(measured)
+        for joint_index, current in enumerate(measured):
+            values = [float(row[joint_index]) for row in positions]
+            lower, upper = float(limits[0][joint_index]), float(limits[1][joint_index])
+            minimum_branch = math.ceil((lower - min(values)) / period)
+            maximum_branch = math.floor((upper - max(values)) / period)
+            if minimum_branch > maximum_branch:
+                continue
+            nearest_branch = round((float(current) - values[0]) / period)
+            branch = min(max(nearest_branch, minimum_branch), maximum_branch)
+            shifts[joint_index] = branch * period
+        shifted = [[float(value) + shifts[index] for index, value in enumerate(row)]
+                   for row in positions]
+        return shifted, shifts
+
+    def execute_trajectory(self, lease_id: str, trajectory, speed: float = 0.0,
+                           acceleration: float = 0.0, timeout: float = 0.0,
+                           cancel_requested=None, feedback=None) -> dict[str, Any]:
+        """Execute a timed multi-point trajectory through a supported backend.
+
+        Args:
+            lease_id: Active arm control lease.
+            trajectory: ROS joint trajectory with ordered positions and arrival times.
+            speed: Requested maximum joint speed in radians per second.
+            acceleration: Requested maximum joint acceleration in radians per second squared.
+            timeout: Maximum operation duration in seconds.
+            cancel_requested: Optional callback that reports action cancellation.
+            feedback: Optional callback receiving state, error, and waypoint index.
+
+        Returns:
+            Execution status, final error, stop status, and safety feedback.
+        """
+        if str(self.config.get("backend")) != "ros2_sim":
+            raise NotImplementedError("time-parameterized arm trajectories are enabled only for ros2_sim")
+        if not callable(getattr(self.backend, "execute_trajectory", None)):
+            raise NotImplementedError("selected arm backend does not implement trajectory execution")
+        names = list(trajectory.joint_names)
+        expected = list(self.config["joints"]["names"])
+        if len(names) != len(expected) or len(set(names)) != len(names) or set(names) != set(expected):
+            raise ValueError("trajectory must name each configured joint exactly once")
+        points = list(trajectory.points)
+        if not points:
+            raise ValueError("trajectory must contain at least one waypoint")
+        limits = self._effective_limits()
+        if limits is None:
+            raise RuntimeError("controller joint limits are unknown; motion remains disabled")
+        name_indices = {name: index for index, name in enumerate(names)}
+        ordered_positions = []
+        waypoint_times = []
+        for point in points:
+            values = self._validate_vector(point.positions, "trajectory.positions")
+            ordered = [values[name_indices[name]] for name in expected]
+            for index, value in enumerate(ordered):
+                if not limits[0][index] <= value <= limits[1][index]:
+                    raise ValueError(f"trajectory waypoint exceeds effective limits for {expected[index]}")
+            ordered_positions.append(ordered)
+            waypoint_times.append(float(point.time_from_start.sec) +
+                                  float(point.time_from_start.nanosec) * 1e-9)
+        if any(not math.isfinite(value) or value < 0 for value in waypoint_times):
+            raise ValueError("trajectory waypoint times must be finite and non-negative")
+        if any(later <= earlier for earlier, later in zip(waypoint_times, waypoint_times[1:])):
+            raise ValueError("trajectory waypoint times must be strictly increasing")
+        max_speed = float(self.config["motion"]["max_speed_rad_sec"])
+        speed = float(speed or max_speed)
+        acceleration = float(acceleration or self.config["motion"]["max_acceleration_rad_sec2"])
+        if not math.isfinite(speed) or not 0 < speed <= max_speed:
+            raise ValueError(f"speed_rad_sec must be in (0, {max_speed:g}]")
+        if (not math.isfinite(acceleration) or
+                not 0 < acceleration <= float(self.config["motion"]["max_acceleration_rad_sec2"])):
+            raise ValueError("acceleration_rad_sec2 exceeds configured limit")
+        initial_state = self.state()
+        if not initial_state["feedback_valid"]:
+            raise RuntimeError("fresh joint feedback is required before motion")
+        ordered_positions, _ = self._shift_equivalent_trajectory_angles(
+            ordered_positions, initial_state["positions_rad"], limits)
+        if waypoint_times[0] == 0.0:
+            initial_error = max(abs(target - measured) for target, measured in
+                                zip(ordered_positions[0], initial_state["positions_rad"]))
+            if initial_error > float(self.config["motion"]["goal_tolerance_rad"]):
+                raise ValueError("a zero-time first waypoint must match the measured start state")
+            ordered_positions.pop(0)
+            waypoint_times.pop(0)
+            if not waypoint_times:
+                raise ValueError("trajectory contains no timed motion waypoint after its start state")
+        timeout = float(timeout or max(float(self.config["motion"]["operation_timeout_sec"]),
+                                       waypoint_times[-1] + 5.0))
+        if not math.isfinite(timeout) or timeout <= waypoint_times[-1]:
+            raise ValueError("timeout_sec must be finite and exceed the final waypoint time")
+        command = copy.deepcopy(trajectory)
+        if len(command.points) != len(ordered_positions):
+            command.points = command.points[1:]
+        command.joint_names = expected
+        for point, values in zip(command.points, ordered_positions):
+            point.positions = [float(value) for value in values]
+        with self.lock:
+            self._require_lease(lease_id)
+            if not self.motion_enabled or self.active_operation or self.teach_enabled:
+                raise RuntimeError("trajectory execution requires an enabled idle arm")
+            operation_id = uuid.uuid4().hex
+            self.active_operation = operation_id
+            self.operation_state = "running"
+            self.cancel_event.clear()
+            self.velocity_command_time = 0.0
+            self.controller_accepted = False
+            self.stop_requested = False
+            self.stationary_confirmed = False
+        accepted = False
+        stop_requested = False
+        terminal_state = "failed"
+        last_error = 0.0
+        try:
+            self._require_motion_ready(lease_id)
+            if self.servo_mode_active:
+                self._leave_servo_mode()
+            self.operations.prepare_move()
+            if not self.backend.stop():
+                raise RuntimeError("arm did not confirm pre-trajectory stop")
+            result = self.operations.execute_trajectory(command)
+            if not self.operations.command_accepted(result):
+                raise RuntimeError(self.operations.command_error("execute_trajectory", result))
+            accepted = True
+            with self.lock:
+                self.controller_accepted = True
+            started = time.monotonic()
+            deadline = started + timeout
+            simulation_clock = (
+                initial_state.get("feedback_timestamp_source") == "simulation_clock")
+            accepted_state = self.state()
+            simulation_start = float(accepted_state.get("stamp_sec", initial_state.get("stamp_sec", 0.0)))
+            stable_since = None
+            tolerance = float(self.config["motion"]["goal_tolerance_rad"])
+            stable_sec = float(self.config["motion"]["stable_sec"])
+            while time.monotonic() < deadline:
+                self.poll_once()
+                if (cancel_requested and cancel_requested()) or self.cancel_event.is_set():
+                    stop_requested = True
+                    break
+                self._require_motion_ready(lease_id)
+                current_state = self.state()
+                if not current_state["feedback_valid"] or current_state["positions_rad"] is None:
+                    raise RuntimeError("joint feedback became stale during trajectory")
+                if simulation_clock:
+                    simulation_stamp = current_state.get("stamp_sec")
+                    if simulation_stamp is None or not math.isfinite(float(simulation_stamp)):
+                        raise RuntimeError("simulation clock feedback became unavailable during trajectory")
+                    elapsed = float(simulation_stamp) - simulation_start
+                    if elapsed < 0.0:
+                        raise RuntimeError("simulation clock moved backwards during trajectory")
+                else:
+                    elapsed = time.monotonic() - started
+                waypoint_index = next((index for index, arrival in enumerate(waypoint_times)
+                                       if elapsed <= arrival), len(waypoint_times) - 1)
+                target = ordered_positions[waypoint_index]
+                last_error = max(abs(a - b) for a, b in zip(target, current_state["positions_rad"]))
+                self.last_trajectory_error_rad = last_error
+                velocities = current_state["velocities_rad_sec"]
+                measured_stationary = velocities is not None and all(
+                    abs(float(value)) <= 0.01 for value in velocities)
+                if feedback:
+                    feedback("moving", last_error, waypoint_index)
+                final_error = max(abs(a - b) for a, b in
+                                  zip(ordered_positions[-1], current_state["positions_rad"]))
+                if elapsed >= waypoint_times[-1] and final_error <= tolerance and measured_stationary:
+                    stable_since = stable_since or time.monotonic()
+                    if time.monotonic() - stable_since >= stable_sec:
+                        last_error = final_error
+                        break
+                else:
+                    stable_since = None
+                time.sleep(0.04)
+            else:
+                final_target = ordered_positions[-1]
+                final_positions = current_state["positions_rad"]
+                final_velocities = current_state["velocities_rad_sec"]
+                diagnostics = {
+                    "progress_clock": "simulation" if simulation_clock else "wall",
+                    "progress_elapsed_sec": round(float(elapsed), 4),
+                    "progress_duration_sec": round(float(waypoint_times[-1]), 4),
+                    "wall_elapsed_sec": round(time.monotonic() - started, 4),
+                    "wall_timeout_sec": round(float(timeout), 4),
+                    "last_waypoint_index": int(waypoint_index),
+                    "last_waypoint_count": len(ordered_positions),
+                    "last_waypoint_error_rad": round(float(last_error), 6),
+                    "endpoint_error_rad": round(float(final_error), 6),
+                    "position_tolerance_rad": float(tolerance),
+                    "stable_sec_required": float(stable_sec),
+                    "stationary": bool(measured_stationary),
+                    "endpoint_target_rad": dict(zip(expected, final_target)),
+                    "measured_positions_rad": dict(zip(expected, final_positions)),
+                    "endpoint_error_by_joint_rad": {
+                        name: round(float(target - measured), 6)
+                        for name, target, measured in zip(expected, final_target, final_positions)},
+                    "measured_velocities_rad_sec": (
+                        dict(zip(expected, [float(value) for value in final_velocities]))
+                        if final_velocities is not None else None),
+                }
+                raise TimeoutError(
+                    "trajectory did not reach and settle at its final waypoint before timeout; "
+                    f"diagnostics={json.dumps(diagnostics, sort_keys=True)}")
+            if stop_requested:
+                self.backend.stop()
+                self.poll_once()
+                stopped_state = self.state()
+                terminal_state = "cancelled"
+                return {"success": False, "message": "cancelled", "max_error_rad": last_error,
+                        "controller_accepted": accepted, "stop_requested": True,
+                        "stationary_confirmed": stopped_state["stationary_confirmed"] is True,
+                        "hardware_estop": bool(stopped_state.get("hardware_estop"))}
+            terminal_state = "succeeded"
+            return {"success": True, "message": "trajectory reached final waypoint",
+                    "max_error_rad": last_error, "controller_accepted": accepted,
+                    "stop_requested": False, "stationary_confirmed": True, "hardware_estop": False}
+        except Exception:
+            stop_requested = True
+            self.backend.stop()
+            self.poll_once()
+            raise
+        finally:
+            with self.lock:
+                if self.active_operation == operation_id:
+                    self.active_operation = ""
+                    self.operation_state = terminal_state
+                    self.stop_requested = stop_requested
+                    velocities = self.feedback.get("velocities_rad_sec")
+                    self.stationary_confirmed = bool(velocities) and all(
+                        abs(float(value)) <= 0.01 for value in velocities)
 
     def set_lifecycle(self, lease_id: str, command: str) -> dict[str, Any]:
         """设置生命周期。

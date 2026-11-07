@@ -90,30 +90,38 @@ EmbodiedNexus/
     │   ├── third_party/licenses/
     │   ├── docs/
     │   └── examples/
-    └── lidar/
-        ├── scripts/
-        │   ├── lidar.sh
-        │   └── lidar.ps1
-        ├── embodied_nexus_lidar/
-        ├── embodied_nexus_lidar_interfaces/
-        ├── third_party/lslidar_c16_ros2/
-        │   ├── LICENSE
-        │   ├── UPSTREAM_README.md
-        │   ├── lslidar_driver/
-        │   └── lslidar_msgs/
-        ├── docs/
-        └── examples/
+    ├── lidar/
+    │   ├── scripts/
+    │   │   ├── lidar.sh
+    │   │   └── lidar.ps1
+    │   ├── embodied_nexus_lidar/
+    │   ├── embodied_nexus_lidar_interfaces/
+    │   ├── third_party/lslidar_c16_ros2/
+    │   │   ├── LICENSE
+    │   │   ├── UPSTREAM_README.md
+    │   │   ├── lslidar_driver/
+    │   │   └── lslidar_msgs/
+    │   ├── docs/
+    │   └── examples/
+    ├── operator/
+    │   ├── embodied_nexus_operator_interfaces/
+    │   ├── embodied_nexus_operator/
+    │   ├── embodied_nexus_operator_moveit_config/
+    │   └── docs/
     └── sim/
         ├── common/
         │   ├── embodied_nexus_sim/
         │   ├── docs/
         │   └── third_party/
         │       └── embodied_nexus_sim_description/
-        └── gazebo/
-            ├── scripts/
-            │   ├── gazebo.sh
-            │   └── gazebo.ps1
-            └── embodied_nexus_sim_gazebo/
+        ├── gazebo/
+        │   ├── scripts/
+        │   │   ├── gazebo.sh
+        │   │   └── gazebo.ps1
+        │   └── embodied_nexus_sim_gazebo/
+        └── mujoco/
+            ├── embodied_nexus_sim_mujoco/
+            └── embodied_nexus_sim_mujoco_interfaces/
 ```
 
 功能包使用 `ament_python`，自定义接口包使用 `ament_cmake` / `rosidl`，因此继续保留独立构建边界。厂商雷达包保持原包名和来源材料。colcon 的递归发现允许设备目录作为中间分组层，构建时用 `--base-paths src` 限定范围，详见 [colcon 官方发现参数](https://colcon.readthedocs.io/en/released/reference/discovery-arguments.html)。
@@ -128,6 +136,7 @@ EmbodiedNexus/
 | 自定义 ROS 消息、服务、action    | 同模块的 `embodied_nexus_<设备能力>_interfaces/` |
 | 设备指南、来源、实机记录         | `src/<设备能力>/docs/`                           |
 | 设备专用示例                     | `src/<设备能力>/examples/`                       |
+| 面向任务的算法、ROS 接口和 MoveIt 配置 | `src/operator/`                              |
 | Core 与设备的 Bash/PowerShell 操作脚本 | `src/<模块>/scripts/`                       |
 | 随仓库保存的专用第三方代码与许可 | `src/<设备能力>/third_party/`                    |
 | 通用远程 Python 客户端与测试     | `sdk/python/`                                    |
@@ -138,6 +147,8 @@ EmbodiedNexus/
 | 已确认规划                       | 根目录 `todo/`                                   |
 
 设备模块通过公开接口协作，不互相导入内部实现。SDK 依赖远程协议，不依赖 ROS 或机器人端源码。普通 Python、系统和 ROS 依赖继续通过包清单声明；只有需要随项目分发的专用依赖才存入模块的 `third_party/`。
+
+`src/operator/` 按任务组织机器人算法，使用设备公开 ROS 服务、Action、相机和 TF，不导入 arm、gripper 或 sim 包的内部 Python 实现。MoveIt 配置属于对应算法模块；MoveIt 只规划，轨迹由设备节点在控制租约保护下执行。首个 Planned 抓取流程面向 MuJoCo 单盒体场景，具体边界和验收见[抓取设计](../src/operator/docs/grasp-design.md)及[MuJoCo 验收指南](../src/operator/docs/mujoco-acceptance.md)。
 
 设备入口：[底盘](../src/base/docs/scout-base.md)、[机械臂](../src/arm/docs/aubo-i5.md)、[相机](../src/camera/docs/camera.md)、[夹爪](../src/gripper/docs/ms42dc-gripper.md)、[雷达](../src/lidar/docs/lidar-c16.md)。开发约定统一维护在根目录 [AGENTS.md](../AGENTS.md)。
 

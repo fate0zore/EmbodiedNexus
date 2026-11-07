@@ -53,6 +53,30 @@ class ArmControllerTests(unittest.TestCase):
         self.controller.enable_motion(lease, True)
         return lease
 
+    def test_trajectory_uses_nearest_feasible_equivalent_joint_branch(self):
+        """Keep the planned motion while avoiding unnecessary full revolutions.
+
+        Returns:
+            None.
+        """
+        period = 2.0 * 3.141592653589793
+        positions = [[-6.24, 4.70], [-6.0, 4.90]]
+        measured = [0.04, -1.57]
+        limits = ([-6.283, -6.283], [6.283, 6.283])
+
+        shifted, offsets = self.controller._shift_equivalent_trajectory_angles(
+            positions, measured, limits)
+
+        self.assertAlmostEqual(offsets[0], period)
+        self.assertAlmostEqual(offsets[1], -period)
+        self.assertAlmostEqual(shifted[0][0], 0.043185307179586)
+        self.assertAlmostEqual(shifted[1][1], -1.383185307179586)
+        self.assertAlmostEqual(shifted[1][0] - shifted[0][0],
+                               positions[1][0] - positions[0][0])
+        for row in shifted:
+            self.assertTrue(all(low <= value <= high
+                                for low, value, high in zip(limits[0], row, limits[1])))
+
     def test_config_checks_joint_mapping_and_unknown_fields(self):
         """验证配置checks关节mapping和未知项fields。
 
@@ -443,3 +467,4 @@ class ArmControllerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

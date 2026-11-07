@@ -15,7 +15,7 @@ from rclpy.signals import SignalHandlerOptions
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 
-from embodied_nexus_arm_interfaces.action import MoveArmJoints
+from embodied_nexus_arm_interfaces.action import ExecuteArmTrajectory, MoveArmJoints
 from embodied_nexus_arm_interfaces.srv import (
     AcquireArmControl, ApplyArmConfiguration, GetArmConfiguration, GetArmInfo,
     GetArmState, ReleaseArmControl, RenewArmControl, SetArmJointVelocity,
@@ -70,6 +70,13 @@ class ArmNode(Node):
                                         goal_callback=self._move_goal,
                                         cancel_callback=self._cancel_goal,
                                         callback_group=self.group)
+        self.trajectory_action = ActionServer(
+            self, ExecuteArmTrajectory, f"{self.prefix}/execute_trajectory",
+            execute_callback=self._execute_trajectory,
+            goal_callback=self._trajectory_goal,
+            cancel_callback=self._cancel_goal,
+            callback_group=self.group,
+        )
         hz = float(self.config["feedback"]["rate_hz"])
         self.timer = self.create_timer(1.0 / hz, self._tick, callback_group=self.group,
                                        clock=Clock(clock_type=ClockType.STEADY_TIME))
@@ -353,6 +360,28 @@ class ArmNode(Node):
             self.get_logger().warning(f"Rejected arm joint goal: {exc}")
             return GoalResponse.REJECT
 
+    def _trajectory_goal(self, request):
+        """Validate a trajectory goal before accepting it for execution.
+
+        Args:
+            request: Action goal containing the lease and timed joint waypoints.
+
+        Returns:
+            GoalResponse.ACCEPT when a simulation trajectory can be executed.
+        """
+        try:
+            if self.config.get("backend") != "ros2_sim":
+                raise NotImplementedError("trajectory execution is currently supported only by ros2_sim")
+            if not request.trajectory.points:
+                raise ValueError("trajectory must contain at least one waypoint")
+            self.controller._require_lease(request.lease_id)
+            if not self.controller.motion_enabled:
+                raise PermissionError("arm motion is disabled")
+            return GoalResponse.ACCEPT
+        except Exception as exc:
+            self.get_logger().warning(f"Rejected arm trajectory goal: {exc}")
+            return GoalResponse.REJECT
+
     @staticmethod
     def _cancel_goal(_goal_handle):
         """取消正在执行的动作目标。
@@ -405,6 +434,135 @@ class ArmNode(Node):
             result.hardware_estop = bool(self.controller.feedback.get("hardware_estop", False))
             goal_handle.canceled() if goal_handle.is_cancel_requested else goal_handle.abort()
         return result
+
+    def _execute_trajectory(self, goal_handle):
+        """Execute a lease-protected, time-parameterized arm trajectory.
+
+        Args:
+            goal_handle: Accepted trajectory action goal.
+
+        Returns:
+            Action result describing execution, stop, and feedback status.
+        """
+        request = goal_handle.request
+        result = ExecuteArmTrajectory.Result()
+        trajectory = request.trajectory
+        points = list(trajectory.points)
+        joint_names = list(trajectory.joint_names)
+        duration_sec = 0.0
+        peak_velocity = {name: 0.0 for name in joint_names}
+        peak_acceleration = {name: 0.0 for name in joint_names}
+        if points:
+            last_time = points[-1].time_from_start
+            duration_sec = float(last_time.sec) + float(last_time.nanosec) * 1e-9
+        for point in points:
+            for index, name in enumerate(joint_names):
+                if index < len(point.velocities):
+                    peak_velocity[name] = max(peak_velocity[name], abs(float(point.velocities[index])))
+                if index < len(point.accelerations):
+                    peak_acceleration[name] = max(
+                        peak_acceleration[name], abs(float(point.accelerations[index])))
+        self.get_logger().info(
+            f"Starting arm trajectory device={self.device_id} points={len(points)} "
+            f"duration_sec={duration_sec:.4f} requested_speed_rad_sec={request.speed_rad_sec:.4f} "
+            f"requested_acceleration_rad_sec2={request.acceleration_rad_sec2:.4f} "
+            f"timeout_sec={request.timeout_sec:.3f} "
+            f"peak_velocity_rad_sec={peak_velocity} peak_acceleration_rad_sec2={peak_acceleration}")
+        last_feedback_index = -10
+        last_feedback_log_time = 0.0
+        final_feedback_index = max(
+            0, len(points) - 1 - int(bool(points and
+                points[0].time_from_start.sec == 0 and points[0].time_from_start.nanosec == 0)))
+
+        def publish_progress(state, error, point_index):
+            """Publish trajectory feedback and log sparse waypoint progress.
+
+            Args:
+                state: Execution state reported by the arm controller.
+                error: Maximum measured error to the currently tracked waypoint.
+                point_index: Zero-based timed-waypoint index after any start point is removed.
+
+            Returns:
+                None.
+            """
+            nonlocal last_feedback_index, last_feedback_log_time
+            self._publish_trajectory_feedback(goal_handle, state, error, point_index)
+            now = time.monotonic()
+            if ((point_index == 0 and last_feedback_index != 0) or
+                    point_index >= last_feedback_index + 10 or
+                    (point_index == final_feedback_index and point_index != last_feedback_index) or
+                    now - last_feedback_log_time >= 2.0):
+                current = self.controller.state()
+                snapshot = {key: current.get(key) for key in (
+                    "stamp_sec", "feedback_timestamp_source", "feedback_valid", "feedback_age_sec",
+                    "joint_names", "positions_rad", "velocities_rad_sec")}
+                self.get_logger().info(
+                    f"Arm trajectory progress device={self.device_id} "
+                    f"waypoint_index={point_index}/{final_feedback_index} "
+                    f"tracked_waypoint_error_rad={float(error):.5f} "
+                    f"feedback={json.dumps(snapshot, sort_keys=True)}")
+                last_feedback_index = point_index
+                last_feedback_log_time = now
+
+        try:
+            outcome = self.controller.execute_trajectory(
+                request.lease_id, request.trajectory, request.speed_rad_sec,
+                request.acceleration_rad_sec2, request.timeout_sec,
+                cancel_requested=lambda: goal_handle.is_cancel_requested,
+                feedback=publish_progress,
+            )
+            result.success = outcome["success"]
+            result.message = outcome["message"]
+            result.max_error_rad = outcome["max_error_rad"]
+            result.controller_accepted = outcome["controller_accepted"]
+            result.stop_requested = outcome["stop_requested"]
+            result.stationary_confirmed = outcome["stationary_confirmed"]
+            result.hardware_estop = outcome["hardware_estop"]
+            self.get_logger().info(
+                f"Arm trajectory finished device={self.device_id} success={result.success} "
+                f"message={result.message!r} stop_requested={result.stop_requested} "
+                f"final_max_error_rad={result.max_error_rad:.6f} "
+                f"stationary_confirmed={result.stationary_confirmed}")
+            if goal_handle.is_cancel_requested:
+                goal_handle.canceled()
+            elif result.success:
+                goal_handle.succeed()
+            else:
+                goal_handle.abort()
+        except Exception as exc:
+            result.success = False
+            result.message = str(exc)
+            result.max_error_rad = float(self.controller.last_trajectory_error_rad)
+            result.controller_accepted = self.controller.controller_accepted
+            result.stop_requested = self.controller.stop_requested
+            result.stationary_confirmed = self.controller.stationary_confirmed
+            result.hardware_estop = bool(self.controller.feedback.get("hardware_estop", False))
+            self.get_logger().error(
+                f"Arm trajectory failed device={self.device_id} "
+                f"last_max_error_rad={result.max_error_rad:.6f} "
+                f"controller_accepted={result.controller_accepted} "
+                f"stop_requested={result.stop_requested}: {result.message}")
+            goal_handle.canceled() if goal_handle.is_cancel_requested else goal_handle.abort()
+        return result
+
+    @staticmethod
+    def _publish_trajectory_feedback(goal_handle, state, error, point_index):
+        """Publish current trajectory phase, waypoint, and joint error.
+
+        Args:
+            goal_handle: Accepted trajectory action goal.
+            state: Current execution state label.
+            error: Maximum measured joint error in radians.
+            point_index: Current zero-based trajectory waypoint index.
+
+        Returns:
+            None.
+        """
+        feedback = ExecuteArmTrajectory.Feedback()
+        feedback.state = str(state)
+        feedback.point_index = int(point_index)
+        feedback.max_error_rad = float(error if math.isfinite(error) else 0.0)
+        goal_handle.publish_feedback(feedback)
 
     @staticmethod
     def _publish_action_feedback(goal_handle, state, error):

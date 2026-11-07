@@ -22,7 +22,7 @@ class Ros2SimArmBackend:
         """
         return (list(self.config["joints"]["min_rad"]), list(self.config["joints"]["max_rad"]))
 
-    capabilities = ("joint_state", "move_joints", "joint_velocity", "power", "stop")
+    capabilities = ("joint_state", "move_joints", "execute_trajectory", "joint_velocity", "power", "stop")
 
     def __init__(self, config: dict) -> None:
         """初始化对象并保存构造参数或依赖。
@@ -154,6 +154,32 @@ class Ros2SimArmBackend:
         point.time_from_start = Duration(sec=int(duration), nanosec=int((duration % 1) * 1e9))
         message.points = [point]
         self._publisher.publish(message)
+
+    def execute_trajectory(self, trajectory: JointTrajectory):
+        """Publish every validated waypoint to the MuJoCo arm controller.
+
+        Args:
+            trajectory: Time-parameterized trajectory using the configured arm joints.
+
+        Returns:
+            Integer command-acceptance result compatible with the Aubo adapter.
+        """
+        if not trajectory.points:
+            raise ValueError("joint trajectory must contain at least one waypoint")
+        command = JointTrajectory()
+        command.header = trajectory.header
+        command.header.stamp = self._ros.node.get_clock().now().to_msg()
+        command.joint_names = list(trajectory.joint_names)
+        for source in trajectory.points:
+            point = JointTrajectoryPoint()
+            point.positions = list(source.positions)
+            point.velocities = list(source.velocities)
+            point.accelerations = list(source.accelerations)
+            point.effort = list(source.effort)
+            point.time_from_start = source.time_from_start
+            command.points.append(point)
+        self._publisher.publish(command)
+        return 0
 
     def execute(self, method: str, params: list | None = None):
         """执行当前设备或操作。

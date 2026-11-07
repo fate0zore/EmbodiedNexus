@@ -2,13 +2,18 @@ string lease_id
 string client_operation_id
 string command
 float64 angle_degrees
+string expected_contact_object_id
 ---
 bool success
 string operation_id
 string error
 bool stop_sent
 bool hardware_stop_confirmed
+bool contact_confirmed
+string contacted_object_id
 ---
 string operation_id
 string state
 float64 feedback_age_sec
+bool contact_valid
+bool contact_detected

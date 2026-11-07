@@ -1,0 +1,17 @@
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+moveit_simple_controller_manager:
+  controller_names:
+    - nexus_arm_trajectory
+
+  nexus_arm_trajectory:
+    action_ns: follow_joint_trajectory
+    type: FollowJointTrajectory
+    default: true
+    joints:
+      - aubo_shoulder_joint
+      - aubo_upperArm_joint
+      - aubo_foreArm_joint
+      - aubo_wrist1_joint
+      - aubo_wrist2_joint
+      - aubo_wrist3_joint

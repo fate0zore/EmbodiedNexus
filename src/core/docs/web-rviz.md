@@ -39,6 +39,8 @@ URDF 中的 `package://` 网格从 ament 安装的 ROS 包读取。模型包必�
 
 支持的可视化话题包括 URDF 字符串、TF、PointCloud2、LaserScan、Image 和 JointState。雷达与相机点云可同时显示，分别选择话题、开关图层；相机点云固定使用洋红色以便与雷达区分，雷达点云保留消息中的 RGB 或 intensity 色彩。点云读取字段偏移、点步长、行跨度和大小端，支持 XYZ、RGB/RGBA 或 intensity，跳过无效坐标并按点数上限采样。图像支持 RGB/BGR/RGBA/BGRA、mono8、16UC1/mono16 和 32FC1；深度图使用米制色阶，可调显示范围。
 
+抓取 operator 发布 `/embodied_nexus/operators/grasp/planned_trajectory`，类型为 `trajectory_msgs/msg/JointTrajectory`。话题选择器自动发现该话题；“规划轨迹”开关显示青色末端轨迹线。浏览器依据当前 URDF 对关节点做正向运动学，计算 `grasp_frame` 的位置；该线表示最新规划，包含被拒绝的部分笛卡尔路径，并不是实际反馈轨迹。预览需要已加载包含 `grasp_frame` 的机器人模型，显示依赖当前模型根坐标系 TF。
+
 三维场景按需绘制，上限为 25 FPS，没有新数据或视角变化时不持续重绘；像素倍率上限为 1.0，并关闭 WebGL 抗锯齿以降低远程桌面和 MuJoCo GUI 同时显示时的图形负载。页面 URL 添加 `?diagnostics=1` 时，状态面板显示实际 3D 帧率及传感器从浏览器收到到显示处理的延迟。关闭点云图层时取消对应订阅，页面隐藏或离开时断开全部订阅并终止传感器解码 Worker，返回后重建 Worker 并自动重新连接；连接代次检查会丢弃旧连接迟到的传感器结果。JointState 限频至约 30 Hz，浏览器按接收时间保留最近两帧并以约 33 ms 缓冲插值显示，不向最新状态外推；TF 限频至 20 Hz。图像与点云默认限频至 5 Hz；浏览器 Worker 解码 CBOR，并按话题覆盖尚未处理的旧传感器帧，优先转换最新帧，再通过可转移缓冲区交给主线程。TF、模型及关节与传感器使用独立连接；TF 变换图按时间戳缓存，点云复用 GPU 缓冲，默认最多绘制 100,000 点。传感器点云与激光扫描按消息时间查询 TF；没有可用变换时会隐藏并暂停对应图层，收到可用 TF 后自动恢复。仿真时间回跳时会清理动态 TF 与关节插值缓存。静态 TF 和模型描述使用 transient-local 订阅策略；传感器采用适合传感器数据的 QoS。
 
 本机 Gazebo 默认使用 `balanced` 档：320×240 RGB-D、相机与雷达均为 5 Hz、关闭阴影；相机内参和设备捕获配置自动匹配分辨率。与原来的 640×480、10 Hz 相比，原始 RGB-D 数据量降为八分之一。需要原分辨率与频率时，使用 `ros2 launch embodied_nexus_sim_gazebo sim.launch.py performance:=full`，或设置 `EMBODIED_NEXUS_SIM_PERFORMANCE=full` 后调用 Gazebo Bash/PowerShell 脚本。物理步长、控制频率和雷达扫描覆盖范围保持原配置。
@@ -70,3 +72,7 @@ visualization:
 - RGB 或深度显示“不支持”：确认话题类型为 `sensor_msgs/msg/Image`，编码属于页面支持范围。
 
 Web RViz 仅用于查看 ROS 数据，不包含导航交互、设备控制或 SDK 接口，也不替代 ROS 2 桌面版 RViz。
+
+MuJoCo 场景可在机器人模型图层启用“夹指碰撞盒与接触点”：左指为半透明蓝色盒体，右指为半透明橙色盒体，红色球表示当前 MuJoCo 接触点，原始夹指网格继续显示。盒体与点的数据来自 `/sim/arachne/gripper/collision_visualization`，以各夹指链接为坐标系，随关节运动更新；没有物理接触时不显示红点。当前仅绘制 MuJoCo 的盒形夹指碰撞几何，使用网格碰撞时不会显示盒体。
+
+绿色圆柱场景可另外启用“柔性夹指垫”图层，显示同一话题中的左右 MuJoCo 柔性网格及实时顶点。该图层与碰撞盒、接触点可同时启用；其他场景未配置柔性垫时不显示网格。

@@ -239,10 +239,15 @@ class CoreManagerTests(unittest.TestCase):
             ("/cmd_vel", ["geometry_msgs/msg/Twist"]),
             ("/embodied_nexus/core/status", ["std_msgs/msg/String"]),
             ("/robot_description", ["std_msgs/msg/String"]),
+            ("/sim/arachne/gripper/collision_visualization", ["std_msgs/msg/String"]),
+            ("/embodied_nexus/operators/grasp/planned_trajectory", ["trajectory_msgs/msg/JointTrajectory"]),
+            ("/sim/arachne/arm_controller/joint_trajectory", ["trajectory_msgs/msg/JointTrajectory"]),
         ], popen=lambda *_a, **_k: (_ for _ in ()).throw(FileNotFoundError("ros2 not found")))
         self.assertFalse(runtime.info()["available"])
         self.assertEqual(runtime.topic_types(), {
             "/tf": "tf2_msgs/msg/TFMessage", "/robot_description": "std_msgs/msg/String",
+            "/sim/arachne/gripper/collision_visualization": "std_msgs/msg/String",
+            "/embodied_nexus/operators/grasp/planned_trajectory": "trajectory_msgs/msg/JointTrajectory",
         })
         self.assertIn("sensor_msgs/msg/PointCloud2", SUPPORTED_TYPES)
         self.assertNotIn("sensor_msgs/msg/CompressedImage", SUPPORTED_TYPES)

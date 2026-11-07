@@ -1,0 +1,17 @@
+string lease_id
+trajectory_msgs/JointTrajectory trajectory
+float64 speed_rad_sec
+float64 acceleration_rad_sec2
+float64 timeout_sec
+---
+bool success
+string message
+float64 max_error_rad
+bool controller_accepted
+bool stop_requested
+bool stationary_confirmed
+bool hardware_estop
+---
+string state
+uint32 point_index
+float64 max_error_rad

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import math
+import json
 import threading
 import time
 
 from builtin_interfaces.msg import Duration
 from sensor_msgs.msg import JointState
+from std_msgs.msg import String
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 from embodied_nexus_gripper import GripperFeedback
@@ -30,22 +32,30 @@ class Ros2SimGripperBackend:
         self.config = config
         options = config["backend_options"]
         validate_options(options, {"namespace", "joint_states_topic", "gripper_trajectory_topic",
-                                   "gripper_joint_names", "finger_travel_rad", "speed_at_150_rad_sec"})
+                                   "contact_state_topic", "gripper_joint_names", "finger_travel_rad",
+                                   "speed_at_150_rad_sec", "contact_hold_advance_rad"})
         root = str(options.get("namespace", "/sim/arachne")).rstrip("/")
         if not root.startswith("/"):
             raise ValueError("backend_options.namespace must be an absolute ROS namespace")
         self.state_topic = configured_topic(options, "joint_states_topic", f"{root}/joint_states")
         self.command_topic = configured_topic(options, "gripper_trajectory_topic", f"{root}/gripper_controller/joint_trajectory")
+        self.contact_topic = configured_topic(options, "contact_state_topic", f"{root}/gripper/contact_state")
         self.joints = list(options.get("gripper_joint_names", ["ms42dc_left_finger_joint", "ms42dc_right_finger_joint"]))
         if len(self.joints) != 2 or len(set(self.joints)) != 2:
             raise ValueError("backend_options.gripper_joint_names must contain two unique joints")
         self.travel_rad = float(options.get("finger_travel_rad", 0.6))
         self.speed_at_150 = float(options.get("speed_at_150_rad_sec", 0.6))
-        if not math.isfinite(self.travel_rad) or self.travel_rad <= 0 or not math.isfinite(self.speed_at_150) or self.speed_at_150 <= 0:
+        self.contact_hold_advance_rad = float(options.get("contact_hold_advance_rad", 0.02))
+        if (not math.isfinite(self.travel_rad) or self.travel_rad <= 0 or
+                not math.isfinite(self.speed_at_150) or self.speed_at_150 <= 0 or
+                not math.isfinite(self.contact_hold_advance_rad) or self.contact_hold_advance_rad <= 0):
             raise ValueError("gripper simulation travel and speed must be finite and positive")
         self.feedback_is_simulated = True
         self.opened = False
         self._sample = None
+        self._contact = None
+        self._contact_receipt = 0.0
+        self._target = None
         self._receipt = 0.0
         self._lock = threading.RLock()
         self._stamp_guard = SimTimestampGuard()
@@ -63,6 +73,8 @@ class Ros2SimGripperBackend:
         self._ros = SimRosNode(self.config["device_id"], "gripper")
         self._publisher = self._ros.node.create_publisher(JointTrajectory, self.command_topic, 10)
         self._subscription = self._ros.node.create_subscription(JointState, self.state_topic, self._on_state, 10)
+        self._contact_subscription = self._ros.node.create_subscription(
+            String, self.contact_topic, self._on_contact, 10)
         if not self._ros.wait_for(lambda: self._receipt > 0.0, 10.0):
             self._ros.close_ros()
             raise TimeoutError(f"no simulated gripper feedback on {self.state_topic}")
@@ -91,6 +103,25 @@ class Ros2SimGripperBackend:
             self._sample = sample
             self._receipt = time.monotonic()
 
+    def _on_contact(self, message: String) -> None:
+        """Cache simulator contact diagnostics without using scene truth for planning.
+
+        Args:
+            message: JSON contact state published by the MuJoCo bridge.
+
+        Returns:
+            None.
+        """
+        try:
+            payload = json.loads(message.data)
+            contact = (bool(payload["valid"]), bool(payload["contact"]),
+                       tuple(str(value) for value in payload.get("object_ids", [])))
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            return
+        with self._lock:
+            self._contact = contact
+            self._contact_receipt = time.monotonic()
+
     def _state(self):
         """构造设备状态响应。
 
@@ -117,7 +148,17 @@ class Ros2SimGripperBackend:
         positions, velocities = self._state()
         speed = max(abs(value) for value in velocities)
         moving = speed > 0.01
-        return GripperFeedback(moving=moving, reached=not moving, stationary=not moving)
+        reached = (not moving and self._target is not None and
+                   max(abs(current - target) for current, target in zip(positions, self._target)) <= 0.02)
+        with self._lock:
+            contact = self._contact
+            contact_fresh = contact is not None and time.monotonic() - self._contact_receipt <= 0.5
+        return GripperFeedback(
+            moving=moving, reached=reached, stationary=not moving,
+            contact_valid=bool(contact_fresh and contact[0]),
+            contact_detected=bool(contact_fresh and contact[1]),
+            contact_object_ids=contact[2] if contact_fresh else (),
+        )
 
     def read_feedback(self):
         """读取反馈。
@@ -153,6 +194,7 @@ class Ros2SimGripperBackend:
         point.positions = [float(value) for value in positions]
         point.time_from_start = Duration(sec=int(duration), nanosec=int((duration % 1) * 1e9))
         message.points = [point]
+        self._target = [float(value) for value in positions]
         self._publisher.publish(message)
 
     def command(self, direction: int, angle_tenths: int, speed_tenths: int) -> None:
@@ -187,6 +229,26 @@ class Ros2SimGripperBackend:
         """
         current, _ = self._state()
         self._publish(current, 0.05)
+
+    def hold_contact(self, object_id: str) -> None:
+        """Apply a short simulated closing squeeze after the requested object is detected.
+
+        Args:
+            object_id: MuJoCo scene object ID whose current finger contact must be held.
+
+        Returns:
+            None; raises RuntimeError when fresh contact with the requested object is absent.
+        """
+        object_id = str(object_id).strip()
+        with self._lock:
+            contact = self._contact
+            contact_fresh = contact is not None and time.monotonic() - self._contact_receipt <= 0.5
+        if (not object_id or not contact_fresh or not contact[0] or object_id not in contact[2]):
+            raise RuntimeError("simulated contact squeeze requires fresh contact with the requested object")
+        current, _ = self._state()
+        target = min(self.travel_rad, current[0] + self.contact_hold_advance_rad)
+        duration = max(0.05, self.contact_hold_advance_rad / self.speed_at_150)
+        self._publish([target, -target], duration)
 
     def close(self) -> None:
         """关闭连接并释放相关资源。

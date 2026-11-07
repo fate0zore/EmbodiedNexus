@@ -7,7 +7,8 @@ backend_options:
   gripper_trajectory_topic: /sim/arachne/gripper_controller/joint_trajectory
   gripper_joint_names: [ms42dc_left_finger_joint, ms42dc_right_finger_joint]
   finger_travel_rad: 0.6
-  speed_at_150_rad_sec: 0.6
+  speed_at_150_rad_sec: 0.15
+  contact_hold_advance_rad: 0.05
 interface_mode: both
 protocol:
   device_id: 1

@@ -1,5 +1,7 @@
 # MuJoCo 仿真启动指南
 
+独立的双指柔性结构实验及使用方法见 [Fin Ray 夹爪验证](docs/fin-ray-validation.md)。
+
 MuJoCo 配置接入项目的标准 ROS 2 设备后端和 Core 生命周期。它加载共享 Arachne URDF，发布仿真时钟、底盘里程计、关节状态、相机 RGB-D 和雷达点云；设备 API、SDK 和 Core 配置沿用 Gazebo 的 `ros2_sim` / `ros2_topics` 接口。
 
 ## 环境和构建

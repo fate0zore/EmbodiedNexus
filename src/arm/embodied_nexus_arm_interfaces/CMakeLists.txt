@@ -6,6 +6,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(action_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(trajectory_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/GetArmInfo.srv"
@@ -22,7 +23,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/SetArmTeachMode.srv"
   "srv/StopArm.srv"
   "action/MoveArmJoints.action"
-  DEPENDENCIES action_msgs std_msgs sensor_msgs
+  "action/ExecuteArmTrajectory.action"
+  DEPENDENCIES action_msgs std_msgs sensor_msgs trajectory_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)

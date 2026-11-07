@@ -1,12 +1,14 @@
 """Launch the MuJoCo model, ROS state publisher, and optional Core manager."""
 
 from pathlib import Path
+from typing import List
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, TimerAction
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch.actions import SetEnvironmentVariable
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.actions import Node
 
 from embodied_nexus_sim_mujoco.camera_calibration import (
@@ -44,7 +46,11 @@ def _setup(context):
         package="embodied_nexus_sim_mujoco", executable="mujoco_sim", name="mujoco",
         namespace="/sim/arachne", output="screen",
         parameters=[{"gui": LaunchConfiguration("gui"), "scene": scene,
-                     "scene_directory": scene_directory, "use_sim_time": True}],
+                     "scene_directory": scene_directory, "use_sim_time": True,
+                     "simplified_finger_collision": ParameterValue(
+                         LaunchConfiguration("simplified_finger_collision"), value_type=bool),
+                     "finger_contact_box_half_size_m": ParameterValue(
+                         LaunchConfiguration("finger_contact_box_half_size_m"), value_type=List[float])}],
     )
     state_publisher = Node(
         package="robot_state_publisher", executable="robot_state_publisher",
@@ -79,6 +85,8 @@ def generate_launch_description():
         DeclareLaunchArgument("gui", default_value="false"),
         DeclareLaunchArgument("scene", default_value="default"),
         DeclareLaunchArgument("scene_directory", default_value=""),
+        DeclareLaunchArgument("simplified_finger_collision", default_value="true"),
+        DeclareLaunchArgument("finger_contact_box_half_size_m", default_value="[0.023, 0.052, 0.012]"),
         DeclareLaunchArgument("start_core", default_value="true"),
         DeclareLaunchArgument("core_token", default_value=EnvironmentVariable(
             "EMBODIED_NEXUS_CORE_TOKEN", default_value="sim-local-token-change-me")),

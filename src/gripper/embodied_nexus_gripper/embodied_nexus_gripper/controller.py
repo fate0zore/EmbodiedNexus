@@ -20,6 +20,8 @@ class MotionResult:
     cancelled: bool = False
     stop_sent: bool = False
     hardware_stop_confirmed: bool = False
+    contact_confirmed: bool = False
+    contacted_object_id: str = ""
 
 
 class GripperController:
@@ -401,7 +403,8 @@ class GripperController:
         if not self._lease_valid_locked(lease_id):
             raise PermissionError("valid control lease required")
 
-    def reserve_motion_goal(self, lease_id: str, command: str, angle_degrees: float, operation_id: str) -> None:
+    def reserve_motion_goal(self, lease_id: str, command: str, angle_degrees: float,
+                            operation_id: str, expected_contact_object_id: str = "") -> None:
         """预留底盘运动目标及其控制租约。
 
         Args:
@@ -409,6 +412,7 @@ class GripperController:
             command: command，作为执行 reserve_motion_goal 对应的处理流程所需的输入。 类型为 str。
             angle_degrees: 角度degrees，作为执行 reserve_motion_goal 对应的处理流程所需的输入。 类型为 float。
             operation_id: 操作标识符，作为执行 reserve_motion_goal 对应的处理流程所需的输入。 类型为 str。
+            expected_contact_object_id: 仿真夹取时必须接触的场景物体 ID；空值表示常规运动。
 
         Returns:
             无返回值。
@@ -422,6 +426,11 @@ class GripperController:
             if self._operation_state == "running" or self._reserved_goal_id:
                 raise RuntimeError("another gripper operation is active")
             self.model_adapter.plan(self.config, command, angle_degrees)
+            if expected_contact_object_id:
+                if command != "close" or self.config.get("backend") != "ros2_sim":
+                    raise NotImplementedError("object-specific contact completion is available only for ros2_sim close")
+                if not str(expected_contact_object_id).strip():
+                    raise ValueError("expected_contact_object_id must not be blank")
             self._reserved_goal_id = operation_id
 
     def cancel_reserved_goal(self, operation_id: str) -> None:
@@ -442,6 +451,7 @@ class GripperController:
         cancel_requested: Callable[[], bool] | None = None,
         feedback_callback: Callable[[dict], None] | None = None,
         operation_id: str = "",
+        expected_contact_object_id: str = "",
     ) -> MotionResult:
         """运动当前设备或操作。
 
@@ -452,11 +462,16 @@ class GripperController:
             cancel_requested: 取消requested，作为运动当前设备或操作所需的输入。 类型为 Callable[[], bool] | None。
             feedback_callback: 反馈callback，作为运动当前设备或操作所需的输入。 类型为 Callable[[dict], None] | None。
             operation_id: 操作标识符，作为运动当前设备或操作所需的输入。 类型为 str。
+            expected_contact_object_id: Expected MuJoCo object ID for contact-confirmed closing.
 
         Returns:
             本次处理产生的结果值。 返回类型为 MotionResult。
         """
         plan = self.model_adapter.plan(self.config, command, angle_degrees)
+        expected_contact_object_id = str(expected_contact_object_id or "").strip()
+        if expected_contact_object_id:
+            if command != "close" or self.config.get("backend") != "ros2_sim":
+                raise NotImplementedError("object-specific contact completion is available only for ros2_sim close")
         operation_id = operation_id.strip() or str(uuid.uuid4())
         stop_event = threading.Event()
         with self._lock:
@@ -543,8 +558,66 @@ class GripperController:
                 if self.model_adapter.moving(feedback, self.config):
                     moving_seen = True
                 transition_ok = self.model_adapter.completion_allowed(self.config, moving_seen)
+                if (getattr(self.backend, "feedback_is_simulated", False) and
+                        self.model_adapter.reached(feedback, self.config)):
+                    transition_ok = True
                 with self._lock:
                     still_authorized = self._lease_valid_locked(lease_id) and self._motion_enabled
+                contacted = tuple(getattr(feedback, "contact_object_ids", ()))
+                contact_confirmed = (
+                    bool(expected_contact_object_id) and moving_seen and
+                    getattr(feedback, "contact_valid", False) is True and
+                    expected_contact_object_id in contacted and still_authorized
+                )
+                if contact_confirmed:
+                    try:
+                        contact_hold = getattr(self.backend, "hold_contact", None)
+                        if (getattr(self.backend, "feedback_is_simulated", False) and
+                                callable(contact_hold)):
+                            with self._poll_lock:
+                                contact_hold(expected_contact_object_id)
+                            hold_deadline = time.monotonic() + float(
+                                self.config.get("control", {}).get("contact_hold_timeout_sec", 4.0))
+                            stopped_feedback = None
+                            while time.monotonic() < hold_deadline:
+                                self.poll_once()
+                                with self._lock:
+                                    stopped_feedback = self._feedback
+                                    still_authorized = (
+                                        self._lease_valid_locked(lease_id) and self._motion_enabled)
+                                if (still_authorized and stopped_feedback is not None and
+                                        getattr(stopped_feedback, "stationary", False) is True and
+                                        self.model_adapter.reached(stopped_feedback, self.config) and
+                                        getattr(stopped_feedback, "contact_valid", False) is True and
+                                        expected_contact_object_id in tuple(
+                                            getattr(stopped_feedback, "contact_object_ids", ()))):
+                                    break
+                                time.sleep(min(float(self.config["feedback"]["poll_interval_sec"]), 0.05))
+                        else:
+                            with self._poll_lock:
+                                self.backend.stop()
+                            self.poll_once()
+                            with self._lock:
+                                stopped_feedback = self._feedback
+                        if (stopped_feedback is None or
+                                getattr(stopped_feedback, "contact_valid", False) is not True or
+                                expected_contact_object_id not in
+                                tuple(getattr(stopped_feedback, "contact_object_ids", ())) or
+                                getattr(stopped_feedback, "stationary", False) is not True):
+                            raise RuntimeError("target contact was not maintained after stopping gripper closure")
+                    except Exception as exc:
+                        stop_result = self.stop(f"could not hold gripper at target contact: {exc}")
+                        with self._lock:
+                            self._operation_state = "failed"
+                            self._operation_error = str(exc)
+                        return MotionResult(False, operation_id, str(exc), False,
+                                            stop_result["stop_sent"],
+                                            stop_result["hardware_stop_confirmed"])
+                    with self._lock:
+                        self._operation_state = "succeeded"
+                        self._operation_error = ""
+                    return MotionResult(True, operation_id, contact_confirmed=True,
+                                        contacted_object_id=expected_contact_object_id)
                 if self.model_adapter.reached(feedback, self.config) and transition_ok and still_authorized:
                     with self._lock:
                         self._operation_state = "succeeded"

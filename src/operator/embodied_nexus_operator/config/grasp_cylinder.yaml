@@ -1,0 +1,52 @@
+operator:
+  camera_id: camera_front
+  arm_id: arm_main
+  gripper_id: gripper_main
+  object_id: cylinder-1
+  action_name: /embodied_nexus/operators/grasp
+  mujoco_diagnostics_topic: /sim/arachne/mujoco/arm_diagnostics
+  http_bind_host: 127.0.0.1
+  http_port: 8782
+  http_token_env: EMBODIED_NEXUS_OPERATOR_HTTP_TOKEN
+  base_frame: base_link
+  end_effector_frame: grasp_frame
+  # The scene has a ground plane at world z=0 and base_link at world z=0.236 m.
+  table_height_base_m: -0.236
+  table_center_base_m: [0.88, 0.0, -0.246]
+  table_size_m: [0.60, 0.60, 0.02]
+  collision_obstacles: []
+  target_shape: cylinder
+  symmetric_box_grasp_yaw_rad: -1.48
+  # Tool Z points downward. Put grasp_frame 9 mm above the cylinder center.
+  finger_contact_center_offset_grasp_m: [0.0, 0.0, 0.009]
+  pregrasp_distance_m: 0.12
+  lift_distance_m: 0.12
+  grasp_position_tolerance_m: 0.02
+  grasp_pose_tracking_tolerance_m: 0.01
+  grasp_orientation_tolerance_rad: 0.15
+  grasp_pose_correction_attempts: 3
+  grasp_yaw_tolerance_rad: 0.20
+  minimum_mask_points: 80
+  maximum_rgb_depth_delta_sec: 0.08
+  maximum_frame_age_sec: 0.75
+  detector_confidence: 0.10
+  arm_speed_rad_sec: 0.20
+  arm_acceleration_rad_sec2: 0.30
+  arm_timeout_sec: 45.0
+  arm_trajectory_timeout_multiplier: 12.0
+  arm_trajectory_timeout_margin_sec: 10.0
+  gripper_timeout_sec: 12.0
+  lease_ttl_sec: 15.0
+  lease_renew_interval_sec: 0.5
+  planning_time_sec: 20.0
+  planning_attempts: 10
+  pose_plan_retries: 2
+  moveit_velocity_scaling: 0.25
+  moveit_acceleration_scaling: 0.25
+  cartesian_min_fraction: 0.90
+  model_weights: "~/.cache/embodied-nexus/models/yoloe-11s-seg.pt"
+  text_embeddings: "~/.cache/embodied-nexus/models/yoloe-green-cylinder-text.npz"
+  class_prompt: green cylinder
+  observation_joint_names: [aubo_shoulder_joint, aubo_upperArm_joint, aubo_foreArm_joint, aubo_wrist1_joint, aubo_wrist2_joint, aubo_wrist3_joint]
+  observation_joints_rad: [-0.7901906244, -0.2094643602, 0.2558252853, -1.2548296865, 1.4666098362, 1.4912766063]
+  observation_joint_tolerance_rad: 0.08

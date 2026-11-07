@@ -21,6 +21,10 @@ Gemini335 相机、MS42DC 夹爪和 C16 雷达已完成各自适配。Scout 2.0 
 
 `src/sim/` 提供 MuJoCo 与 Gazebo 仿真入口、共享 Arachne 移动机械臂模型，以及通用 `ros2_sim` 底盘、机械臂和夹爪后端；RGB-D 相机和 16 线雷达通过标准 ROS 话题接入。五类设备已完成 Gazebo 本机 SDK 联调；MuJoCo 支持同一设备平台和 Core 生命周期。安装、构建与启动步骤见 [MuJoCo 仿真指南](src/sim/mujoco/README.md) 和 [Gazebo 仿真指南](src/sim/gazebo/embodied_nexus_sim_gazebo/docs/gazebo-fortress.md)，仿真记录见 [仿真实施记录](src/sim/README.md)。
 
+`src/operator/` 新增 MuJoCo Planned 模式视觉抓取算法模块：YOLOE 分割、RGB-D 位姿估计、MoveIt2 规划及经 Nexus 租约接口执行。完整设计、HTTP `/plan` 与 ROS Action 入口、部署及五次抓取验收流程见[抓取设计](src/operator/docs/grasp-design.md)和[MuJoCo 验收指南](src/operator/docs/mujoco-acceptance.md)。Humble 构建与相关单测已通过；YOLOE→定位→规划已进行本地试跑，但盒体抬升验收尚未通过，当前平放盒体与短边夹持方向仍待 MuJoCo 复测，详见[验收记录](src/operator/docs/mujoco-acceptance-20261031.md)。
+
+抓取演示默认使用地面横放绿色圆柱场景；规划轨迹会记录并发布到只读话题，可在 Web RViz 中显示末端预览。圆柱场景的实际识别和抓取结果需另行验收。
+
 ## 工作基线
 
 [设备中间层总体规划](todo/设备中间层总体规划.md)是已确认的后续工作基线，包含总体架构、设备接口、配置体系、实施阶段和验收标准。
@@ -35,6 +39,7 @@ src/base/      底盘实现、ROS 接口、文档和示例
 src/arm/       机械臂实现、ROS 接口、来源许可、文档和示例
 src/gripper/   夹爪实现、ROS 接口、来源许可、文档和示例
 src/lidar/     雷达实现、ROS 接口、厂商驱动、文档和示例
+src/operator/  面向任务的算法模块、ROS 接口、MoveIt 配置和验收指南
 sdk/python/    不依赖 ROS 的统一 Python SDK
 src/core/      五类设备的统一 ROS 管理节点与 HTTP/WebSocket 入口
 docs/          总体架构与跨模块说明

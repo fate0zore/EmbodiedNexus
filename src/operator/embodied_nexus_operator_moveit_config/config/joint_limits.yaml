@@ -1,0 +1,7 @@
+joint_limits:
+  aubo_shoulder_joint: {has_velocity_limits: true, max_velocity: 0.45, has_acceleration_limits: true, max_acceleration: 0.8}
+  aubo_upperArm_joint: {has_velocity_limits: true, max_velocity: 0.45, has_acceleration_limits: true, max_acceleration: 0.8}
+  aubo_foreArm_joint: {has_velocity_limits: true, max_velocity: 0.45, has_acceleration_limits: true, max_acceleration: 0.8}
+  aubo_wrist1_joint: {has_velocity_limits: true, max_velocity: 0.65, has_acceleration_limits: true, max_acceleration: 1.0}
+  aubo_wrist2_joint: {has_velocity_limits: true, max_velocity: 0.65, has_acceleration_limits: true, max_acceleration: 1.0}
+  aubo_wrist3_joint: {has_velocity_limits: true, max_velocity: 0.65, has_acceleration_limits: true, max_acceleration: 1.0}

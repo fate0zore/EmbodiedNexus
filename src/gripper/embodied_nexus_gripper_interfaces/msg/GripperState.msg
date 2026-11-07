@@ -17,6 +17,9 @@ uint64 feedback_sequence
 bool feedback_moving
 bool feedback_reached
 bool feedback_stationary
+bool feedback_contact_valid
+bool feedback_contact_detected
+string[] feedback_contact_object_ids
 float64 feedback_age_sec
 bool stop_sent
 bool hardware_stop_confirmed

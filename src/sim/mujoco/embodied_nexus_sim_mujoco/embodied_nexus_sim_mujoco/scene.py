@@ -23,6 +23,10 @@ _OBJECT_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,47}$")
 _ASSET_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _SHAPES = {"box", "sphere", "cylinder", "mesh"}
 _COMMON_FIELDS = {"id", "shape", "position", "rotation", "rgba", "motion"}
+_ARM_JOINTS = {
+    "aubo_shoulder_joint", "aubo_upperArm_joint", "aubo_foreArm_joint",
+    "aubo_wrist1_joint", "aubo_wrist2_joint", "aubo_wrist3_joint",
+}
 
 
 def _package_share_directory(package: str) -> Path:
@@ -329,10 +333,100 @@ class SceneLibrary:
         Returns:
             None; raises ValueError when any field is invalid.
         """
-        if not isinstance(scene, dict) or set(scene) - {"name", "ground", "objects"}:
-            raise ValueError("scene must contain only name, ground, and objects")
+        if not isinstance(scene, dict) or set(scene) - {
+                "name", "ground", "objects", "initial_arm_joint_positions_rad",
+                "arm_position_actuator", "finger_contact_center_offset_m",
+                "finger_contact_box_half_size_m", "finger_contact_boxes", "finger_contact_material",
+                "contact_cone", "finger_flex_pads", "finger_collision_geometry"}:
+            raise ValueError(
+                "scene must contain only name, ground, objects, initial_arm_joint_positions_rad, "
+                "arm_position_actuator, finger_contact_center_offset_m, finger_contact_box_half_size_m, "
+                "finger_contact_boxes, finger_contact_material, contact_cone, finger_flex_pads, "
+                "and finger_collision_geometry")
         if not isinstance(scene.get("name"), str) or not scene["name"].strip():
             raise ValueError("scene name must be a non-empty string")
+        if scene.get("contact_cone", "pyramidal") not in ("pyramidal", "elliptic"):
+            raise ValueError("contact_cone must be pyramidal or elliptic")
+        if scene.get("finger_collision_geometry", "boxes") not in ("mesh", "boxes"):
+            raise ValueError("finger_collision_geometry must be mesh or boxes")
+        pads = scene.get("finger_flex_pads", {})
+        if not isinstance(pads, dict) or set(pads) - {"enabled", "style", "size_m", "grid", "mass_kg", "young_pa", "poisson", "damping", "radius_m", "fin_ray_edge_time_constant_s", "fin_ray_out_of_plane_stiffness_n_m"}:
+            raise ValueError("finger_flex_pads contains unsupported fields")
+        if pads:
+            if pads.get("style", "pad") not in ("pad", "fin_ray"):
+                raise ValueError("finger_flex_pads.style must be pad or fin_ray")
+            if not isinstance(pads.get("enabled"), bool):
+                raise ValueError("finger_flex_pads.enabled must be boolean")
+            self._positive_vector(pads.get("size_m"), 3, "finger_flex_pads.size_m")
+            grid = pads.get("grid")
+            if not isinstance(grid, list) or len(grid) != 3 or any(type(n) is not int or n < 2 for n in grid):
+                raise ValueError("finger_flex_pads.grid must contain three integers >= 2")
+            for key in ("mass_kg", "young_pa", "damping", "radius_m"):
+                self._positive_number(pads.get(key), f"finger_flex_pads.{key}")
+            for key in ("fin_ray_edge_time_constant_s", "fin_ray_out_of_plane_stiffness_n_m"):
+                if key in pads:
+                    self._positive_number(pads[key], f"finger_flex_pads.{key}")
+            poisson = pads.get("poisson")
+            if isinstance(poisson, bool) or not isinstance(poisson, (int, float)) or not 0 < poisson < 0.5:
+                raise ValueError("finger_flex_pads.poisson must be between 0 and 0.5")
+            if pads["enabled"] and any(not scene.get("finger_contact_boxes", {}).get(side)
+                                       for side in ("left", "right")):
+                raise ValueError("enabled finger_flex_pads require contact boxes for both fingers")
+            if pads["enabled"] and scene.get("finger_collision_geometry") == "mesh":
+                raise ValueError("flexible finger pads require box collision geometry")
+        initial_arm_pose = scene.get("initial_arm_joint_positions_rad", {})
+        if not isinstance(initial_arm_pose, dict):
+            raise ValueError("initial_arm_joint_positions_rad must be a joint-to-position mapping")
+        unknown_arm_joints = set(initial_arm_pose) - _ARM_JOINTS
+        if unknown_arm_joints:
+            raise ValueError(
+                "initial_arm_joint_positions_rad contains unknown joints: "
+                f"{sorted(unknown_arm_joints)}")
+        for joint_name, position in initial_arm_pose.items():
+            if (isinstance(position, bool) or not isinstance(position, (int, float)) or
+                    not math.isfinite(position)):
+                raise ValueError(
+                    f"initial_arm_joint_positions_rad.{joint_name} must be a finite number")
+        arm_actuator = scene.get("arm_position_actuator", {})
+        if not isinstance(arm_actuator, dict) or set(arm_actuator) - {"kp", "kv", "max_force"}:
+            raise ValueError("arm_position_actuator must contain only kp, kv, and max_force")
+        for parameter, value in arm_actuator.items():
+            self._positive_number(value, f"arm_position_actuator.{parameter}")
+        self._finite_vector(scene.get("finger_contact_center_offset_m", [0.0, 0.0, 0.0]), 3,
+                            "finger_contact_center_offset_m")
+        if "finger_contact_box_half_size_m" in scene:
+            self._positive_vector(scene["finger_contact_box_half_size_m"], 3,
+                                  "finger_contact_box_half_size_m")
+        material = scene.get("finger_contact_material", {})
+        if not isinstance(material, dict) or set(material) - {"friction", "condim", "solref", "solimp"}:
+            raise ValueError("finger_contact_material must contain only friction, condim, solref, and solimp")
+        if "friction" in material:
+            friction = self._finite_vector(material["friction"], 3, "finger_contact_material.friction")
+            if any(value < 0 for value in friction):
+                raise ValueError("finger_contact_material.friction values must be nonnegative")
+        if "condim" in material and (type(material["condim"]) is not int or material["condim"] not in {1, 3, 4, 6}):
+            raise ValueError("finger_contact_material.condim must be 1, 3, 4, or 6")
+        if "solref" in material:
+            self._positive_vector(material["solref"], 2, "finger_contact_material.solref")
+        if "solimp" in material:
+            solimp = self._finite_vector(material["solimp"], 5, "finger_contact_material.solimp")
+            if not (0 < solimp[0] <= solimp[1] < 1 and solimp[2] > 0 and
+                    0 < solimp[3] < 1 and solimp[4] >= 1):
+                raise ValueError("finger_contact_material.solimp must have 0 < dmin <= dmax < 1, "
+                                 "width > 0, 0 < midpoint < 1, and power >= 1")
+        boxes = scene.get("finger_contact_boxes", {})
+        if not isinstance(boxes, dict) or set(boxes) - {"left", "right"}:
+            raise ValueError("finger_contact_boxes must contain only left and right lists")
+        for side, parts in boxes.items():
+            if not isinstance(parts, list) or not parts:
+                raise ValueError(f"finger_contact_boxes.{side} must be a non-empty list")
+            for index, part in enumerate(parts):
+                field = f"finger_contact_boxes.{side}[{index}]"
+                if not isinstance(part, dict) or set(part) != {"position", "rotation", "half_size"}:
+                    raise ValueError(f"{field} must contain position, rotation, and half_size")
+                self._finite_vector(part["position"], 3, f"{field}.position")
+                self._finite_vector(part["rotation"], 3, f"{field}.rotation")
+                self._positive_vector(part["half_size"], 3, f"{field}.half_size")
         ground = scene.get("ground", {})
         if not isinstance(ground, dict) or set(ground) - {"size", "rgba"}:
             raise ValueError("ground must contain only size and rgba")

@@ -35,7 +35,14 @@
               <label><input id="tf-toggle" type="checkbox" checked /> 坐标轴与 TF</label>
               <label><input id="lidar-toggle" type="checkbox" checked /><i class="layer-swatch lidar-swatch"></i><i class="layer-swatch scan-swatch"></i> 雷达点云 / 激光扫描</label>
               <label><input id="camera-cloud-toggle" type="checkbox" checked /><i class="layer-swatch camera-swatch"></i> 相机点云（洋红）</label>
+              <label><input id="trajectory-toggle" type="checkbox" checked /> 规划轨迹（青色）</label>
+              <label><input id="finger-collision-toggle" type="checkbox" checked /> 夹指碰撞盒与接触点（蓝 / 橙 / 红）</label>
+              <label><input id="finger-flex-toggle" type="checkbox" checked /> 柔性夹指垫</label>
             </div>
+            <p id="finger-collision-state" class="card-note">等待夹指碰撞数据</p>
+            <label class="field-label" for="trajectory-topic">规划轨迹话题</label>
+            <select id="trajectory-topic"><option value="">等待规划轨迹</option></select>
+            <p id="trajectory-state" class="card-note">等待规划轨迹</p>
           </section>
           <section class="side-card sensor-card">
             <div class="card-heading"><div><small>SENSOR TOPICS</small><h2>传感器数据</h2></div><button id="refresh-topics" class="icon-button" type="button" title="刷新 ROS 话题">↻</button></div>

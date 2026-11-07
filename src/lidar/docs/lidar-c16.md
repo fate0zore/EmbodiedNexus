@@ -52,14 +52,14 @@ ros2 launch embodied_nexus_lidar lidar.launch.py interface_mode:=both
 
 数据命名空间为 `/embodied_nexus/lidars/lidar_main`：
 
-| 名称 | 类型 | 内容 |
-|---|---|---|
-| `/points` | `sensor_msgs/PointCloud2` | 原始 XYZ、强度、ring 和逐点 time |
-| `/scan` | `sensor_msgs/LaserScan` | 按配置高度带从完整点云投影的水平扫描 |
-| `/status` | `embodied_nexus_lidar_interfaces/LidarState` | 连接、数据年龄、频率、租约及电机状态 |
-| `/control/acquire`、`/control/renew`、`/control/release` | 服务 | 独占电机控制权；有效期默认 2 秒，每 0.5 秒续约 |
-| `/motor`、`/motor/speed` | 服务 | 启停电机及设置 5、10、20Hz |
-| `/capture`、`/config/*` | 服务 | 启停本封装数据输出，检查和应用运行时配置 |
+| 名称                                                           | 类型                                           | 内容                                           |
+| -------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
+| `/points`                                                    | `sensor_msgs/PointCloud2`                    | 原始 XYZ、强度、ring 和逐点 time               |
+| `/scan`                                                      | `sensor_msgs/LaserScan`                      | 按配置高度带从完整点云投影的水平扫描           |
+| `/status`                                                    | `embodied_nexus_lidar_interfaces/LidarState` | 连接、数据年龄、频率、租约及电机状态           |
+| `/control/acquire`、`/control/renew`、`/control/release` | 服务                                           | 独占电机控制权；有效期默认 2 秒，每 0.5 秒续约 |
+| `/motor`、`/motor/speed`                                   | 服务                                           | 启停电机及设置 5、10、20Hz                     |
+| `/capture`、`/config/*`                                    | 服务                                           | 启停本封装数据输出，检查和应用运行时配置       |
 
 真实 C16 后端把厂商接收节点放在设备命名空间下，由设备包独占 MSOP/DIFOP 端口。DIFOP 报文经过校验后才可用于启停和调速。启动接收不发送启转命令。启转和调速需要控制租约；停转不需要租约。释放、租约超时和进程退出都会请求停转。退出和停转响应分别报告命令是否发出、硬件状态是否已确认；当前厂商驱动没有确认电机转态的独立反馈，所以真实硬件确认状态保持未知。DIFOP 中可识别的 5/10/20Hz 转速读回会另行报告。
 
@@ -110,6 +110,6 @@ Humble 机器人端的短时真机电机验收命令：
 python3 src/lidar/embodied_nexus_lidar/test/validate_c16_hardware.py --enable-motor-test
 ```
 
-该脚本先读取并记录 DIFOP 原转速，再执行停转、启转及 5/10/20Hz 读回；结束时恢复原值、释放租约并请求停转，同时输出点云频率、数据年龄、带宽和丢帧。若设备停转后 DIFOP 不再报告可识别转速，可在本次验收已可靠记录先前读回值后，通过 `--recorded-original-speed-hz 10` 提供该恢复值；脚本会先写回并等待 DIFOP 确认，再允许启转。没有有效 DIFOP、已记录恢复值或转速读回时，会跳过启转/调速并报告待验收项。
+该脚本先读取并记录 DIFOP 原转速，再执行停转、启转及 5/10/20Hz 读回；结束时恢复原值、释放租约并请求停转，同时输出点云频率、数据年龄、带宽和丢帧。若设备停转后 DIFOP 不再报告可识别转速，可在已可靠记录先前实测转速后，通过 `--recorded-original-speed-hz 10` 提供恢复值。脚本在启转前发送该基线转速命令，启转后等待 DIFOP 实测确认基线，再开始 5/10/20Hz 测试；若启转后仍无法读回基线，后续调速测试会跳过，并执行恢复和停转清理。没有新鲜、型号有效的 DIFOP 或可靠基线值时，脚本会跳过启转。
 
-自动化检查覆盖配置、DIFOP 型号/报文、协议帧、PointCloud2 布局、大端数据、点步长、过滤、扫描边界、租约、速度范围和故障注入。ROS 2 构建及 C16 网络采集、电机测试需在 Humble 机器人端完成。实机电机测试开始前读取 DIFOP 转速；无法识别原转速时不执行调速。测试后恢复原转速设置，然后按控制规则请求停转。
+自动化检查覆盖配置、DIFOP 型号/报文、协议帧、PointCloud2 布局、大端数据、点步长、过滤、扫描边界、租约、速度范围和故障注入。ROS 2 构建及 C16 网络采集、电机测试需在 Humble 机器人端完成。停转时 DIFOP 可能不含转速读回；此时需提供先前可靠读到的基线，脚本在启转后确认实测转速再开始频率测试。测试后恢复基线设置，然后按控制规则请求停转。

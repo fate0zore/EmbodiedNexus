@@ -18,7 +18,7 @@ motion:
   speed_joint_duration_sec: 100.0
   watchdog_sec: 0.75
   operation_timeout_sec: 30.0
-  goal_tolerance_rad: 0.04
+  goal_tolerance_rad: 0.01
   stable_sec: 0.25
   servo_joint_command_period_sec: 0.20
   servo_joint_velocity_rad_sec: 0.2

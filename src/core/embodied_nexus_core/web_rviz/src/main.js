@@ -7,6 +7,7 @@ import { Decoder } from "cbor-x";
 import { decodeCborFrame } from "./cbor-codec.js";
 import { buildTfPoses, imagePixels, pointCloudBuffers } from "./ros-data.js";
 import { updatePointLayer } from "./point-layer.js";
+import { trajectoryPoints } from "./trajectory-layer.js";
 import "./style.css";
 
 /**
@@ -38,11 +39,13 @@ const diagnosticsEnabled = new URLSearchParams(location.search).get("diagnostics
 const token = localStorage.getItem(TOKEN_KEY) || "";
 const topicSelectors = {
   description: $("description-topic"), cloud: $("cloud-topic"), cameraCloud: $("camera-cloud-topic"), scan: $("scan-topic"),
-  rgb: $("rgb-topic"), depth: $("depth-topic"),
+  rgb: $("rgb-topic"), depth: $("depth-topic"), trajectory: $("trajectory-topic"),
 };
 const typeFor = { description: "std_msgs/msg/String", cloud: "sensor_msgs/msg/PointCloud2", cameraCloud: "sensor_msgs/msg/PointCloud2",
-  scan: "sensor_msgs/msg/LaserScan", rgb: "sensor_msgs/msg/Image", depth: "sensor_msgs/msg/Image" };
+  scan: "sensor_msgs/msg/LaserScan", rgb: "sensor_msgs/msg/Image", depth: "sensor_msgs/msg/Image",
+  trajectory: "trajectory_msgs/msg/JointTrajectory" };
 const CAMERA_CLOUD_COLOR = 0xff66cc;
+const FINGER_COLLISION_TOPIC = "/sim/arachne/gripper/collision_visualization";
 const selection = new Map();
 const manualTopics = new Set();
 const latest = new Map();
@@ -63,6 +66,9 @@ let reconnectDelay = 1000;
 let currentModel = null;
 let modelRootLink = "";
 let modelDescription = "";
+let trajectoryLine = null;
+let trajectorySignature = "";
+let fingerOverlayGroups = [];
 let maxPoints = 100000;
 let pointSize = 0.035;
 let depthRange = 6;
@@ -238,6 +244,7 @@ function populateTopics(preset, applyPreset = false) {
   if (applyPreset || !topicSelectors.scan.value) chooseTopic("scan", (name) => name.endsWith("/lidars/lidar_main/scan"));
   if (applyPreset || !topicSelectors.rgb.value) chooseTopic("rgb", (name) => name === `${root}/camera/image_raw` || name.endsWith("/cameras/camera_front/color/image_raw"));
   if (applyPreset || !topicSelectors.depth.value) chooseTopic("depth", (name) => name === `${root}/camera/depth_image_raw` || name.endsWith("/cameras/camera_front/depth/image_raw"));
+  if (applyPreset || !topicSelectors.trajectory.value) chooseTopic("trajectory", (name) => name === "/embodied_nexus/operators/grasp/planned_trajectory");
 }
 
 /**
@@ -251,13 +258,16 @@ function optionsFor(topic) {
     ? { ...base, queue_length: 10, throttle_rate: topic.name === "/tf_static" ? 0 : 50 }
     : topic.type === "sensor_msgs/msg/JointState"
       ? { ...base, throttle_rate: 33 }
+    : topic.name === FINGER_COLLISION_TOPIC ? { ...base, throttle_rate: 100 }
     : { ...base, throttle_rate: topic.type === "std_msgs/msg/String" ? 0 : 200 };
   if (explicitQos) {
     if (topic.type === "tf2_msgs/msg/TFMessage") {
       options.qos = topic.name === "/tf_static"
         ? { history: "keep_last", depth: 100, reliability: "reliable", durability: "transient_local" }
         : { history: "keep_last", depth: 100, reliability: "best_effort", durability: "volatile" };
-    } else if (topic.type === "std_msgs/msg/String") {
+    } else if (topic.name === FINGER_COLLISION_TOPIC) {
+      options.qos = { history: "keep_last", depth: 1, reliability: "best_effort", durability: "volatile" };
+    } else if (["std_msgs/msg/String", "trajectory_msgs/msg/JointTrajectory"].includes(topic.type)) {
       options.qos = { history: "keep_last", depth: 1, reliability: "reliable", durability: "transient_local" };
     } else {
       options.qos = { history: "keep_last", depth: 1, reliability: "best_effort", durability: "volatile" };
@@ -322,7 +332,9 @@ function unsubscribe(topicName) {
 function activeTopicNames() {
   return [topicSelectors.description.value, $("lidar-toggle").checked ? topicSelectors.cloud.value : "",
     $("camera-cloud-toggle").checked ? topicSelectors.cameraCloud.value : "", $("lidar-toggle").checked ? topicSelectors.scan.value : "",
-    topicSelectors.rgb.value, topicSelectors.depth.value, $("model-toggle").checked ? latest.get("selected-joints") : "", "/tf", "/tf_static"].filter(Boolean);
+    topicSelectors.rgb.value, topicSelectors.depth.value, $("trajectory-toggle").checked ? topicSelectors.trajectory.value : "",
+    $("model-toggle").checked ? latest.get("selected-joints") : "",
+    ($("finger-collision-toggle").checked || $("finger-flex-toggle").checked) ? FINGER_COLLISION_TOPIC : "", "/tf", "/tf_static"].filter(Boolean);
 }
 
 /**
@@ -349,6 +361,7 @@ function setSelectedTopic(key, value) {
     if (key === "cloud") removeGeometry("lidar");
     if (key === "cameraCloud") removeGeometry("camera");
     if (key === "scan") removeGeometry("scan");
+    if (key === "trajectory") clearTrajectory();
   }
   if (key === "description" && previous !== value) clearModel();
   latest.set(`selected-${key}`, value);
@@ -660,10 +673,15 @@ function updateModelPose() {
   const pose = lookupTransform($("fixed-frame").value, modelRootLink);
   if (!pose) {
     currentModel.visible = false;
+    if (trajectoryLine) trajectoryLine.visible = false;
     $("model-state").textContent = `等待 ${modelRootLink} 到固定坐标系的 TF。`;
     return;
   }
   pose.decompose(currentModel.position, currentModel.quaternion, currentModel.scale);
+  if (trajectoryLine) {
+    pose.decompose(trajectoryLine.position, trajectoryLine.quaternion, trajectoryLine.scale);
+    trajectoryLine.visible = $("trajectory-toggle").checked;
+  }
   currentModel.visible = $("model-toggle").checked;
   $("model-state").textContent = `模型已加载 · 根链接 ${modelRootLink}`;
 }
@@ -693,7 +711,9 @@ function loadRobotDescription(xml) {
     $("model-state").textContent = "URDF 已解析，等待 TF";
     controls?.target.set(0, 0, 0.45);
     applyJointPose(performance.now() - jointInterpolationDelayMs);
+    if (latest.has(FINGER_COLLISION_TOPIC)) renderFingerCollision(latest.get(FINGER_COLLISION_TOPIC));
     updateModelPose();
+    if (latest.has(topicSelectors.trajectory.value)) renderTrajectory(latest.get(topicSelectors.trajectory.value));
     requestRender();
   } catch (error) {
     $("model-state").textContent = `模型解析失败：${error.message}`;
@@ -705,16 +725,130 @@ function loadRobotDescription(xml) {
  * @returns {void} 无返回值；函数通过更新界面或发送请求完成操作。
  */
 function clearModel() {
+  clearTrajectory();
+  clearFingerCollision();
   if (currentModel) currentModel.traverse((object) => {
     object.geometry?.dispose();
     const materials = Array.isArray(object.material) ? object.material : [object.material];
     for (const material of materials) material?.dispose();
   });
   modelGroup.clear();
+  trajectoryLine = null;
+  trajectorySignature = "";
   currentModel = null;
   modelRootLink = "";
   modelDescription = "";
   $("model-state").textContent = "选择已发布的 URDF 模型话题。";
+  requestRender();
+}
+
+/**
+ * Remove diagnostic finger boxes and contact markers from the robot links.
+ * @returns {void} No return value.
+ */
+function clearFingerCollision() {
+  for (const group of fingerOverlayGroups) {
+    group.removeFromParent();
+    group.traverse((object) => { object.geometry?.dispose(); object.material?.dispose(); });
+  }
+  fingerOverlayGroups = [];
+  for (const name of ["ms42dc_left_finger_link", "ms42dc_right_finger_link"]) {
+    const link = currentModel?.links?.[name];
+    if (link) for (const child of link.children) if (child.isURDFVisual) child.visible = true;
+  }
+}
+
+/**
+ * Draw MuJoCo finger collision boxes and contact points in their link frames.
+ * @param {object} message - ROS String carrying the simulator diagnostic JSON.
+ * @returns {void} No return value.
+ */
+function renderFingerCollision(message) {
+  clearFingerCollision();
+  if (!currentModel || (!$("finger-collision-toggle").checked && !$("finger-flex-toggle").checked)) return;
+  let data;
+  try { data = JSON.parse(message.data); } catch { return; }
+  let boxCount = 0, contactCount = 0;
+  for (const finger of data.fingers || []) {
+    const link = currentModel.links?.[finger.link];
+    if (!link) continue;
+    const showFinRay = $("finger-flex-toggle").checked &&
+      (finger.pads || []).some((pad) => pad.name?.endsWith("_pad_fin"));
+    if (showFinRay) for (const child of link.children) if (child.isURDFVisual) child.visible = false;
+    const group = new THREE.Group();
+    const color = finger.link.includes("left") ? 0x28c9ff : 0xffa126;
+    for (const box of $("finger-collision-toggle").checked ? (finger.boxes || []) : []) {
+      if (![box.position, box.quaternion, box.size].every(Array.isArray)) continue;
+      const geometry = new THREE.BoxGeometry(...box.size);
+      const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }));
+      mesh.position.fromArray(box.position); mesh.quaternion.fromArray(box.quaternion);
+      group.add(mesh);
+      const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color, depthTest: false }));
+      wire.position.copy(mesh.position); wire.quaternion.copy(mesh.quaternion); wire.renderOrder = 20;
+      group.add(wire);
+      boxCount++;
+    }
+    for (const pad of $("finger-flex-toggle").checked ? (finger.pads || []) : []) {
+      if (!Array.isArray(pad.vertices) || !Array.isArray(pad.triangles)) continue;
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(pad.vertices.flat(), 3));
+      geometry.setIndex(pad.triangles.flat());
+      geometry.computeVertexNormals();
+      group.add(new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color, side: THREE.DoubleSide })));
+    }
+    for (const contact of $("finger-collision-toggle").checked ? (finger.contacts || []) : []) {
+      if (!Array.isArray(contact.position)) continue;
+      const point = new THREE.Mesh(new THREE.SphereGeometry(0.004, 10, 8),
+        new THREE.MeshBasicMaterial({ color: 0xff3344, depthTest: false }));
+      point.position.fromArray(contact.position); point.renderOrder = 21; group.add(point);
+      contactCount++;
+    }
+    link.add(group); fingerOverlayGroups.push(group);
+  }
+  $("finger-collision-state").textContent = `碰撞盒 ${boxCount} · 当前接触点 ${contactCount}`;
+  requestRender();
+}
+
+/**
+ * 移除当前规划轨迹图层。
+ * @returns {void} 无返回值。
+ */
+function clearTrajectory() {
+  if (trajectoryLine) {
+    trajectoryLine.removeFromParent();
+    trajectoryLine.geometry.dispose();
+    trajectoryLine.material.dispose();
+  }
+  trajectoryLine = null;
+  trajectorySignature = "";
+  $("trajectory-state").textContent = "等待规划轨迹";
+  requestRender();
+}
+
+/**
+ * 使用 URDF 的关节运动学将规划关节轨迹转换为末端轨迹线。
+ * @param {object} message - JointTrajectory 消息。
+ * @returns {void} 无返回值。
+ */
+function renderTrajectory(message) {
+  if (!currentModel || !Array.isArray(message?.joint_names) || !Array.isArray(message?.points)) return;
+  if (!message.points.length) { clearTrajectory(); return; }
+  const signature = JSON.stringify(message);
+  if (trajectoryLine && signature === trajectorySignature) return;
+  clearTrajectory();
+  if (!currentModel.links?.grasp_frame) { $("trajectory-state").textContent = "模型缺少 grasp_frame，无法显示轨迹"; return; }
+  const points = trajectoryPoints(currentModel, message);
+  if (points.length < 2) { $("trajectory-state").textContent = "轨迹点不足，无法绘制"; return; }
+  trajectoryLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({ color: 0x33e6e6, depthTest: false }));
+  trajectoryLine.renderOrder = 10;
+  trajectoryLine.visible = $("trajectory-toggle").checked;
+  trajectoryLine.position.copy(currentModel.position);
+  trajectoryLine.quaternion.copy(currentModel.quaternion);
+  trajectoryLine.scale.copy(currentModel.scale);
+  modelGroup.add(trajectoryLine);
+  trajectorySignature = signature;
+  $("trajectory-state").textContent = `末端预览 · ${points.length} 个点`;
   requestRender();
 }
 
@@ -964,6 +1098,8 @@ function handleRosMessage(message, prepared = null, receivedAt = null) {
   else if (topic === "/tf_static") updateTf(payload, true);
   else if (topic === topicSelectors.description.value) loadRobotDescription(payload.data || "");
   else if (topic === latest.get("selected-joints") && payload.name) updateJoints(payload);
+  else if (topic === topicSelectors.trajectory.value) renderTrajectory(payload);
+  else if (topic === FINGER_COLLISION_TOPIC) renderFingerCollision(payload);
   else if (isSensorTopic(topic)) { pendingSensors.add(topic); requestRender(); }
   if (topic !== "/tf" && topic !== "/tf_static") $("empty-state").hidden = true;
 }
@@ -1156,6 +1292,7 @@ async function refresh() {
         if (selectedJoint) subscribe(selectedJoint);
         latest.set("subscribed-joints", selectedJoint);
       }
+      syncSubscriptions();
     }
     $("empty-state").hidden = renderer ? Boolean(currentModel || geometryObjects.size) : false;
   } catch (error) {
@@ -1190,6 +1327,16 @@ $("model-toggle").addEventListener("change", () => { if (currentModel) currentMo
 $("tf-toggle").addEventListener("change", () => { updateFrameAxes(); requestRender(); });
 $("lidar-toggle").addEventListener("change", (event) => { setVisible("lidar", event.target.checked); setVisible("scan", event.target.checked); syncSubscriptions(); });
 $("camera-cloud-toggle").addEventListener("change", (event) => { setVisible("camera", event.target.checked); syncSubscriptions(); });
+$("trajectory-toggle").addEventListener("change", (event) => { if (trajectoryLine) trajectoryLine.visible = event.target.checked; syncSubscriptions(); requestRender(); });
+$("finger-collision-toggle").addEventListener("change", () => {
+  if (latest.has(FINGER_COLLISION_TOPIC)) renderFingerCollision(latest.get(FINGER_COLLISION_TOPIC));
+  else $("finger-collision-state").textContent = "等待夹指碰撞数据";
+  syncSubscriptions(); requestRender();
+});
+$("finger-flex-toggle").addEventListener("change", () => {
+  if (latest.has(FINGER_COLLISION_TOPIC)) renderFingerCollision(latest.get(FINGER_COLLISION_TOPIC));
+  syncSubscriptions(); requestRender();
+});
 $("point-size").addEventListener("input", (event) => {
   pointSize = Number(event.target.value); $("point-size-value").value = pointSize.toFixed(3);
   for (const object of geometryObjects.values()) object.material.size = pointSize;

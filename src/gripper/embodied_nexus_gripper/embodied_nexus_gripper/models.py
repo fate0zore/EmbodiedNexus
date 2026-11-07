@@ -10,3 +10,6 @@ class GripperFeedback:
     moving: bool | None
     reached: bool | None
     stationary: bool | None
+    contact_valid: bool | None = None
+    contact_detected: bool | None = None
+    contact_object_ids: tuple[str, ...] = ()

@@ -14,6 +14,7 @@ from typing import Any, Callable
 SUPPORTED_TYPES = {
     "std_msgs/msg/String", "tf2_msgs/msg/TFMessage", "sensor_msgs/msg/PointCloud2",
     "sensor_msgs/msg/LaserScan", "sensor_msgs/msg/Image", "sensor_msgs/msg/JointState",
+    "trajectory_msgs/msg/JointTrajectory",
 }
 
 
@@ -143,7 +144,11 @@ class RosbridgeRuntime:
                 for msg_type in types:
                     if msg_type not in SUPPORTED_TYPES:
                         continue
-                    if msg_type == "std_msgs/msg/String" and not name.rstrip("/").endswith("robot_description"):
+                    if (msg_type == "std_msgs/msg/String" and
+                            not name.rstrip("/").endswith("robot_description") and
+                            name != "/sim/arachne/gripper/collision_visualization"):
+                        continue
+                    if msg_type == "trajectory_msgs/msg/JointTrajectory" and name != "/embodied_nexus/operators/grasp/planned_trajectory":
                         continue
                     result[name] = msg_type
             return result

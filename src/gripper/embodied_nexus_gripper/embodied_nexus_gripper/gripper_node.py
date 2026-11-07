@@ -165,6 +165,9 @@ class GripperNode(Node):
         message.feedback_moving = state["feedback_moving"]
         message.feedback_reached = state["feedback_reached"]
         message.feedback_stationary = state["feedback_stationary"]
+        message.feedback_contact_valid = state["feedback_contact_valid"]
+        message.feedback_contact_detected = state["feedback_contact_detected"]
+        message.feedback_contact_object_ids = state["feedback_contact_object_ids"]
         message.feedback_age_sec = float(
             state["feedback_age_sec"] if state["feedback_age_sec"] is not None else -1.0
         )
@@ -353,7 +356,8 @@ class GripperNode(Node):
             return GoalResponse.REJECT
         try:
             self.controller.reserve_motion_goal(
-                request.lease_id, request.command, request.angle_degrees, request.client_operation_id
+                request.lease_id, request.command, request.angle_degrees, request.client_operation_id,
+                request.expected_contact_object_id,
             )
             return GoalResponse.ACCEPT
         except Exception as exc:
@@ -399,6 +403,8 @@ class GripperNode(Node):
             feedback.feedback_age_sec = float(
                 state["feedback_age_sec"] if state["feedback_age_sec"] is not None else -1.0
             )
+            feedback.contact_valid = state["feedback_contact_valid"]
+            feedback.contact_detected = state["feedback_contact_detected"]
             goal_handle.publish_feedback(feedback)
 
         try:
@@ -407,12 +413,15 @@ class GripperNode(Node):
                 cancel_requested=lambda: goal_handle.is_cancel_requested,
                 feedback_callback=publish,
                 operation_id=request.client_operation_id,
+                expected_contact_object_id=request.expected_contact_object_id,
             )
             result.success = outcome.success
             result.operation_id = outcome.operation_id
             result.error = outcome.error
             result.stop_sent = outcome.stop_sent
             result.hardware_stop_confirmed = outcome.hardware_stop_confirmed
+            result.contact_confirmed = outcome.contact_confirmed
+            result.contacted_object_id = outcome.contacted_object_id
             if outcome.cancelled:
                 goal_handle.canceled()
             elif outcome.success:

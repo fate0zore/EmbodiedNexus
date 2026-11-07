@@ -6,8 +6,12 @@ from __future__ import annotations
 import queue
 import threading
 import time
-import tkinter as tk
-from tkinter import ttk
+try:
+    import tkinter as tk
+    from tkinter import ttk
+except ImportError:  # Tk is optional for importing/testing the control logic headlessly.
+    tk = None
+    ttk = None
 
 from embodied_nexus_client import BaseClient
 
@@ -34,6 +38,7 @@ def velocity_for_keys(keys: set[str], linear_speed: float, angular_speed: float)
 
 class WasdWindow:
     def __init__(self, root: tk.Tk) -> None:
+
         """初始化对象并保存构造参数或依赖。
 
         Args:
@@ -77,6 +82,7 @@ class WasdWindow:
         self.worker.start()
 
     def _build(self) -> None:
+
         """构建当前设备或操作。
 
         Args:
@@ -114,6 +120,7 @@ class WasdWindow:
             frame.columnconfigure(column, weight=1)
 
     def _connect(self) -> None:
+
         """连接当前设备或操作。
 
         Args:
@@ -125,6 +132,7 @@ class WasdWindow:
         self._enqueue("connect", self.url.get().strip(), self.device_id.get().strip(), self.token.get())
 
     def _enable(self) -> None:
+
         """更新设备运动使能状态。
 
         Args:
@@ -137,6 +145,7 @@ class WasdWindow:
         self._enqueue("enable")
 
     def _stop(self) -> None:
+
         """停止设备当前动作。
 
         Args:
@@ -174,7 +183,7 @@ class WasdWindow:
         Returns:
             无返回值。
         """
-        if isinstance(event.widget, (tk.Entry, ttk.Entry)):
+        if tk is not None and isinstance(event.widget, (tk.Entry, ttk.Entry)):
             return
         key = event.keysym.lower()
         if key == "space":
@@ -361,6 +370,7 @@ class WasdWindow:
             self.worker_done.set()
 
     def _execute(self, command: str, args: tuple) -> None:
+
         """执行当前设备或操作。
 
         Args:
@@ -428,6 +438,7 @@ class WasdWindow:
         self.client = None
 
     def _show_state(self, state: dict) -> None:
+
         """显示状态。
 
         Args:
@@ -480,6 +491,7 @@ class WasdWindow:
         self._ui_status(message)
 
     def _close(self) -> None:
+
         """关闭当前设备或操作。
 
         Args:
@@ -508,6 +520,7 @@ class WasdWindow:
 
 
 def main() -> None:
+
     """解析启动参数并运行程序入口。
 
     Args:
@@ -516,6 +529,8 @@ def main() -> None:
     Returns:
         无返回值。
     """
+    if tk is None or ttk is None:
+        raise RuntimeError("the WASD window requires tkinter; install the python3-tk package")
     root = tk.Tk()
     WasdWindow(root)
     root.mainloop()

@@ -26,20 +26,20 @@ ros2 launch embodied_nexus_base base.launch.py \
   interface_mode:=both
 ```
 
-本次没有运行上述真实配置，也没有向机器人发送运动命令。来源和 Scout payload 字节序待实机核实事项见[驱动来源记录](scout-source.md)。
+此前尚未运行上述真实配置或向机器人发送运动命令。2026-10-19 的短移实机验收记录见[Scout 底盘实机验收记录](scout-hardware-acceptance-20261019.md)。来源和 Scout payload 字节序待实机核实事项见[驱动来源记录](scout-source.md)。
 
 ## ROS 接口
 
 设备命名空间为 `/embodied_nexus/bases/<device_id>`，默认 ID 为 `base_main`。
 
-| 接口 | 类型 | 作用 |
-| --- | --- | --- |
-| `state` | `embodied_nexus_base_interfaces/msg/BaseState` | 设备连接、控制权、硬件状态和反馈有效性 |
-| `odom` | `nav_msgs/msg/Odometry` | 反馈速度积分所得的估算里程计 |
-| `info`、`get_state`、`config/get` | services | 设备描述、状态与配置读取 |
-| `control/acquire`、`control/renew`、`control/release` | services | 独占控制租约 |
-| `motion/enable`、`velocity`、`stop` | services | 运动使能、租约保护的速度控制和停止 |
-| `move_relative`、`turn_relative` | actions | 可取消直行距离和相对转角操作 |
+| 接口                                                        | 类型                                             | 作用                                   |
+| ----------------------------------------------------------- | ------------------------------------------------ | -------------------------------------- |
+| `state`                                                   | `embodied_nexus_base_interfaces/msg/BaseState` | 设备连接、控制权、硬件状态和反馈有效性 |
+| `odom`                                                    | `nav_msgs/msg/Odometry`                        | 反馈速度积分所得的估算里程计           |
+| `info`、`get_state`、`config/get`                     | services                                         | 设备描述、状态与配置读取               |
+| `control/acquire`、`control/renew`、`control/release` | services                                         | 独占控制租约                           |
+| `motion/enable`、`velocity`、`stop`                   | services                                         | 运动使能、租约保护的速度控制和停止     |
+| `move_relative`、`turn_relative`                        | actions                                          | 可取消直行距离和相对转角操作           |
 
 速度单位为 m/s、rad/s，角度使用弧度。正线速度向前，正角速度逆时针。相对动作沿起始航向追踪里程，角度跨界时以角速度增量累计。速度请求超限会被拒绝，不会静默放大或截断。默认线速度为 `0.16 m/s`、角速度为 `0.60 rad/s`，配置上限为 `1.5`。里程计由速度积分估算；没有收到新鲜运动反馈时，状态中的实测速度和位姿有效标记会反映缺失。
 
