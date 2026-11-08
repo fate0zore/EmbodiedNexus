@@ -337,18 +337,24 @@ class SceneLibrary:
                 "name", "ground", "objects", "initial_arm_joint_positions_rad",
                 "arm_position_actuator", "finger_contact_center_offset_m",
                 "finger_contact_box_half_size_m", "finger_contact_boxes", "finger_contact_material",
-                "contact_cone", "finger_flex_pads", "finger_collision_geometry"}:
+                "contact_cone", "finger_flex_pads", "finger_collision_geometry",
+                "fixed_base", "noslip_iterations"}:
             raise ValueError(
                 "scene must contain only name, ground, objects, initial_arm_joint_positions_rad, "
                 "arm_position_actuator, finger_contact_center_offset_m, finger_contact_box_half_size_m, "
                 "finger_contact_boxes, finger_contact_material, contact_cone, finger_flex_pads, "
-                "and finger_collision_geometry")
+                "finger_collision_geometry, fixed_base, and noslip_iterations")
         if not isinstance(scene.get("name"), str) or not scene["name"].strip():
             raise ValueError("scene name must be a non-empty string")
         if scene.get("contact_cone", "pyramidal") not in ("pyramidal", "elliptic"):
             raise ValueError("contact_cone must be pyramidal or elliptic")
         if scene.get("finger_collision_geometry", "boxes") not in ("mesh", "boxes"):
             raise ValueError("finger_collision_geometry must be mesh or boxes")
+        if not isinstance(scene.get("fixed_base", False), bool):
+            raise ValueError("fixed_base must be boolean")
+        noslip = scene.get("noslip_iterations", 0)
+        if isinstance(noslip, bool) or not isinstance(noslip, int) or not 0 <= noslip <= 50:
+            raise ValueError("noslip_iterations must be an integer between 0 and 50")
         pads = scene.get("finger_flex_pads", {})
         if not isinstance(pads, dict) or set(pads) - {"enabled", "style", "size_m", "grid", "mass_kg", "young_pa", "poisson", "damping", "radius_m", "fin_ray_edge_time_constant_s", "fin_ray_out_of_plane_stiffness_n_m"}:
             raise ValueError("finger_flex_pads contains unsupported fields")

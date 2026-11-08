@@ -77,6 +77,25 @@ class SceneLibraryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "arm_position_actuator.kp"):
                 library._validate_mapping("test", scene)
 
+    def test_fixed_base_and_friction_solver_options_are_validated(self):
+        """Accept a stationary scene and reject malformed solver settings.
+
+        Returns:
+            None.
+        """
+        with tempfile.TemporaryDirectory() as temporary:
+            library = self.make_library(temporary)
+            scene = self.scene()
+            scene.update(fixed_base=True, noslip_iterations=10)
+            library._validate_mapping("test", scene)
+            scene["fixed_base"] = "true"
+            with self.assertRaisesRegex(ValueError, "fixed_base"):
+                library._validate_mapping("test", scene)
+            scene["fixed_base"] = True
+            scene["noslip_iterations"] = -1
+            with self.assertRaisesRegex(ValueError, "noslip_iterations"):
+                library._validate_mapping("test", scene)
+
     def test_scene_validates_finger_collision_boxes(self):
         """Accept valid link-local boxes and reject nonpositive dimensions.
 

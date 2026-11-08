@@ -274,6 +274,7 @@ class MujocoSimulation(Node):
         self._apply_initial_arm_pose(scene_config)
         mujoco.mj_forward(self.model, self.data)
         self._scene_name = scene_name
+        self._fixed_base = bool(scene_config.get("fixed_base", False))
         self._scene_objects = list(scene_config.get("objects", []))
         self._base_x = float(self.data.qpos[self._root_qpos])
         self._base_y = float(self.data.qpos[self._root_qpos + 1])
@@ -504,6 +505,13 @@ class MujocoSimulation(Node):
                     "fin_ray_out_of_plane_stiffness_n_m", 500.0)))
             candidate_data = mujoco.MjData(candidate_model)
             candidate_indices = self._model_indices(candidate_model)
+            if scene.get("fixed_base", False):
+                actual = self.data.qpos[self._root_qpos:self._root_qpos + 7]
+                reference = candidate_model.qpos0[candidate_indices["root_qpos"]:
+                                                  candidate_indices["root_qpos"] + 7]
+                if (np.linalg.norm(actual[:3] - reference[:3]) > 1e-4 or
+                        abs(float(np.dot(actual[3:], reference[3:]))) < 1.0 - 1e-6):
+                    raise ValueError("fixed-base scene requires the base at its initial pose")
             self._copy_robot_state(candidate_model, candidate_data, candidate_indices)
             mujoco.mj_forward(candidate_model, candidate_data)
             self._replace_viewer(candidate_model, candidate_data)
@@ -516,6 +524,7 @@ class MujocoSimulation(Node):
         self.data = candidate_data
         self._set_model_indices(candidate_indices)
         self._scene_name = request.scene_id
+        self._fixed_base = bool(scene.get("fixed_base", False))
         self._scene_objects = list(scene.get("objects", []))
         self._base_velocity = (0.0, 0.0)
         self._base_command_time = time.monotonic()
@@ -679,7 +688,8 @@ class MujocoSimulation(Node):
         Returns:
             None.
         """
-        self._base_velocity = (float(message.twist.linear.x), float(message.twist.angular.z))
+        self._base_velocity = ((0.0, 0.0) if self._fixed_base else
+                               (float(message.twist.linear.x), float(message.twist.angular.z)))
         self._base_command_time = time.monotonic()
 
     def _on_arm_trajectory(self, message: JointTrajectory) -> None:

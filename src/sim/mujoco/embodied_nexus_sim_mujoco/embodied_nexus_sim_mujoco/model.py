@@ -130,9 +130,13 @@ def make_scene(urdf, description_dir, camera_calibration=None, scene_config=None
         timestep = min(timestep, float(flex_pads.get("fin_ray_edge_time_constant_s", 0.0005)) / 2.0)
     option = {"timestep": str(timestep), "gravity": "0 0 -9.8",
               "integrator": "implicitfast", "cone": contact_cone}
+    option["noslip_iterations"] = str(selected_scene.get("noslip_iterations", 0))
     if flex_pads.get("enabled") and flex_pads.get("style") == "fin_ray":
         option.update({"solver": "CG", "iterations": "50"})
     ET.SubElement(scene, "option", option)
+    if selected_scene.get("fixed_base", False):
+        equality = ET.SubElement(scene, "equality")
+        ET.SubElement(equality, "weld", {"body1": "base_link", "solref": "0.004 1"})
     asset = ET.SubElement(scene, "asset")
     world = ET.SubElement(scene, "worldbody")
     ET.SubElement(world, "light", {"pos": "0 0 8", "dir": "-0.4 0.2 -0.9"})

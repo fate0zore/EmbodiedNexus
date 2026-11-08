@@ -14,6 +14,25 @@ class SceneConversionTests(unittest.TestCase):
     """Verify joint and geometry conversion without a ROS installation."""
 
     @unittest.skipUnless(importlib.util.find_spec("mujoco"), "MuJoCo is required")
+    def test_stationary_base_and_noslip_are_scene_specific(self):
+        """Compile an optional fixed base and friction solver without changing defaults.
+
+        Returns:
+            None.
+        """
+        import mujoco
+        urdf = """<robot name="test"><link name="base_link"><inertial>
+          <origin xyz="0 0 0"/><mass value="1"/><inertia ixx="1" iyy="1" izz="1"/>
+          </inertial></link></robot>"""
+        fixed = mujoco.MjModel.from_xml_string(make_scene(urdf, ".", scene_config={
+            "name": "stationary", "fixed_base": True, "noslip_iterations": 10}))
+        self.assertEqual(fixed.neq, 1)
+        self.assertEqual(fixed.opt.noslip_iterations, 10)
+        default = mujoco.MjModel.from_xml_string(make_scene(urdf, "."))
+        self.assertEqual(default.neq, 0)
+        self.assertEqual(default.opt.noslip_iterations, 0)
+
+    @unittest.skipUnless(importlib.util.find_spec("mujoco"), "MuJoCo is required")
     def test_configured_elliptic_friction_cone_compiles(self):
         """Apply the scene friction cone and retain the default for other scenes.
 
