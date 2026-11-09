@@ -5,6 +5,44 @@ import math
 import numpy as np
 
 
+def orientation_error(target, actual):
+    """Compute the shortest angle between two orientations.
+
+    Args:
+        target: Desired quaternion in XYZW order.
+        actual: Measured quaternion in XYZW order.
+
+    Returns:
+        Rotation error in radians.
+    """
+    target, actual = np.asarray(target, dtype=float), np.asarray(actual, dtype=float)
+    if (target.shape != (4,) or actual.shape != (4,) or not np.isfinite(target).all()
+            or not np.isfinite(actual).all() or np.linalg.norm(target) < 1e-9
+            or np.linalg.norm(actual) < 1e-9):
+        raise ValueError('invalid orientation quaternion')
+    cosine = abs(float(np.dot(target / np.linalg.norm(target), actual / np.linalg.norm(actual))))
+    return 2.0 * math.acos(min(1.0, cosine))
+
+
+def continuous_grasp_orientation(target_yaw, reference):
+    """Select the equivalent parallel-jaw orientation nearest the reference.
+
+    Args:
+        target_yaw: Object principal-axis angle in radians, modulo pi.
+        reference: Previous grasp quaternion in XYZW order.
+
+    Returns:
+        The nearest equivalent downward-facing grasp quaternion in XYZW order.
+    """
+    if not math.isfinite(float(target_yaw)):
+        raise ValueError('invalid target yaw')
+    closing = float(target_yaw) + math.pi / 2
+    candidates = [[math.cos((closing + offset) / 2),
+                   math.sin((closing + offset) / 2), 0.0, 0.0]
+                  for offset in (0.0, math.pi)]
+    return min(candidates, key=lambda candidate: orientation_error(candidate, reference))
+
+
 def cartesian_velocity(target, actual, gain, max_speed, tolerance):
     """Calculate bounded linear velocity toward a grasp-frame position.
 

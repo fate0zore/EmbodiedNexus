@@ -3,9 +3,88 @@
 import hashlib
 import json
 import math
+from collections import deque
 from pathlib import Path
 
 import numpy as np
+
+
+class GeometryTracker:
+    """Maintain a robust rolling estimate of a stationary target's geometry."""
+
+    def __init__(self, window_size=5):
+        """Initialize the tracker.
+
+        Args:
+            window_size: Number of complete observations needed for an estimate.
+
+        Returns:
+            None.
+        """
+        self.samples = deque(maxlen=window_size)
+        self.partial_centers = deque(maxlen=window_size)
+        self.estimate = None
+
+    def update(self, observation, clipped=False):
+        """Add an observation without allowing a single frame to move the estimate.
+
+        Args:
+            observation: Mapping containing center, size and yaw.
+            clipped: Whether the observation has an incomplete target mask.
+
+        Returns:
+            Smoothed geometry, or None until enough complete observations exist.
+        """
+        if clipped:
+            if self.estimate is None:
+                self.samples.clear()
+                return None
+            result = dict(self.estimate)
+            self.partial_centers.append(np.asarray(observation['center'], dtype=float))
+            center = np.median(np.asarray(self.partial_centers), axis=0)
+            anchor = np.asarray(self.estimate['center'], dtype=float)
+            result['center'] = (anchor + np.clip(center - anchor, -0.003, 0.003)).tolist()
+            return result
+        self.partial_centers.clear()
+        self.samples.append(observation)
+        if len(self.samples) < self.samples.maxlen:
+            return None
+        centers = np.asarray([sample['center'] for sample in self.samples], dtype=float)
+        sizes = np.asarray([sample['size'] for sample in self.samples], dtype=float)
+        yaw = np.asarray([sample['yaw'] for sample in self.samples], dtype=float)
+        anchor = self.estimate['yaw'] if self.estimate is not None else float(yaw[0])
+        yaw = anchor + (yaw - anchor + math.pi / 2) % math.pi - math.pi / 2
+        if self.estimate is None and (np.max(np.linalg.norm(centers - np.median(centers, axis=0), axis=1)) > 0.01
+                                      or np.max(np.abs(sizes - np.median(sizes, axis=0))) > 0.01
+                                      or np.max(np.abs(yaw - np.median(yaw))) > math.radians(10)):
+            self.samples.clear()
+            return None
+        self.estimate = {'center': np.median(centers, axis=0).tolist(),
+                         'size': np.median(sizes, axis=0).tolist(),
+                         'yaw': float(np.median(yaw))}
+        return dict(self.estimate)
+
+    def reject(self):
+        """Discard an incomplete initialization after a failed observation.
+
+        Returns:
+            None.
+        """
+        if self.estimate is None:
+            self.samples.clear()
+
+
+def incomplete_box_extent(observation, reliable_longest_extent):
+    """Detect progressive loss of a stationary box's visible long axis.
+
+    Args:
+        observation: Current geometry measured from the segmentation mask.
+        reliable_longest_extent: Largest previously smoothed complete extent in meters.
+
+    Returns:
+        True when the current extent is too short to trust as a complete box.
+    """
+    return float(observation['size'][0]) < 0.85 * float(reliable_longest_extent)
 
 
 def select_target(targets, target_class):
@@ -229,6 +308,8 @@ class YOLOEDetector:
         self.model.model.to(device)
         self.model.set_classes(classes, torch.as_tensor(vectors, device=device))
         self.confidence = float(confidence)
+        self.preferred_angle = 0
+        self.retry_index = 0
 
     def segment(self, rgb):
         """Select the highest confidence segmentation from an RGB frame.
@@ -243,26 +324,46 @@ class YOLOEDetector:
         image = np.asarray(rgb)
         if image.ndim != 3 or image.shape[2] != 3 or image.dtype != np.uint8:
             raise ValueError("expected an RGB uint8 image")
-        result = self.model.predict(image[:, :, ::-1].copy(), verbose=False,
-                                    conf=self.confidence, max_det=20)[0]
-        padding = 0
-        if result.boxes is None or result.masks is None or not len(result.boxes):
-            # Give a clipped near-field object more image context before retrying YOLOE.
-            padding = max(1, min(image.shape[:2]) // 3)
-            border = tuple(int(x) for x in np.median(image.reshape(-1, 3), axis=0)[::-1])
-            padded = cv2.copyMakeBorder(image[:, :, ::-1].copy(), padding, padding, padding, padding,
-                                        cv2.BORDER_CONSTANT, value=border)
-            result = self.model.predict(padded, verbose=False, conf=self.confidence, max_det=20)[0]
+        height, width = image.shape[:2]
+        side = int(math.ceil(math.hypot(width, height)))
+        left, top = (side - width) // 2, (side - height) // 2
+        border = tuple(int(x) for x in np.median(image.reshape(-1, 3), axis=0)[::-1])
+        canvas = cv2.copyMakeBorder(image[:, :, ::-1].copy(), top, side - height - top,
+                                    left, side - width - left, cv2.BORDER_CONSTANT, value=border)
+        # A full-turn padded input retains the original orientation while
+        # providing context around an image-edge target.
+        angles = list(dict.fromkeys([self.preferred_angle, 0, 45, -45, 90, 360]))
+        # One inference per camera frame keeps the RGB-D freshness guarantee;
+        # failed angles are retried on subsequent frames.
+        for angle in [angles[self.retry_index % len(angles)]]:
+            matrix = cv2.getRotationMatrix2D((side / 2, side / 2), angle, 1.0)
+            context_pad = int(min(width, height) * 0.75)
+            if angle == 0:
+                rotated = image[:, :, ::-1].copy()
+            elif angle == 360:
+                rotated = cv2.copyMakeBorder(image[:, :, ::-1].copy(), context_pad, context_pad,
+                                             context_pad, context_pad, cv2.BORDER_CONSTANT, value=border)
+            else:
+                rotated = cv2.warpAffine(canvas, matrix, (side, side), borderValue=border)
+            result = self.model.predict(rotated, verbose=False, conf=self.confidence, max_det=20)[0]
             if result.boxes is None or result.masks is None or not len(result.boxes):
-                raise RuntimeError("target not detected")
-        confidences = result.boxes.conf.detach().cpu().numpy()
-        index = int(np.argmax(confidences))
-        mask = result.masks.data[index].detach().cpu().numpy()
-        output_size = (image.shape[1] + 2 * padding, image.shape[0] + 2 * padding)
-        if mask.shape != output_size[::-1]:
-            mask = cv2.resize(mask.astype(np.float32), output_size,
-                              interpolation=cv2.INTER_NEAREST)
-        if padding:
-            mask = mask[padding:padding + image.shape[0], padding:padding + image.shape[1]]
-        mask = mask > 0.5
-        return mask, float(confidences[index])
+                continue
+            confidences = result.boxes.conf.detach().cpu().numpy()
+            index = int(np.argmax(confidences))
+            mask = result.masks.data[index].detach().cpu().numpy()
+            target_size = (rotated.shape[1], rotated.shape[0])
+            if mask.shape != target_size[::-1]:
+                mask = cv2.resize(mask.astype(np.float32), target_size, interpolation=cv2.INTER_NEAREST)
+            if angle == 360:
+                mask = mask[context_pad:context_pad + height, context_pad:context_pad + width]
+            elif angle != 0:
+                mask = cv2.warpAffine(mask.astype(np.float32), cv2.invertAffineTransform(matrix),
+                                      (side, side), flags=cv2.INTER_NEAREST)
+                mask = mask[top:top + height, left:left + width]
+            mask = mask > 0.5
+            if mask.any():
+                self.preferred_angle = angle
+                self.retry_index = 0
+                return mask, float(confidences[index])
+        self.retry_index = (self.retry_index + 1) % len(angles)
+        raise RuntimeError("target not detected")

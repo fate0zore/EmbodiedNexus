@@ -10,7 +10,10 @@ publish_joint_accelerations: false
 smoothing_filter_plugin_name: embodied_nexus_visual_servo::PassthroughFilter
 is_primary_planning_scene_monitor: false
 move_group_name: manipulator
-planning_frame: base_link
+# Humble Servo applies its Cartesian increment in the KDL solver base frame.
+# Aubo is mounted 90 degrees from base_link; use the solver base here so that
+# Servo rotates base_link-stamped velocity commands before applying them.
+planning_frame: aubo_base_link
 ee_frame_name: grasp_frame
 robot_link_command_frame: base_link
 incoming_command_timeout: 0.5

@@ -13,6 +13,36 @@ from embodied_nexus_sim_mujoco.model import make_scene
 class SceneConversionTests(unittest.TestCase):
     """Verify joint and geometry conversion without a ROS installation."""
 
+    @unittest.skipUnless(shutil.which('xacro') and importlib.util.find_spec('mujoco'),
+                         'ROS xacro and MuJoCo are required')
+    def test_convex_fingers_preserve_visual_geometry_and_collision_parts(self):
+        """Compile the same convex parts used by MoveIt as MuJoCo contacts.
+
+        Returns:
+            None.
+        """
+        import json
+        import mujoco
+        import yaml
+
+        package = Path(__file__).resolve().parents[1]
+        description = package.parents[1] / 'common/third_party/embodied_nexus_sim_description'
+        scene_dir = package / 'config/scenes'
+        scene = yaml.safe_load((scene_dir / 'visual_servo_convex.yaml').read_text(encoding='utf-8'))
+        manifest = json.loads((description / 'meshes/gripper/ms42dc/convex/manifest.json').read_text())
+        urdf = subprocess.run(['xacro', str(description / 'urdf/arachne.urdf.xacro'),
+                               'gazebo_drive_wheels:=true', 'with_mimic_joints:=false'],
+                              check=True, capture_output=True, text=True).stdout
+        xml = make_scene(urdf, description, scene_config=scene, scene_directory=scene_dir)
+        model = mujoco.MjModel.from_xml_string(xml)
+        for side in ('left', 'right'):
+            body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f'ms42dc_{side}_finger_link')
+            geoms = [i for i in range(model.ngeom) if model.geom_bodyid[i] == body]
+            collision = [i for i in geoms if model.geom_contype[i] == 2]
+            self.assertEqual(len(collision), len(manifest['fingers'][side]['parts']))
+            self.assertTrue(all(model.geom_type[i] == mujoco.mjtGeom.mjGEOM_MESH for i in collision))
+            self.assertTrue(any(model.geom_contype[i] == 0 and model.geom_rgba[i][3] > 0 for i in geoms))
+
     @unittest.skipUnless(importlib.util.find_spec("mujoco"), "MuJoCo is required")
     def test_stationary_base_and_noslip_are_scene_specific(self):
         """Compile an optional fixed base and friction solver without changing defaults.

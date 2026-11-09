@@ -106,33 +106,52 @@ def _contact_finger_side(model: mujoco.MjModel, contact, side: int) -> str | Non
     return name if name in ("ms42dc_left_finger_link", "ms42dc_right_finger_link") else None
 
 
+def _finger_contact_forces(model: mujoco.MjModel, data: mujoco.MjData,
+                           object_ids: set[str]) -> dict:
+    """Sum each finger's normal force on each scene object.
+
+    Args:
+        model: Compiled simulation model.
+        data: Current simulation state and contact forces.
+        object_ids: Scene object IDs eligible for contact reporting.
+
+    Returns:
+        Object IDs mapped to left and right normal forces in newtons.
+    """
+    result = {item: {'left': 0.0, 'right': 0.0} for item in object_ids}
+    for index in range(data.ncon):
+        contact = data.contact[index]
+        for finger_side, object_side in ((0, 1), (1, 0)):
+            finger = _contact_finger_side(model, contact, finger_side)
+            geom = int(contact.geom[object_side])
+            if finger is None or geom < 0 or geom >= model.ngeom:
+                continue
+            name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom) or ''
+            object_id = name[:-5] if name.endswith('_geom') else ''
+            if object_id in result:
+                force = np.zeros(6, dtype=float)
+                mujoco.mj_contactForce(model, data, index, force)
+                side = 'left' if '_left_' in finger else 'right'
+                result[object_id][side] += max(0.0, float(force[0]))
+    return result
+
+
 def _bilateral_finger_contacts(model: mujoco.MjModel, data: mujoco.MjData,
-                               object_ids: set[str]) -> set[str]:
+                               object_ids: set[str], minimum_force_n: float = 0.05) -> set[str]:
     """Return scene objects simultaneously touched by both gripper fingers.
 
     Args:
         model: Active MuJoCo model containing the two named finger bodies.
         data: Current MuJoCo state and contact manifold.
         object_ids: IDs of scene objects eligible for grasp contact reporting.
+        minimum_force_n: Minimum normal force on each finger, in newtons.
 
     Returns:
         Scene object IDs with at least one contact on each finger.
     """
-    object_ids_by_finger = {name: set() for name in
-                            ("ms42dc_left_finger_link", "ms42dc_right_finger_link")}
-    for index in range(data.ncon):
-        contact = data.contact[index]
-        for finger_side, object_side in ((0, 1), (1, 0)):
-            finger_name = _contact_finger_side(model, contact, finger_side)
-            object_geom = int(contact.geom[object_side])
-            if finger_name is None or object_geom < 0 or object_geom >= model.ngeom:
-                continue
-            geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, object_geom) or ""
-            object_id = geom_name[:-5] if geom_name.endswith("_geom") else ""
-            if object_id in object_ids:
-                object_ids_by_finger[finger_name].add(object_id)
-    left, right = object_ids_by_finger.values()
-    return left & right
+    forces = _finger_contact_forces(model, data, object_ids)
+    return {object_id for object_id, values in forces.items()
+            if min(values.values()) >= minimum_force_n}
 
 
 def _finger_visualization(model: mujoco.MjModel, data: mujoco.MjData) -> dict:
@@ -326,6 +345,11 @@ class MujocoSimulation(Node):
                 self._viewer.cam.distance = 1.55
                 self._viewer.cam.azimuth = 135
                 self._viewer.cam.elevation = -22
+            elif scene_config.get("finger_collision_geometry") == "convex":
+                self._viewer.cam.lookat[:] = (0.88, 0.0, 0.13)
+                self._viewer.cam.distance = 0.95
+                self._viewer.cam.azimuth = 135
+                self._viewer.cam.elevation = -20
             self._start_viewer_sync()
         self._sensor_thread.start()
         self._sensor_publish_thread.start()
@@ -1053,6 +1077,11 @@ class MujocoSimulation(Node):
             "valid": True,
             "contact": bool(contacts),
             "object_ids": sorted(contacts),
+            "normal_forces_n": _finger_contact_forces(self.model, self.data, object_ids),
+            "joint_positions_rad": {name: float(self.data.qpos[self._joint_qpos(name)])
+                                    for name in GRIPPER_JOINTS},
+            "actuator_forces": {name: float(self.data.actuator_force[self._actuators[name]])
+                                for name in GRIPPER_JOINTS},
             "fingers": pad_diagnostics,
         }, separators=(",", ":"))))
         self._finger_visualization_pub.publish(String(data=json.dumps(

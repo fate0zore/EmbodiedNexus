@@ -13,13 +13,14 @@ visual_servo:
   observation_joints_rad: [-0.7901906244, -0.2094643602, 0.2558252853, -1.2548296865, 1.4666098362, 1.4912766063]
   joint_names: [aubo_shoulder_joint, aubo_upperArm_joint, aubo_foreArm_joint, aubo_wrist1_joint, aubo_wrist2_joint, aubo_wrist3_joint]
   pregrasp_distance_m: 0.12
-  finger_contact_offset_m: 0.019
+  # Probe center y=0.140 m in the gripper base minus grasp-frame y=0.121875263 m.
+  finger_contact_offset_m: 0.018124737
   lift_distance_m: 0.07
   target_freshness_sec: 0.85
-  servo_gain: 0.5
+  servo_gain: 0.15
   servo_speed_m_sec: 0.015
-  servo_position_tolerance_m: 0.012
-  servo_timeout_sec: 60.0
+  servo_position_tolerance_m: 0.003
+  servo_timeout_sec: 120.0
   lease_ttl_sec: 15.0
   targets:
     green cylinder:

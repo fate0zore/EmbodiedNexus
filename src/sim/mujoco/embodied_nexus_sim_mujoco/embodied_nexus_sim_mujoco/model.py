@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 import math
+import json
 from .fin_ray import add_fin_ray
 from pathlib import Path
 import struct
@@ -90,11 +91,11 @@ def make_scene(urdf, description_dir, camera_calibration=None, scene_config=None
     """
     robot = ET.fromstring(urdf)
     selected_scene = scene_config or DEFAULT_SCENE
-    geometry = selected_scene.get("finger_collision_geometry")
-    if geometry not in (None, "mesh", "boxes"):
-        raise ValueError("finger_collision_geometry must be mesh or boxes")
-    if geometry is not None:
-        simplified_finger_collision = geometry == "boxes"
+    finger_geometry = selected_scene.get("finger_collision_geometry")
+    if finger_geometry not in (None, "mesh", "boxes", "convex"):
+        raise ValueError("finger_collision_geometry must be mesh, boxes or convex")
+    if finger_geometry is not None:
+        simplified_finger_collision = finger_geometry == "boxes"
     finger_material = selected_scene.get("finger_contact_material", {})
     flex_pads = selected_scene.get("finger_flex_pads", {})
     if flex_pads.get("enabled") and not simplified_finger_collision:
@@ -270,6 +271,7 @@ def make_scene(urdf, description_dir, camera_calibration=None, scene_config=None
             geometry = collision.find("geometry")
             finger_collision = link_name in {"ms42dc_left_finger_link", "ms42dc_right_finger_link"}
             use_contact_box = finger_collision and bool(simplified_finger_collision)
+            use_convex_finger = finger_collision and finger_geometry == "convex"
             ga = {"rgba": "0.55 0.58 0.62 1", "mass": "0", "group": "1",
                   "contype": "2" if finger_collision and not use_contact_box else "0",
                   "conaffinity": "1" if finger_collision and not use_contact_box else "0",
@@ -284,6 +286,8 @@ def make_scene(urdf, description_dir, camera_calibration=None, scene_config=None
             if finger_collision and not use_contact_box:
                 ga.update(finger_material_attrs)
             ga.update(_pose(collision.find("origin")))
+            if use_convex_finger:
+                ga.update({"contype": "0", "conaffinity": "0"})
             shape = geometry[0]
             if shape.tag == "mesh":
                 name = f"mesh_{mesh_index}"
@@ -310,6 +314,19 @@ def make_scene(urdf, description_dir, camera_calibration=None, scene_config=None
             else:
                 raise ValueError(f"unsupported geometry: {shape.tag}")
             ET.SubElement(body, "geom", ga)
+            if use_convex_finger:
+                side = "left" if "_left_" in link_name else "right"
+                convex_dir = Path(description_dir) / "meshes/gripper/ms42dc/convex"
+                manifest = json.loads((convex_dir / "manifest.json").read_text(encoding="utf-8"))
+                for index, filename in enumerate(manifest["fingers"][side]["parts"]):
+                    convex_name = f"{link_name}_convex_{index}"
+                    ET.SubElement(asset, "mesh", {"name": convex_name, "file": str(convex_dir / filename)})
+                    convex_attrs = {"name": convex_name, "type": "mesh", "mesh": convex_name,
+                                    "rgba": "0 0 0 0", "mass": "0", "group": "3",
+                                    "contype": "2", "conaffinity": "1", "friction": "1.1 0.01 0.001"}
+                    convex_attrs.update(finger_material_attrs)
+                    convex_attrs.update(_pose(collision.find("origin")))
+                    ET.SubElement(body, "geom", convex_attrs)
             if use_contact_box:
                 contact_attrs = {
                     "name": f"{link_name}_contact_{collision_index}",

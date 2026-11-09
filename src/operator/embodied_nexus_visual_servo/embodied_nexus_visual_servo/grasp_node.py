@@ -40,7 +40,8 @@ from std_srvs.srv import Trigger
 from tf2_ros import Buffer, TransformListener
 from trajectory_msgs.msg import JointTrajectory
 
-from .control import JointVelocityTracker, angular_velocity, cartesian_velocity, map_servo_velocities
+from .control import (JointVelocityTracker, angular_velocity, cartesian_velocity,
+                      continuous_grasp_orientation, map_servo_velocities, orientation_error)
 
 
 class Cancelled(RuntimeError):
@@ -598,7 +599,8 @@ class VisualServoGraspNode(Node):
             self._check(goal)
             with self.lock:
                 data = self.target
-            if data and data[0].target_class == self.target_class and time.monotonic() - data[1] <= self.config["target_freshness_sec"]:
+            if (data and data[0].target_class == self.target_class and data[0].geometry_ready and
+                    time.monotonic() - data[1] <= self.config["target_freshness_sec"]):
                 return data[0]
             time.sleep(0.05)
         raise TimeoutError("fresh vision target unavailable")
@@ -682,12 +684,15 @@ class VisualServoGraspNode(Node):
         tracker = JointVelocityTracker(self._positions(), gain=4.0, limit=0.2)
         previous_time = self.get_clock().now().nanoseconds
         initial_distance = None
+        stable_since = None
+        scene_update_at = 0.0
         try:
             while time.monotonic() < deadline:
                 self._check(goal)
                 try:
                     target = self._latest_target(goal, timeout=0.1)
                 except TimeoutError:
+                    stable_since = None
                     # Stop the velocity stream before waiting for another visual observation.
                     halt = TwistStamped()
                     halt.header.frame_id = self.config["base_frame"]
@@ -707,26 +712,73 @@ class VisualServoGraspNode(Node):
                                                      Time(), timeout=Duration(seconds=0.4))
                 actual = transform.transform.translation
                 position = target.pose.pose.position
+                target_orientation = target.pose.pose.orientation
+                yaw = 2 * math.atan2(target_orientation.z, target_orientation.w)
+                previous_orientation = [desired_orientation.x, desired_orientation.y,
+                                        desired_orientation.z, desired_orientation.w]
+                wanted_quaternion = continuous_grasp_orientation(yaw, previous_orientation)
+                (desired_orientation.x, desired_orientation.y,
+                 desired_orientation.z, desired_orientation.w) = wanted_quaternion
                 desired = [position.x, position.y, position.z + self.config["finger_contact_offset_m"]]
                 velocity, reached = cartesian_velocity(desired, [actual.x, actual.y, actual.z],
                     self.config["servo_gain"], self.config["servo_speed_m_sec"],
                     self.config["servo_position_tolerance_m"])
                 rotation = transform.transform.rotation
+                actual_quaternion = [rotation.x, rotation.y, rotation.z, rotation.w]
+                angle_error = orientation_error(wanted_quaternion, actual_quaternion)
                 angular = angular_velocity(
-                    [desired_orientation.x, desired_orientation.y, desired_orientation.z, desired_orientation.w],
-                    [rotation.x, rotation.y, rotation.z, rotation.w], 0.05, 0.01)
+                    wanted_quaternion, actual_quaternion, 0.05, 0.01)
+                # Near the floor, finish lateral and angular alignment before
+                # descending farther. Upward correction remains available.
+                lateral_error = math.hypot(desired[0] - actual.x, desired[1] - actual.y)
+                if (abs(desired[2] - actual.z) < 0.04 and velocity[2] < 0.0 and
+                        (lateral_error > 0.004 or angle_error > math.radians(3.0))):
+                    velocity[2] = 0.0
                 distance = float(np.linalg.norm(np.asarray(desired) - [actual.x, actual.y, actual.z]))
                 if initial_distance is None:
                     initial_distance = distance
                 elif distance > initial_distance + 0.03:
                     raise RuntimeError("visual servo error increased by more than 3 cm")
-                self.get_logger().info(f"servo error_m={[round(a-b, 4) for a, b in zip(desired, [actual.x, actual.y, actual.z])]}",
+                self.get_logger().info(f"servo error_m={[round(a-b, 4) for a, b in zip(desired, [actual.x, actual.y, actual.z])]} "
+                                       f"orientation_error_deg={math.degrees(angle_error):.2f}",
                                        throttle_duration_sec=2.0)
-                if reached and float(np.linalg.norm(angular)) < 0.01:
+                if time.monotonic() - scene_update_at >= 0.5:
+                    obj = self._collision(target_id, [position.x, position.y, position.z],
+                                          list(target.size_m), yaw,
+                                          self.config['targets'][self.target_class]['shape'] == 'cylinder')
+                    scene = PlanningScene()
+                    scene.is_diff = scene.robot_state.is_diff = True
+                    scene.world.collision_objects = [obj]
+                    self._apply_scene(scene, goal)
+                    scene_update_at = time.monotonic()
+                if reached and angle_error <= math.radians(3.0):
+                    if stable_since is None:
+                        stable_since = time.monotonic()
                     response = self._velocity(lease, [0.0] * len(self.config["joint_names"]), goal)
-                    if not response.stationary_confirmed:
-                        self._wait_stationary(goal)
-                    return target
+                    halt = TwistStamped()
+                    halt.header.frame_id = self.config['base_frame']
+                    halt.header.stamp = self.get_clock().now().to_msg()
+                    self.twists.publish(halt)
+                    if time.monotonic() - stable_since >= 0.5:
+                        if not response.stationary_confirmed:
+                            self._wait_stationary(goal)
+                        fresh = self._latest_target(goal, timeout=0.1)
+                        current = self.tf.lookup_transform(self.config['base_frame'], self.config['tip_frame'],
+                                                           Time(), timeout=Duration(seconds=0.4)).transform
+                        p = fresh.pose.pose.position
+                        error = np.linalg.norm(np.asarray([p.x, p.y, p.z + self.config['finger_contact_offset_m']]) -
+                                               [current.translation.x, current.translation.y, current.translation.z])
+                        q = current.rotation
+                        fresh_orientation = fresh.pose.pose.orientation
+                        fresh_yaw = 2 * math.atan2(fresh_orientation.z, fresh_orientation.w)
+                        wanted_quaternion = continuous_grasp_orientation(fresh_yaw, wanted_quaternion)
+                        if error <= self.config['servo_position_tolerance_m'] and orientation_error(
+                                wanted_quaternion, [q.x, q.y, q.z, q.w]) <= math.radians(3.0):
+                            return fresh
+                        stable_since = None
+                    time.sleep(0.1)
+                    continue
+                stable_since = None
                 twist = TwistStamped()
                 twist.header.frame_id = self.config["base_frame"]
                 twist.header.stamp = self.get_clock().now().to_msg()
@@ -862,6 +914,11 @@ class VisualServoGraspNode(Node):
             self._latest_target(goal, timeout=5.0)
             self._feedback(goal, "servo", "approaching with continuous vision", target.confidence)
             target = self._servo_approach(goal, leases[0], target_id, grasp.orientation)
+            position = target.pose.pose.position
+            orientation = target.pose.pose.orientation
+            yaw = 2 * math.atan2(orientation.z, orientation.w)
+            obj = self._collision(target_id, [position.x, position.y, position.z],
+                                  list(target.size_m), yaw, is_cylinder)
             self._feedback(goal, "close", "closing gripper on target", target.confidence)
             closed = self._gripper("close", leases[1], target_id, goal)
             if not closed.contact_confirmed or closed.contacted_object_id != target_id:

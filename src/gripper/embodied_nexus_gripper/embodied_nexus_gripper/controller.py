@@ -579,20 +579,38 @@ class GripperController:
                             hold_deadline = time.monotonic() + float(
                                 self.config.get("control", {}).get("contact_hold_timeout_sec", 4.0))
                             stopped_feedback = None
+                            stable_since = None
                             while time.monotonic() < hold_deadline:
+                                if stop_event.is_set() or (cancel_requested and cancel_requested()):
+                                    stop_result = self.stop("operation cancelled during contact hold")
+                                    with self._lock:
+                                        self._operation_state = "cancelled"
+                                        self._operation_error = "operation cancelled during contact hold"
+                                    return MotionResult(False, operation_id, self._operation_error, True,
+                                                        stop_result["stop_sent"],
+                                                        stop_result["hardware_stop_confirmed"])
                                 self.poll_once()
                                 with self._lock:
                                     stopped_feedback = self._feedback
                                     still_authorized = (
                                         self._lease_valid_locked(lease_id) and self._motion_enabled)
-                                if (still_authorized and stopped_feedback is not None and
-                                        getattr(stopped_feedback, "stationary", False) is True and
-                                        self.model_adapter.reached(stopped_feedback, self.config) and
-                                        getattr(stopped_feedback, "contact_valid", False) is True and
-                                        expected_contact_object_id in tuple(
-                                            getattr(stopped_feedback, "contact_object_ids", ()))):
-                                    break
+                                if not still_authorized:
+                                    raise RuntimeError("gripper control lease lost during contact hold")
+                                stable = (still_authorized and stopped_feedback is not None and
+                                          getattr(stopped_feedback, "stationary", False) is True and
+                                          getattr(stopped_feedback, "contact_valid", False) is True and
+                                          expected_contact_object_id in tuple(
+                                              getattr(stopped_feedback, "contact_object_ids", ())))
+                                if stable:
+                                    if stable_since is None:
+                                        stable_since = time.monotonic()
+                                    elif time.monotonic() - stable_since >= 0.5:
+                                        break
+                                else:
+                                    stable_since = None
                                 time.sleep(min(float(self.config["feedback"]["poll_interval_sec"]), 0.05))
+                            if stable_since is None or time.monotonic() - stable_since < 0.5:
+                                raise RuntimeError("target contact was not stable for 0.5 seconds")
                         else:
                             with self._poll_lock:
                                 self.backend.stop()
@@ -605,6 +623,14 @@ class GripperController:
                                 tuple(getattr(stopped_feedback, "contact_object_ids", ())) or
                                 getattr(stopped_feedback, "stationary", False) is not True):
                             raise RuntimeError("target contact was not maintained after stopping gripper closure")
+                        if stop_event.is_set() or (cancel_requested and cancel_requested()):
+                            stop_result = self.stop("operation cancelled during contact hold")
+                            with self._lock:
+                                self._operation_state = "cancelled"
+                                self._operation_error = "operation cancelled during contact hold"
+                            return MotionResult(False, operation_id, self._operation_error, True,
+                                                stop_result["stop_sent"],
+                                                stop_result["hardware_stop_confirmed"])
                     except Exception as exc:
                         stop_result = self.stop(f"could not hold gripper at target contact: {exc}")
                         with self._lock:

@@ -19,6 +19,7 @@ from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from std_msgs.msg import String
 
 
 class GraspAcceptance(Node):
@@ -55,12 +56,40 @@ class GraspAcceptance(Node):
         self._recording = False
         self._samples: list[SceneObjectStates] = []
         self._trial_feedback: list[dict] = []
+        self._contact_diagnostics: list[dict] = []
         self.create_subscription(SceneObjectStates, "/sim/arachne/ground_truth/scene_objects",
                                  self._on_scene_state, 10, callback_group=self.callback_group)
+        self.create_subscription(String, "/sim/arachne/gripper/contact_state",
+                                 self._on_contact_state, 10, callback_group=self.callback_group)
         self.scene_client = self.create_client(ApplyScene, "/sim/arachne/mujoco/apply_scene",
                                                callback_group=self.callback_group)
         self.action_client = ActionClient(self, VisualServoGrasp, "/embodied_nexus/visual_servo/grasp",
                                           callback_group=self.callback_group)
+
+    def _on_contact_state(self, message: String) -> None:
+        """Record force diagnostics independently from the control path.
+
+        Args:
+            message: Simulator contact diagnostics JSON.
+
+        Returns:
+            None.
+        """
+        try:
+            payload = json.loads(message.data)
+            forces = payload.get('normal_forces_n', {}).get(self.object_id)
+            if forces is None:
+                return
+            record = {'left': float(forces['left']), 'right': float(forces['right'])}
+            if not all(math.isfinite(value) and value >= 0 for value in record.values()):
+                return
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return
+        with self._condition:
+            if self._recording:
+                self._contact_diagnostics.append(record)
+                if len(self._contact_diagnostics) > 5000:
+                    self._contact_diagnostics.pop(0)
 
     def _on_scene_state(self, message: SceneObjectStates) -> None:
         """Cache simulator ground truth and record samples during one trial.
@@ -304,6 +333,7 @@ class GraspAcceptance(Node):
             with self._condition:
                 self._samples = []
                 self._trial_feedback = []
+                self._contact_diagnostics = []
                 self._recording = True
             goal = VisualServoGrasp.Goal()
             goal.target_class = self.target_class
@@ -335,6 +365,7 @@ class GraspAcceptance(Node):
                 self._recording = False
                 samples = list(self._samples)
                 feedback_events = list(self._trial_feedback)
+                diagnostics = list(self._contact_diagnostics)
             action_result = wrapped.result
             metrics = self._evaluate_lift(baseline, samples, minimum_lift_m, hold_sec)
             if action_result.object_pose.header.frame_id:
@@ -347,6 +378,14 @@ class GraspAcceptance(Node):
             else:
                 metrics["position_error_m"] = None
             metrics["action_success"] = bool(action_result.success)
+            metrics["scene_id"] = self.scene_id
+            metrics["object_id"] = self.object_id
+            metrics["target_class"] = self.target_class
+            metrics["peak_normal_force_n"] = {
+                side: max((sample[side] for sample in diagnostics), default=0.0)
+                for side in ('left', 'right')}
+            metrics["bilateral_force_samples"] = sum(
+                min(sample.values()) >= 0.05 for sample in diagnostics)
             metrics["action_grasp_verified"] = bool(action_result.grasp_verified)
             metrics["action_message"] = str(action_result.message)
             phases = []

@@ -31,7 +31,7 @@ def find_window():
         """
         title = ctypes.create_unicode_buffer(512)
         user.GetWindowTextW(hwnd, title, len(title))
-        if user.IsWindowVisible(hwnd) and title.value.startswith("MuJoCo : arachne"):
+        if user.IsWindowVisible(hwnd) and "MuJoCo : arachne" in title.value:
             matches.append(hwnd)
         return True
 
@@ -56,7 +56,7 @@ def record(output, stop_file, duration, fps):
     hwnd = find_window()
     if not hwnd:
         raise RuntimeError("MuJoCo window not found")
-    user.ShowWindow(hwnd, 9)
+    user.ShowWindow(hwnd, 3)
     user.SetForegroundWindow(hwnd)
     time.sleep(1)
     rectangle = wintypes.RECT()

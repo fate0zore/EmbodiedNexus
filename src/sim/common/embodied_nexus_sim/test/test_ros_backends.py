@@ -373,6 +373,12 @@ class RosBackendContractTests(unittest.TestCase):
         self.assertFalse(feedback.reached)
         self.assertFalse(feedback.stationary)
         self.assertTrue(self.backend.feedback_is_simulated)
+        self.backend.close()
+        # A cached receipt must not satisfy the next connection's readiness.
+        self.backend._receipt = time.monotonic() + 100.0
+        self.backend.open()
+        self.assertLessEqual(self.backend._receipt, time.monotonic())
+        self.assertTrue(self.backend.read_feedback().moving)
 
 
 if __name__ == "__main__":

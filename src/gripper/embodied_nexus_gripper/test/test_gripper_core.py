@@ -10,6 +10,7 @@ from embodied_nexus_gripper.adapters.ms42dc.mock import MockBackend
 from embodied_nexus_gripper.config import load_config
 from embodied_nexus_gripper.config import validate_config
 from embodied_nexus_gripper.controller import GripperController
+from embodied_nexus_gripper.models import GripperFeedback
 from embodied_nexus_gripper.adapters.ms42dc.protocol import (
     MS42DCFeedback, ProtocolError, build_feedback_frame, build_motion_frame,
     build_state_request_frame, parse_feedback_frame,
@@ -71,6 +72,118 @@ class MS42DCProtocolTests(unittest.TestCase):
 
 
 class GripperControllerTests(unittest.TestCase):
+    def test_simulated_contact_must_remain_stable(self):
+        """Require continuous contact for the full hold interval.
+
+        Returns:
+            None.
+        """
+        class ContactBackend(MockBackend):
+            feedback_is_simulated = True
+
+            def __init__(self, config, drop_contact):
+                """Create a contact backend with optional loss after holding.
+
+                Args:
+                    config: Mock configuration.
+                    drop_contact: Whether to remove contact during the hold.
+
+                Returns:
+                    None.
+                """
+                super().__init__(config)
+                self.holding = False
+                self.drop_contact = drop_contact
+
+            def read_feedback(self):
+                """Return motor motion and simulated target contact.
+
+                Returns:
+                    Normalized simulated feedback.
+                """
+                raw = super().read_feedback()
+                moving = raw.speed_raw != 0
+                contact = not (self.holding and self.drop_contact)
+                return GripperFeedback(moving, False, not moving, True, contact,
+                                       ("target",) if contact else ())
+
+            def hold_contact(self, object_id):
+                """Stop the mock motor at the contacted object.
+
+                Args:
+                    object_id: Identifier of the contacted target.
+
+                Returns:
+                    None.
+                """
+                self.stop()
+                self.holding = True
+
+        for drop_contact in (False, True):
+            with self.subTest(drop_contact=drop_contact):
+                config = load_config(CONFIG)
+                config["mock"]["move_duration_sec"] = 1.0
+                backend = ContactBackend(config, drop_contact)
+                controller = GripperController(config, backend)
+                controller.config["backend"] = "ros2_sim"
+                controller.config["control"]["contact_hold_timeout_sec"] = 0.7
+                controller.poll_once()
+                lease_id, _ = controller.acquire_control("test")
+                controller.set_motion_enabled(lease_id, True)
+                result = controller.move(lease_id, "close", expected_contact_object_id="target")
+                self.assertEqual(result.success, not drop_contact, result.error)
+                if drop_contact:
+                    self.assertTrue(result.stop_sent)
+                controller.shutdown()
+
+    def test_cancel_during_simulated_contact_hold_stops_without_success(self):
+        """Cancel during contact hold and confirm the operation stops.
+
+        Returns:
+            None.
+        """
+        class ContactBackend(MockBackend):
+            feedback_is_simulated = True
+
+            def read_feedback(self):
+                """Return contact feedback reflecting the mock motor state.
+
+                Returns:
+                    Normalized simulated gripper feedback.
+                """
+                raw = super().read_feedback()
+                moving = raw.speed_raw != 0
+                return GripperFeedback(moving, False, not moving, True, True, ("target",))
+
+            def hold_contact(self, object_id):
+                """Stop the simulated motor and inject a cancellation.
+
+                Args:
+                    object_id: Identifier of the contacted target.
+
+                Returns:
+                    None.
+                """
+                self.stop()
+                cancelled.set()
+
+        config = load_config(CONFIG)
+        config["mock"]["move_duration_sec"] = 1.0
+        cancelled = threading.Event()
+        backend = ContactBackend(config)
+        controller = GripperController(config, backend)
+        controller.config["backend"] = "ros2_sim"
+        controller.poll_once()
+        lease_id, _ = controller.acquire_control("test")
+        controller.set_motion_enabled(lease_id, True)
+        result = controller.move(lease_id, "close", expected_contact_object_id="target",
+                                 cancel_requested=cancelled.is_set)
+        self.assertTrue(cancelled.is_set())
+        self.assertFalse(result.success)
+        self.assertTrue(result.cancelled)
+        self.assertTrue(result.stop_sent)
+        controller.shutdown()
+
     def test_simulator_profile_keeps_motor_feedback_explicitly_simulated(self):
         """验证simulatorprofilekeeps控制电机反馈explicitlysimulated。
 

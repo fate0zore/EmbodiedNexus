@@ -1,0 +1,134 @@
+name: 圆柱半径由 20 mm 缩小到 15 mm
+contact_cone: elliptic
+finger_collision_geometry: convex
+finger_flex_pads:
+  enabled: false
+  style: fin_ray
+  size_m:
+  - 0.003
+  - 0.045
+  - 0.014
+  grid:
+  - 2
+  - 3
+  - 2
+  mass_kg: 0.01
+  young_pa: 1000.0
+  poisson: 0.3
+  damping: 1.0e-05
+  radius_m: 0.0002
+  fin_ray_edge_time_constant_s: 0.001
+  fin_ray_out_of_plane_stiffness_n_m: 500.0
+finger_contact_material:
+  friction:
+  - 5
+  - 0.02
+  - 0.001
+  condim: 4
+  solref:
+  - 0.004
+  - 1
+  solimp:
+  - 0.999
+  - 0.9999
+  - 0.0001
+  - 0.5
+  - 2
+finger_contact_box_half_size_m:
+- 0.01
+- 0.045
+- 0.011
+finger_contact_boxes:
+  left:
+  - position:
+    - 0.003158
+    - 0.007336
+    - -0.0112
+    rotation:
+    - 0
+    - 0
+    - 0
+    half_size:
+    - 0.018825
+    - 0.019796
+    - 0.0114
+  - position:
+    - -0.013884
+    - 0.056208
+    - -0.0112
+    rotation:
+    - 0
+    - 0
+    - 0.381773
+    half_size:
+    - 0.009478
+    - 0.042
+    - 0.008627
+  right:
+  - position:
+    - -0.003158
+    - 0.007336
+    - -0.0112
+    rotation:
+    - 0
+    - 0
+    - 0
+    half_size:
+    - 0.018825
+    - 0.019796
+    - 0.0114
+  - position:
+    - 0.013884
+    - 0.056208
+    - -0.0112
+    rotation:
+    - 0
+    - 0
+    - -0.381773
+    half_size:
+    - 0.009478
+    - 0.042
+    - 0.008627
+arm_position_actuator:
+  kp: 2500
+  kv: 80
+  max_force: 500
+initial_arm_joint_positions_rad:
+  aubo_shoulder_joint: -1.6288407139
+  aubo_upperArm_joint: -0.0661311109
+  aubo_foreArm_joint: 0.9174900104
+  aubo_wrist1_joint: -0.3099877038
+  aubo_wrist2_joint: 1.5081279308
+  aubo_wrist3_joint: 1.0684307295
+ground:
+  size:
+  - 20
+  - 20
+  - 0.1
+  rgba:
+  - 0.75
+  - 0.75
+  - 0.75
+  - 1
+objects:
+- id: cylinder-1
+  shape: cylinder
+  position:
+  - 0.88
+  - -0.001
+  - 0.1
+  rotation:
+  - 0
+  - 1.5707963267948966
+  - 0
+  rgba:
+  - 0.2784313725490196
+  - 0.7215686274509804
+  - 0.4196078431372549
+  - 1
+  motion: dynamic
+  radius: 0.015
+  height: 0.1
+  mass_kg: 0.1
+fixed_base: true
+noslip_iterations: 10

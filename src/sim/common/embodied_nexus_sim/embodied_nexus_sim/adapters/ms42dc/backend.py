@@ -70,6 +70,13 @@ class Ros2SimGripperBackend:
         Returns:
             无返回值。
         """
+        with self._lock:
+            self._sample = None
+            self._receipt = 0.0
+            self._contact = None
+            self._contact_receipt = 0.0
+            self._stamp_guard = SimTimestampGuard()
+            self._clock_jump_pending = False
         self._ros = SimRosNode(self.config["device_id"], "gripper")
         self._publisher = self._ros.node.create_publisher(JointTrajectory, self.command_topic, 10)
         self._subscription = self._ros.node.create_subscription(JointState, self.state_topic, self._on_state, 10)

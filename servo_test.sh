@@ -65,18 +65,39 @@ PY
 stack_ready() {
   timeout 8s python3 - <<'PY'
 import sys
+import json
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from embodied_nexus_visual_servo_interfaces.action import VisualServoGrasp
+from std_srvs.srv import Trigger
+from embodied_nexus_arm_interfaces.srv import GetArmState
+from embodied_nexus_gripper_interfaces.srv import GetGripperState
 
 rclpy.init()
 node = Node('visual_servo_readiness_probe')
 client = ActionClient(node, VisualServoGrasp, '/embodied_nexus/visual_servo/grasp')
+tracker = node.create_client(Trigger, '/embodied_nexus/visual_servo/reset_tracker')
+arm = node.create_client(GetArmState, '/embodied_nexus/arms/arm_main/get_state')
+gripper = node.create_client(GetGripperState, '/embodied_nexus/grippers/gripper_main/get_state')
 try:
     ready = (client.wait_for_server(timeout_sec=3.0) and
-             node.count_publishers('/embodied_nexus/visual_servo/target') > 0)
+             node.count_publishers('/embodied_nexus/visual_servo/target') > 0 and
+             tracker.wait_for_service(timeout_sec=3.0) and
+             arm.wait_for_service(timeout_sec=1.0) and gripper.wait_for_service(timeout_sec=1.0))
+    if ready:
+        arm_future = arm.call_async(GetArmState.Request())
+        gripper_future = gripper.call_async(GetGripperState.Request())
+        rclpy.spin_until_future_complete(node, arm_future, timeout_sec=1.0)
+        rclpy.spin_until_future_complete(node, gripper_future, timeout_sec=1.0)
+        ready = (arm_future.done() and gripper_future.done() and arm_future.result() is not None and
+                 gripper_future.result() is not None and
+                 json.loads(arm_future.result().state_json).get('feedback_valid', False) and
+                 gripper_future.result().state.feedback_valid and gripper_future.result().state.connected)
 finally:
+    node.destroy_client(arm)
+    node.destroy_client(gripper)
+    node.destroy_client(tracker)
     client.destroy()
     node.destroy_node()
     rclpy.shutdown()
@@ -133,15 +154,27 @@ stop_stack() {
 }
 
 # Start one launch process and wait for the Action and perception publisher.
-# Args: optional --gui and --core. Returns: zero when the stack is ready.
+# Args: optional GUI, Core, scene, class and object settings. Returns: zero when ready.
 start_stack() {
-  local log pid info gui_value=false core_value=false option
-  for option in "$@"; do
-    case "$option" in
+  local log pid info gui_value=false core_value=false scene_value=visual_servo_contact
+  local class_value='green cylinder' object_value=cylinder-1 scene_dir=''
+  local -a launch_args
+  while (($#)); do
+    case "$1" in
       --gui) [[ "$gui_value" == false ]] || { echo 'Duplicate --gui.' >&2; return 2; }; gui_value=true ;;
       --core) [[ "$core_value" == false ]] || { echo 'Duplicate --core.' >&2; return 2; }; core_value=true ;;
-      *) echo "Unknown option: $option" >&2; return 2 ;;
+      --scene|--target-class|--object-id|--scene-directory)
+        [[ $# -ge 2 && -n "$2" && "$2" != *$'\n'* ]] || { echo "Missing or invalid value for $1" >&2; return 2; }
+        case "$1" in
+          --scene) scene_value="$2" ;;
+          --target-class) class_value="$2" ;;
+          --object-id) object_value="$2" ;;
+          --scene-directory) scene_dir="$2" ;;
+        esac
+        shift ;;
+      *) echo "Unknown option: $1" >&2; return 2 ;;
     esac
+    shift
   done
   if owned_running; then
     echo 'Visual servo test is already running; use status or stop.' >&2; return 1
@@ -157,13 +190,15 @@ start_stack() {
     echo 'Visual servo Python dependencies or simulation adapters are unavailable.' >&2; return 1
   fi
   log="$STATE_DIR/launch-$(date +%Y%m%d-%H%M%S)-$$.log"
-  setsid ros2 launch embodied_nexus_visual_servo visual_servo.launch.py "gui:=$gui_value" \
-    "start_core:=$core_value" > "$log" 2>&1 < /dev/null &
+  launch_args=("gui:=$gui_value" "start_core:=$core_value" "scene:=$scene_value" "target_class:=$class_value")
+  [[ -z "$scene_dir" ]] || launch_args+=("scene_directory:=$scene_dir")
+  setsid ros2 launch embodied_nexus_visual_servo visual_servo.launch.py "${launch_args[@]}" > "$log" 2>&1 < /dev/null &
   pid=$!
   sleep 0.3
   info="$(identity "$pid")" || { echo "Launch exited; inspect $log" >&2; return 1; }
   printf '%s %s\n' "$pid" "$info" > "$PID_FILE"
   printf '%s\n' "$log" > "$STATE_DIR/launch.logpath"
+  printf '%s\n%s\n%s\n' "$scene_value" "$class_value" "$object_value" > "$STATE_DIR/selection"
   echo "Using ROS overlay: $SETUP"
   for _ in {1..90}; do
     if ! owned_running || grep -q 'process has died' "$log"; then break; fi
@@ -188,35 +223,41 @@ start_stack() {
 # Trigger one visual servo Action or the independent truth-based acceptance run.
 # Args: grasp or verify. Returns: command exit status.
 run_grasp() {
-  local mode="$1"
+  local mode="$1" goal
+  local -a selection
   owned_running || { echo 'This script has not started a running visual servo stack.' >&2; return 1; }
   load_environment
+  mapfile -t selection < "$STATE_DIR/selection"
   if [[ "$mode" == verify ]]; then
     ros2 run embodied_nexus_visual_servo visual_servo_acceptance --trials 1 \
-      --object-id cylinder-1 --camera-id camera_front --arm-id arm_main \
-      --gripper-id gripper_main --target-class 'green cylinder'
+      --scene-id "${selection[0]}" --object-id "${selection[2]}" --camera-id camera_front --arm-id arm_main \
+      --gripper-id gripper_main --target-class "${selection[1]}"
   else
+    goal="$(python3 -c 'import json,sys; print(json.dumps(dict(target_class=sys.argv[1], object_id=sys.argv[2], camera_id="camera_front", arm_id="arm_main", gripper_id="gripper_main")))' "${selection[1]}" "${selection[2]}")"
     ros2 action send_goal "$ACTION" embodied_nexus_visual_servo_interfaces/action/VisualServoGrasp \
-      "{target_class: 'green cylinder', object_id: 'cylinder-1', camera_id: 'camera_front', arm_id: 'arm_main', gripper_id: 'gripper_main'}" \
+      "$goal" \
       --feedback
   fi
 }
 
-usage='Usage: bash servo_test.sh [start [--gui] [--core] | restart [--gui] [--core] | grasp | verify | status | stop]'
+usage='Usage: bash servo_test.sh [start|restart] [--gui] [--core] [--scene ID] [--scene-directory DIR] [--target-class PROMPT] [--object-id ID] | grasp | verify | status | stop'
 case "${1:-start}" in
   start|restart)
     command="${1:-start}"
     if [[ $# -gt 0 ]]; then shift; fi
-    gui_seen=false; core_seen=false
-    for option in "$@"; do
-      case "$option" in
-        --gui) [[ "$gui_seen" == false ]] || { echo "$usage" >&2; exit 2; }; gui_seen=true ;;
-        --core) [[ "$core_seen" == false ]] || { echo "$usage" >&2; exit 2; }; core_seen=true ;;
+    options=("$@")
+    while (($#)); do
+      case "$1" in
+        --gui|--core) ;;
+        --scene|--target-class|--object-id|--scene-directory)
+          [[ $# -ge 2 && -n "$2" && "$2" != *$'\n'* ]] || { echo "$usage" >&2; exit 2; }
+          shift ;;
         *) echo "$usage" >&2; exit 2 ;;
       esac
+      shift
     done
     [[ "$command" != restart ]] || stop_stack
-    start_stack "$@" ;;
+    start_stack "${options[@]}" ;;
   grasp|verify) [[ $# -eq 1 ]] || { echo "$usage" >&2; exit 2; }; run_grasp "$1" ;;
   stop) [[ $# -eq 1 ]] || { echo "$usage" >&2; exit 2; }; stop_stack ;;
   status)

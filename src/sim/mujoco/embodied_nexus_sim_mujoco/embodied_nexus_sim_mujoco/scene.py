@@ -348,8 +348,8 @@ class SceneLibrary:
             raise ValueError("scene name must be a non-empty string")
         if scene.get("contact_cone", "pyramidal") not in ("pyramidal", "elliptic"):
             raise ValueError("contact_cone must be pyramidal or elliptic")
-        if scene.get("finger_collision_geometry", "boxes") not in ("mesh", "boxes"):
-            raise ValueError("finger_collision_geometry must be mesh or boxes")
+        if scene.get("finger_collision_geometry", "boxes") not in ("mesh", "boxes", "convex"):
+            raise ValueError("finger_collision_geometry must be mesh, boxes or convex")
         if not isinstance(scene.get("fixed_base", False), bool):
             raise ValueError("fixed_base must be boolean")
         noslip = scene.get("noslip_iterations", 0)
@@ -378,7 +378,7 @@ class SceneLibrary:
             if pads["enabled"] and any(not scene.get("finger_contact_boxes", {}).get(side)
                                        for side in ("left", "right")):
                 raise ValueError("enabled finger_flex_pads require contact boxes for both fingers")
-            if pads["enabled"] and scene.get("finger_collision_geometry") == "mesh":
+            if pads["enabled"] and scene.get("finger_collision_geometry") in ("mesh", "convex"):
                 raise ValueError("flexible finger pads require box collision geometry")
         initial_arm_pose = scene.get("initial_arm_joint_positions_rad", {})
         if not isinstance(initial_arm_pose, dict):

@@ -1,6 +1,7 @@
 """Launch the independent visual servo and optional MuJoCo device stack."""
 
 from pathlib import Path
+import json
 import xml.etree.ElementTree as ET
 
 import yaml
@@ -44,15 +45,28 @@ def _moveit_parameters(context):
         if not scene_directory:
             scene_directory = str(Path(get_package_share_directory("embodied_nexus_sim_mujoco")) / "config/scenes")
         scene = yaml.safe_load((Path(scene_directory) / f"{scene_name}.yaml").read_text(encoding="utf-8"))
-        if scene.get("finger_collision_geometry") != "boxes" or scene.get("finger_flex_pads", {}).get("enabled"):
+        geometry = scene.get("finger_collision_geometry")
+        if geometry not in ("boxes", "convex") or scene.get("finger_flex_pads", {}).get("enabled"):
             raise RuntimeError("contact_finger_boxes requires rigid finger contact boxes")
         robot = ET.fromstring(parameters["robot_description"])
         for side in ("left", "right"):
             link = robot.find(f"link[@name='ms42dc_{side}_finger_link']")
             if link is None:
                 raise RuntimeError(f"missing {side} finger link")
+            original = link.find("collision")
+            original_origin = original.find("origin") if original is not None else None
             for collision in list(link.findall("collision")):
                 link.remove(collision)
+            if geometry == "convex":
+                convex_dir = description / "meshes/gripper/ms42dc/convex"
+                manifest = json.loads((convex_dir / "manifest.json").read_text(encoding="utf-8"))
+                for index, filename in enumerate(manifest["fingers"][side]["parts"]):
+                    collision = ET.SubElement(link, "collision", {"name": f"{side}_convex_{index}"})
+                    if original_origin is not None:
+                        ET.SubElement(collision, "origin", dict(original_origin.attrib))
+                    shape = ET.SubElement(collision, "geometry")
+                    ET.SubElement(shape, "mesh", {"filename": (convex_dir / filename).as_uri()})
+                continue
             for index, part in enumerate(scene["finger_contact_boxes"][side]):
                 collision = ET.SubElement(link, "collision", {"name": f"{side}_contact_box_{index}"})
                 ET.SubElement(collision, "origin", {"xyz": " ".join(map(str, part["position"])),
@@ -87,6 +101,10 @@ def _servo(context):
         List containing the configured MoveIt Servo node.
     """
     parameters = _moveit_parameters(context)
+    # Humble's Servo IK path permits approximate KDL solutions on every cycle;
+    # their residual can accumulate even for a zero Cartesian component. Use
+    # its Jacobian path for velocity commands while MoveGroup retains KDL.
+    parameters.pop("robot_description_kinematics", None)
     servo_path = Path(get_package_share_directory("embodied_nexus_visual_servo")) / "config/servo.yaml"
     servo = yaml.safe_load(servo_path.read_text(encoding="utf-8"))
     return [Node(package="moveit_servo", executable="servo_node_main", name="visual_servo_moveit",

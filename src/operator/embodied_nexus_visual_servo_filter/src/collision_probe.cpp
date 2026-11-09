@@ -23,6 +23,11 @@ int main(int argc, char** argv) {
     rclcpp::shutdown();
     return 1;
   }
+  const auto* group = monitor->getRobotModel()->getJointModelGroup("manipulator");
+  if (group && !group->getLinkModels().empty()) {
+    RCLCPP_INFO(node->get_logger(), "Jacobian reference link: %s",
+                group->getLinkModels().back()->getName().c_str());
+  }
   monitor->startStateMonitor("/sim/arachne/joint_states");
   monitor->startSceneMonitor("/planning_scene");
   monitor->requestPlanningSceneState("/get_planning_scene");

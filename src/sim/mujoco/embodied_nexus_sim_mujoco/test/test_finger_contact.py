@@ -57,6 +57,7 @@ class BilateralFingerContactTests(unittest.TestCase):
         model, data = self._model(right_finger_x=0.02)
         self.assertGreaterEqual(data.ncon, 2)
         self.assertEqual(_bilateral_finger_contacts(model, data, {"target_box"}), {"target_box"})
+        self.assertEqual(_bilateral_finger_contacts(model, data, {"target_box"}, 1e9), set())
 
     def test_visualization_reports_finger_boxes_and_local_contacts(self):
         """Report collision dimensions and contact positions in the finger frame.
@@ -98,7 +99,8 @@ class BilateralFingerContactTests(unittest.TestCase):
         mujoco.mj_forward(model, data)
         self.assertTrue(any(-1 in contact.geom and max(contact.flex) >= 0
                             for contact in data.contact[:data.ncon]))
-        self.assertEqual(_bilateral_finger_contacts(model, data, {"target_box"}), {"target_box"})
+        # This fixture has contact points but no bilateral load.
+        self.assertEqual(_bilateral_finger_contacts(model, data, {"target_box"}), set())
         fingers = _finger_visualization(model, data)["fingers"]
         self.assertTrue(all(finger["pads"] and finger["contacts"] for finger in fingers))
         self.assertTrue(all(max(max(face) for face in finger["pads"][0]["triangles"]) <
