@@ -17,7 +17,7 @@ import numpy as np
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from builtin_interfaces.msg import Time
-from geometry_msgs.msg import Pose, TwistStamped
+from geometry_msgs.msg import Pose, TwistStamped, WrenchStamped
 from nav_msgs.msg import Odometry
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
@@ -295,6 +295,7 @@ class MujocoSimulation(Node):
         self._scene_name = scene_name
         self._fixed_base = bool(scene_config.get("fixed_base", False))
         self._scene_objects = list(scene_config.get("objects", []))
+        self._test_wrench = None
         self._base_x = float(self.data.qpos[self._root_qpos])
         self._base_y = float(self.data.qpos[self._root_qpos + 1])
         self._base_yaw = 0.0
@@ -336,6 +337,8 @@ class MujocoSimulation(Node):
                                  self._on_arm_trajectory, 10)
         self.create_subscription(JointTrajectory, f"{SIM_NAMESPACE}/gripper_controller/joint_trajectory",
                                  self._on_gripper_trajectory, 10)
+        self.create_subscription(WrenchStamped, f"{SIM_NAMESPACE}/mujoco/test_object_wrench",
+                                 self._on_test_object_wrench, 10)
         self._apply_scene_service = self.create_service(
             ApplyScene, f"{SIM_NAMESPACE}/mujoco/apply_scene", self._apply_scene)
         if self.get_parameter("gui").get_parameter_value().bool_value:
@@ -528,6 +531,10 @@ class MujocoSimulation(Node):
                 out_of_plane_stiffness_n_m=float(scene.get("finger_flex_pads", {}).get(
                     "fin_ray_out_of_plane_stiffness_n_m", 500.0)))
             candidate_data = mujoco.MjData(candidate_model)
+            if request.scene_id.startswith("dynamic_grasp_"):
+                # Test resets must not rewind the ROS clock while action clients
+                # and TF listeners are running.
+                candidate_data.time = self.data.time
             candidate_indices = self._model_indices(candidate_model)
             if scene.get("fixed_base", False):
                 actual = self.data.qpos[self._root_qpos:self._root_qpos + 7]
@@ -550,6 +557,7 @@ class MujocoSimulation(Node):
         self._scene_name = request.scene_id
         self._fixed_base = bool(scene.get("fixed_base", False))
         self._scene_objects = list(scene.get("objects", []))
+        self._test_wrench = None
         self._base_velocity = (0.0, 0.0)
         self._base_command_time = time.monotonic()
         if self._arm_trajectory is not None and self._last_arm_trajectory_event is not None:
@@ -938,6 +946,29 @@ class MujocoSimulation(Node):
                         self.get_logger().error(f"MuJoCo sensor message publication failed: {exc}")
                         self._sensor_publish_reported = True
 
+    def _on_test_object_wrench(self, message: WrenchStamped) -> None:
+        """Accept bounded test forces only for a dynamic-grasp experiment scene.
+
+        Args:
+            message: World-frame wrench whose frame ID names a dynamic scene object.
+
+        Returns:
+            None.
+        """
+        if not self._scene_name.startswith("dynamic_grasp_"):
+            return
+        allowed = {str(item["id"]) for item in self._scene_objects if item.get("motion") == "dynamic"}
+        if message.header.frame_id not in allowed:
+            return
+        wrench = message.wrench
+        values = np.asarray([wrench.force.x, wrench.force.y, wrench.force.z,
+                             wrench.torque.x, wrench.torque.y, wrench.torque.z], dtype=float)
+        if not np.isfinite(values).all() or np.linalg.norm(values[:3]) > 10 or np.linalg.norm(values[3:]) > 1:
+            return
+        body = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, message.header.frame_id + "_body")
+        if body >= 0:
+            self._test_wrench = (body, values, time.monotonic())
+
     def _advance(self) -> None:
         """Step the model and apply commanded chassis and joint motion.
 
@@ -957,6 +988,11 @@ class MujocoSimulation(Node):
             self.data.ctrl[self._actuators[name]] = speed
         self._apply_trajectory(self._arm_trajectory, ARM_JOINTS)
         self._apply_trajectory(self._gripper_trajectory, GRIPPER_JOINTS)
+        if self._test_wrench is not None:
+            body, values, received = self._test_wrench
+            self.data.xfrc_applied[body] = values if time.monotonic() - received <= 0.25 else 0.0
+            if time.monotonic() - received > 0.25:
+                self._test_wrench = None
         steps = max(1, round(dt / self.model.opt.timestep))
         mujoco.mj_step(self.model, self.data, nstep=steps)
         self._base_yaw += angular * dt

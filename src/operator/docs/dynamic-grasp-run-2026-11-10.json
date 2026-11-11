@@ -1,0 +1,2649 @@
+{
+  "passed": false,
+  "maximum_lift_m": 0.010112836014619854,
+  "contact_samples": 0,
+  "first_contact": null,
+  "max_horizontal_displacement_m": 0.014431104202228406,
+  "minimum_lift_m": 0.05,
+  "hold_sec": 2.0,
+  "position_error_m": 0.014411665871862567,
+  "truth_time_delta_sec": 0.010000001000001646,
+  "action_success": false,
+  "scene_id": "dynamic_grasp_cylinder",
+  "object_id": "cylinder-1",
+  "target_class": "green cylinder",
+  "fixture_phase": "track",
+  "peak_normal_force_n": {
+    "left": 0.0,
+    "right": 0.0
+  },
+  "bilateral_force_samples": 0,
+  "action_grasp_verified": false,
+  "action_message": "dynamic visual tracking timed out",
+  "fixture_events": [
+    "preparing:cylinder-1",
+    "ready:cylinder-1",
+    "armed:cylinder-1",
+    "started:cylinder-1",
+    "released:cylinder-1"
+  ],
+  "fixture_started": true,
+  "fixture_released": true,
+  "stationary_before_close": false,
+  "early_contact": false,
+  "tracking_samples": 101,
+  "max_tracking_error_m": 0.019187782780024032,
+  "max_truth_speed_m_sec": 0.008689108196063068,
+  "max_truth_angular_speed_rad_sec": 0.04046781773350748,
+  "preclose_truth_speed_m_sec": null,
+  "preclose_truth_angular_speed_rad_sec": null,
+  "truth_stationary_before_close": false,
+  "phase_feedback": [
+    {
+      "phase": "detect",
+      "detail": "waiting for fresh YOLOE RGB-D target",
+      "confidence": 0.0,
+      "sim_time_sec": 23.56,
+      "target_stationary": false,
+      "target_valid": false,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 2.022
+    },
+    {
+      "phase": "open",
+      "detail": "opening gripper",
+      "confidence": 0.3763965368270874,
+      "sim_time_sec": 25.54,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.075
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.3763965368270874,
+      "sim_time_sec": 25.66,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 1.574
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 27.16,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.216
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.35193702578544617,
+      "sim_time_sec": 27.34,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.674
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 27.94,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.212
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.36809778213500977,
+      "sim_time_sec": 28.06,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 6.011
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 34.02,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.403
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.253046452999115,
+      "sim_time_sec": 34.37,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.907
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 35.22,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.213
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.20969165861606598,
+      "sim_time_sec": 35.37,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 1.656
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 36.92,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.22
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.32091522216796875,
+      "sim_time_sec": 37.12,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 1.191
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 38.22,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.217
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.4279966652393341,
+      "sim_time_sec": 38.42,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.643
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 39.02,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.213
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.5397409796714783,
+      "sim_time_sec": 39.17,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 1.158
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 40.32,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.215
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.5166895389556885,
+      "sim_time_sec": 40.52,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 1.763
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 42.22,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.215
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.2644234597682953,
+      "sim_time_sec": 42.37,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 1.875
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 44.17,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.519
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.4538783133029938,
+      "sim_time_sec": 44.67,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.99
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 45.62,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.22
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.42129233479499817,
+      "sim_time_sec": 45.77,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.589
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 46.32,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.567
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.5182156562805176,
+      "sim_time_sec": 46.82,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 5.786
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 52.52,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.333
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.8594214916229248,
+      "sim_time_sec": 52.82,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.976
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 53.77,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.213
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.8282428979873657,
+      "sim_time_sec": 53.92,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.379
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 54.27,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.213
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.889880895614624,
+      "sim_time_sec": 54.42,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 1.033
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 55.42,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.384
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.9006214737892151,
+      "sim_time_sec": 55.77,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 1.336
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 57.02,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.664
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.6824243068695068,
+      "sim_time_sec": 57.62,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.46
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 58.02,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.214
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.8134188652038574,
+      "sim_time_sec": 58.17,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.887
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 59.02,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.336
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.8164258003234863,
+      "sim_time_sec": 59.32,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.987
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 60.17,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.773
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.7818629741668701,
+      "sim_time_sec": 60.92,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 1.347
+    },
+    {
+      "phase": "replan",
+      "detail": "target observation lost while motion was guarded",
+      "confidence": 0.0,
+      "sim_time_sec": 62.17,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.097
+    },
+    {
+      "phase": "plan",
+      "detail": "planning monitored pregrasp",
+      "confidence": 0.8407391905784607,
+      "sim_time_sec": 62.27,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.689
+    },
+    {
+      "phase": "track",
+      "detail": "following target at pregrasp offset",
+      "confidence": 0.0,
+      "sim_time_sec": 62.92,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration_sec": 0.014
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8543487787246704,
+      "sim_time_sec": 62.92,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.00032996621558589734,
+        0.0008292834059324005,
+        -0.0002637042735128131
+      ],
+      "duration_sec": 0.115
+    },
+    {
+      "phase": "approach",
+      "detail": "target stationary; final approach",
+      "confidence": 0.8785223960876465,
+      "sim_time_sec": 63.02,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.00032996621558589734,
+        0.0008292834059324005,
+        -0.0002637042735128131
+      ],
+      "duration_sec": 0.919
+    },
+    {
+      "phase": "approach",
+      "detail": "visual tracking update",
+      "confidence": 0.8918090462684631,
+      "sim_time_sec": 63.82,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.000630986566798275,
+        0.0008555545266071724,
+        -0.10934411239469653
+      ],
+      "duration_sec": 0.66
+    },
+    {
+      "phase": "track",
+      "detail": "target moved; returning to pregrasp tracking",
+      "confidence": 0.0,
+      "sim_time_sec": 64.33,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0003498002515187615,
+        0.0008017756124569681,
+        -0.10638305964537541
+      ],
+      "duration_sec": 0.479
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8435139656066895,
+      "sim_time_sec": 64.75,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.008935947275693579,
+        0.0036698170317954596,
+        0.009870907453215297
+      ],
+      "duration_sec": 1.151
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8364560008049011,
+      "sim_time_sec": 65.83,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01276036258521096,
+        0.004684260346048399,
+        0.006991370981951725
+      ],
+      "duration_sec": 1.285
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 66.91,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013444030164003085,
+        0.004875448115500485,
+        0.006782210510142925
+      ],
+      "duration_sec": 0.117
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 67.03,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013444030164003085,
+        0.004875448115500485,
+        0.006782210510142925
+      ],
+      "duration_sec": 0.01
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8291153907775879,
+      "sim_time_sec": 67.03,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01407282685494271,
+        0.0050490045797227795,
+        0.007079398061032097
+      ],
+      "duration_sec": 1.176
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8275934457778931,
+      "sim_time_sec": 68.05,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014146838510919246,
+        0.005031902882124423,
+        0.006816799833790091
+      ],
+      "duration_sec": 1.166
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8256714940071106,
+      "sim_time_sec": 69.13,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014120537028319724,
+        0.00499414402825141,
+        0.006858282200463903
+      ],
+      "duration_sec": 1.145
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8472768664360046,
+      "sim_time_sec": 70.27,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014075995021082366,
+        0.004966420029174096,
+        0.006746121181055761
+      ],
+      "duration_sec": 1.164
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.829522430896759,
+      "sim_time_sec": 71.23,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014061296339712981,
+        0.004945851926269856,
+        0.006842428645611201
+      ],
+      "duration_sec": 1.039
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 72.13,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013996055755737813,
+        0.004930205997604369,
+        0.006763197160230175
+      ],
+      "duration_sec": 0.016
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 72.13,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013996055755737813,
+        0.004930205997604369,
+        0.006763197160230175
+      ],
+      "duration_sec": 0.013
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8471125364303589,
+      "sim_time_sec": 72.13,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014154770966030017,
+        0.004938785984351169,
+        0.006970000908150184
+      ],
+      "duration_sec": 1.165
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8489662408828735,
+      "sim_time_sec": 73.15,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0143203569907433,
+        0.004995423277237582,
+        0.007379228720372236
+      ],
+      "duration_sec": 1.163
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8527289628982544,
+      "sim_time_sec": 74.17,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014137489799465941,
+        0.0049533691570876285,
+        0.007330130739648291
+      ],
+      "duration_sec": 1.138
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8442187309265137,
+      "sim_time_sec": 75.13,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014079161977617494,
+        0.004925438915520076,
+        0.007274514185270739
+      ],
+      "duration_sec": 1.159
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8520388007164001,
+      "sim_time_sec": 76.21,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014000156810375253,
+        0.004883205352886242,
+        0.007198441771440481
+      ],
+      "duration_sec": 1.167
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8483786582946777,
+      "sim_time_sec": 77.29,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013608623604170145,
+        0.00475547695368132,
+        0.006970580938986878
+      ],
+      "duration_sec": 1.139
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8582516312599182,
+      "sim_time_sec": 78.25,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013753224703766276,
+        0.004739568402462844,
+        0.007244351519499495
+      ],
+      "duration_sec": 1.166
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8565434813499451,
+      "sim_time_sec": 79.27,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01363966934379679,
+        0.004689783454721604,
+        0.007068085896209372
+      ],
+      "duration_sec": 1.046
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 80.23,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013620461019271168,
+        0.004686542620057037,
+        0.006958542247863644
+      ],
+      "duration_sec": 0.014
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 80.29,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013620461019271168,
+        0.004686542620057037,
+        0.006958542247863644
+      ],
+      "duration_sec": 0.014
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8515852093696594,
+      "sim_time_sec": 80.29,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013607879441723036,
+        0.004682881967405891,
+        0.0069998813586695935
+      ],
+      "duration_sec": 1.166
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8573874831199646,
+      "sim_time_sec": 81.25,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01381365808445878,
+        0.004676564909152393,
+        0.00753789775630366
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8647379875183105,
+      "sim_time_sec": 82.33,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013618267051329291,
+        0.004664195354085514,
+        0.0073260797542994
+      ],
+      "duration_sec": 1.143
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8487014174461365,
+      "sim_time_sec": 83.41,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013739876712266952,
+        0.004652612530240949,
+        0.007376229675316939
+      ],
+      "duration_sec": 1.161
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8638730049133301,
+      "sim_time_sec": 84.43,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01366943497602302,
+        0.004622311231097382,
+        0.007311843563675521
+      ],
+      "duration_sec": 1.282
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 85.57,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013687861541790025,
+        0.0046019215063186885,
+        0.007365865292850368
+      ],
+      "duration_sec": 0.367
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 85.87,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013687861541790025,
+        0.0046019215063186885,
+        0.007365865292850368
+      ],
+      "duration_sec": 0.018
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8580743074417114,
+      "sim_time_sec": 85.87,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01380706124550335,
+        0.004613568126259918,
+        0.007523829620389097
+      ],
+      "duration_sec": 1.167
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8580015897750854,
+      "sim_time_sec": 86.95,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013940670994619264,
+        0.004609136625281267,
+        0.007875587067214126
+      ],
+      "duration_sec": 1.177
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8610345721244812,
+      "sim_time_sec": 88.03,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013915791232482544,
+        0.004576227680129772,
+        0.007825473497893878
+      ],
+      "duration_sec": 1.142
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8575631976127625,
+      "sim_time_sec": 89.05,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013822495856167794,
+        0.004557036773431188,
+        0.007884145875423285
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.857744574546814,
+      "sim_time_sec": 89.95,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013861986658000425,
+        0.0045251398018637794,
+        0.007804278737282358
+      ],
+      "duration_sec": 1.166
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8629909157752991,
+      "sim_time_sec": 91.03,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013862982916843958,
+        0.00450413284670103,
+        0.007743383299189319
+      ],
+      "duration_sec": 0.818
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 91.75,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013810492821034637,
+        0.004491121614771824,
+        0.007695628954745057
+      ],
+      "duration_sec": 0.012
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 91.75,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013810492821034637,
+        0.004491121614771824,
+        0.007695628954745057
+      ],
+      "duration_sec": 0.232
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8588328957557678,
+      "sim_time_sec": 91.93,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01392171747503601,
+        0.004526335174096293,
+        0.008030856222335667
+      ],
+      "duration_sec": 1.164
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8510965704917908,
+      "sim_time_sec": 93.01,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013935188775398455,
+        0.004491362129246352,
+        0.007949429331560412
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8613936305046082,
+      "sim_time_sec": 93.97,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013843059244630362,
+        0.004488434596248359,
+        0.007978043447062003
+      ],
+      "duration_sec": 1.262
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 95.11,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013881299738160657,
+        0.004493691795402674,
+        0.00793783628572671
+      ],
+      "duration_sec": 0.015
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 95.11,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013881299738160657,
+        0.004493691795402674,
+        0.00793783628572671
+      ],
+      "duration_sec": 0.016
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8542137742042542,
+      "sim_time_sec": 95.17,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014013159264387842,
+        0.004496526247684712,
+        0.008000387775155285
+      ],
+      "duration_sec": 1.163
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8457061052322388,
+      "sim_time_sec": 96.13,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013922783285337359,
+        0.004446978242684887,
+        0.008319147487726539
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8431347608566284,
+      "sim_time_sec": 97.15,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013919966385199656,
+        0.0044420681129767525,
+        0.008357861463859848
+      ],
+      "duration_sec": 1.148
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8549333810806274,
+      "sim_time_sec": 98.17,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013993132743956305,
+        0.00444687689467328,
+        0.008323548125797844
+      ],
+      "duration_sec": 1.154
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8466908931732178,
+      "sim_time_sec": 99.19,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013801361013021207,
+        0.004396624491782762,
+        0.00819389269930855
+      ],
+      "duration_sec": 1.16
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8495713472366333,
+      "sim_time_sec": 100.21,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013916670875471215,
+        0.0044001824214878246,
+        0.008171868640323557
+      ],
+      "duration_sec": 1.141
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8510732650756836,
+      "sim_time_sec": 101.17,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013919155599759203,
+        0.004373638336866464,
+        0.00816900621899709
+      ],
+      "duration_sec": 1.167
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8517776727676392,
+      "sim_time_sec": 102.25,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013809776812589103,
+        0.0043488833507805275,
+        0.008059831309687696
+      ],
+      "duration_sec": 1.163
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8474674224853516,
+      "sim_time_sec": 103.27,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013759625755940808,
+        0.004319589941168869,
+        0.00803433480117792
+      ],
+      "duration_sec": 1.148
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8462457060813904,
+      "sim_time_sec": 104.23,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013837771442846591,
+        0.0043183969374715634,
+        0.008123859174727369
+      ],
+      "duration_sec": 1.277
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 105.43,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013605933980205598,
+        0.004266203108122946,
+        0.007856435682364063
+      ],
+      "duration_sec": 1.014
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 106.33,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013605933980205598,
+        0.004266203108122946,
+        0.007856435682364063
+      ],
+      "duration_sec": 0.014
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8544155359268188,
+      "sim_time_sec": 106.33,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01384261754534799,
+        0.004287814677725996,
+        0.008161426905481037
+      ],
+      "duration_sec": 1.166
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8519419431686401,
+      "sim_time_sec": 107.41,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013878790549368913,
+        0.004276299394022947,
+        0.008405145560768365
+      ],
+      "duration_sec": 1.166
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8449331521987915,
+      "sim_time_sec": 108.49,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013852462987653746,
+        0.0042582590151397405,
+        0.008375845401489154
+      ],
+      "duration_sec": 1.148
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8398675322532654,
+      "sim_time_sec": 109.45,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013789396912503138,
+        0.004220331771165709,
+        0.008353771587922207
+      ],
+      "duration_sec": 1.194
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.847162127494812,
+      "sim_time_sec": 110.53,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013722266862771448,
+        0.004196079564557282,
+        0.008219712746975291
+      ],
+      "duration_sec": 1.172
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8412774801254272,
+      "sim_time_sec": 111.55,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013707987002677946,
+        0.004173441356453173,
+        0.008173737062908484
+      ],
+      "duration_sec": 1.142
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8400704860687256,
+      "sim_time_sec": 112.57,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013785202933839003,
+        0.004181468022321322,
+        0.008324681654140506
+      ],
+      "duration_sec": 1.166
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8334351181983948,
+      "sim_time_sec": 113.59,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013653176696035607,
+        0.004137877196814102,
+        0.008078973686525645
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8274216055870056,
+      "sim_time_sec": 114.61,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013471441184537358,
+        0.004097522643123937,
+        0.008064534074194316
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8280541300773621,
+      "sim_time_sec": 115.63,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013492454859499237,
+        0.004089193158850595,
+        0.00812434136467323
+      ],
+      "duration_sec": 1.16
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8459497094154358,
+      "sim_time_sec": 116.71,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013229464249009726,
+        0.00403229510350737,
+        0.007911878948871284
+      ],
+      "duration_sec": 0.818
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 117.43,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01331106154599171,
+        0.004036458997409377,
+        0.007987012417108932
+      ],
+      "duration_sec": 0.52
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 117.91,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01331106154599171,
+        0.004036458997409377,
+        0.007987012417108932
+      ],
+      "duration_sec": 0.011
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.840639591217041,
+      "sim_time_sec": 117.91,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013521324459837558,
+        0.004049416429871755,
+        0.008175412521028255
+      ],
+      "duration_sec": 1.165
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8345191478729248,
+      "sim_time_sec": 118.99,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013655889270519639,
+        0.004044450574968956,
+        0.008372689636155936
+      ],
+      "duration_sec": 1.168
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8407999277114868,
+      "sim_time_sec": 120.01,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01362020645892148,
+        0.004030796214664931,
+        0.00834581571962563
+      ],
+      "duration_sec": 1.137
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8368117809295654,
+      "sim_time_sec": 121.03,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013655466457301868,
+        0.004019139763652943,
+        0.008369368502975524
+      ],
+      "duration_sec": 1.167
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.829155445098877,
+      "sim_time_sec": 122.11,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013597817338372176,
+        0.003985315478153895,
+        0.008343670589194954
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8308514952659607,
+      "sim_time_sec": 123.13,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013448099184617424,
+        0.0039535906708446904,
+        0.008261041608369199
+      ],
+      "duration_sec": 1.138
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8316894173622131,
+      "sim_time_sec": 124.21,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013404370607223326,
+        0.003931600079726265,
+        0.008230596279109978
+      ],
+      "duration_sec": 0.6
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 124.69,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013414879148516246,
+        0.003931894376864147,
+        0.008247803855135502
+      ],
+      "duration_sec": 0.171
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 124.87,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013414879148516246,
+        0.003931894376864147,
+        0.008247803855135502
+      ],
+      "duration_sec": 0.251
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8203436732292175,
+      "sim_time_sec": 125.05,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013706624292306735,
+        0.003960375151571062,
+        0.008550374320429946
+      ],
+      "duration_sec": 1.142
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8221812844276428,
+      "sim_time_sec": 126.13,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01374805067775775,
+        0.0039362691649527624,
+        0.0087391625420664
+      ],
+      "duration_sec": 1.163
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8229594826698303,
+      "sim_time_sec": 127.21,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01370587100820897,
+        0.00391885019233355,
+        0.008712547196881984
+      ],
+      "duration_sec": 1.164
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8205015659332275,
+      "sim_time_sec": 128.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013700247747717498,
+        0.003891090008192043,
+        0.008741925765102285
+      ],
+      "duration_sec": 1.145
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8207406401634216,
+      "sim_time_sec": 129.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01359418618531083,
+        0.003864387967698955,
+        0.008640086515531983
+      ],
+      "duration_sec": 0.593
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 129.74,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013637253109488934,
+        0.003871265529548927,
+        0.00870199696656225
+      ],
+      "duration_sec": 0.312
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 130.04,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013637253109488934,
+        0.003871265529548927,
+        0.00870199696656225
+      ],
+      "duration_sec": 0.257
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8237889409065247,
+      "sim_time_sec": 130.29,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013884707448088784,
+        0.0038976402541028117,
+        0.008967152374791357
+      ],
+      "duration_sec": 1.14
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8117507696151733,
+      "sim_time_sec": 131.19,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.0139561357528174,
+        0.0039054008294872964,
+        0.009239921164594253
+      ],
+      "duration_sec": 1.161
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.823257327079773,
+      "sim_time_sec": 132.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013928795782059855,
+        0.0038952462520566427,
+        0.009200609331056389
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.827380895614624,
+      "sim_time_sec": 133.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013886283866617277,
+        0.003856473953317117,
+        0.009132763942044611
+      ],
+      "duration_sec": 1.141
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8314632177352905,
+      "sim_time_sec": 134.19,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013791869734363749,
+        0.0038310414934741186,
+        0.009122012628374324
+      ],
+      "duration_sec": 1.163
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8252794146537781,
+      "sim_time_sec": 135.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013751713040977442,
+        0.0038004967246083386,
+        0.009014570899768856
+      ],
+      "duration_sec": 1.16
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.829189121723175,
+      "sim_time_sec": 136.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013648170071498322,
+        0.003769445349236936,
+        0.008937958170250712
+      ],
+      "duration_sec": 1.14
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8300207257270813,
+      "sim_time_sec": 137.19,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013666593559561346,
+        0.0037557175056943328,
+        0.008982253474877591
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8321722745895386,
+      "sim_time_sec": 138.19,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013626603072308452,
+        0.0037320956011209095,
+        0.008977670430981202
+      ],
+      "duration_sec": 1.163
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8372641205787659,
+      "sim_time_sec": 139.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013603022051335567,
+        0.0037161001068079943,
+        0.00896180823891514
+      ],
+      "duration_sec": 1.139
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8353537917137146,
+      "sim_time_sec": 140.19,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013560677043568559,
+        0.0036889514890489947,
+        0.008901948067911877
+      ],
+      "duration_sec": 1.164
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8422943949699402,
+      "sim_time_sec": 141.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013460473467839407,
+        0.0036488876214751786,
+        0.008743998807110062
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8367213010787964,
+      "sim_time_sec": 142.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013369925642247371,
+        0.0036219824242809716,
+        0.008705546304620601
+      ],
+      "duration_sec": 1.14
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8435574173927307,
+      "sim_time_sec": 143.19,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013406449309729118,
+        0.0036139375669121654,
+        0.008799198549446482
+      ],
+      "duration_sec": 1.285
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 144.34,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.012987105957471101,
+        0.003413044315579411,
+        0.008894595204241254
+      ],
+      "duration_sec": 0.161
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 144.44,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.012987105957471101,
+        0.003413044315579411,
+        0.008894595204241254
+      ],
+      "duration_sec": 0.018
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8317843675613403,
+      "sim_time_sec": 144.49,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013190541673925527,
+        0.0034509832467657995,
+        0.009131117021306437
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8342273235321045,
+      "sim_time_sec": 145.49,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013675370882545668,
+        0.0036516002689539967,
+        0.009276107354342297
+      ],
+      "duration_sec": 1.282
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 146.69,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013618240514461144,
+        0.0036157869685061153,
+        0.009178043804055444
+      ],
+      "duration_sec": 0.065
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 146.74,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013618240514461144,
+        0.0036157869685061153,
+        0.009178043804055444
+      ],
+      "duration_sec": 0.009
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8250350952148438,
+      "sim_time_sec": 146.74,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013674311209470158,
+        0.0036188605349039157,
+        0.009271187524657373
+      ],
+      "duration_sec": 1.16
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8113343119621277,
+      "sim_time_sec": 147.69,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01384032465907592,
+        0.0036477694093705053,
+        0.009566777158894216
+      ],
+      "duration_sec": 1.142
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8213609457015991,
+      "sim_time_sec": 148.74,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01375504865293875,
+        0.003609783074841144,
+        0.009541350710175353
+      ],
+      "duration_sec": 1.164
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8182850480079651,
+      "sim_time_sec": 149.74,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013326783663841546,
+        0.0033989099369663594,
+        0.00954485556851635
+      ],
+      "duration_sec": 1.166
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8194089531898499,
+      "sim_time_sec": 150.74,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013299245613969779,
+        0.003412921441629943,
+        0.009499199898019575
+      ],
+      "duration_sec": 1.04
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 151.59,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013651436317473564,
+        0.003580705934816463,
+        0.009361455788779935
+      ],
+      "duration_sec": 0.017
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 151.64,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013651436317473564,
+        0.003580705934816463,
+        0.009361455788779935
+      ],
+      "duration_sec": 0.023
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.826530933380127,
+      "sim_time_sec": 151.64,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013420190049086123,
+        0.0034134586727226756,
+        0.00964950692707546
+      ],
+      "duration_sec": 1.282
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 152.74,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013959215398920422,
+        0.0036084829541721698,
+        0.009812045986129544
+      ],
+      "duration_sec": 0.161
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 152.84,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.013959215398920422,
+        0.0036084829541721698,
+        0.009812045986129544
+      ],
+      "duration_sec": 0.01
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8029247522354126,
+      "sim_time_sec": 152.84,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014193528939153821,
+        0.0036333531150536244,
+        0.010136705657284625
+      ],
+      "duration_sec": 1.186
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.841873288154602,
+      "sim_time_sec": 153.89,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014145121002136163,
+        0.003629593216604448,
+        0.010345936167407768
+      ],
+      "duration_sec": 1.168
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8406399488449097,
+      "sim_time_sec": 154.94,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014163030816690791,
+        0.0036096764673516158,
+        0.0103465824554229
+      ],
+      "duration_sec": 0.358
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 155.29,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014163030816690791,
+        0.0036096764673516158,
+        0.0103465824554229
+      ],
+      "duration_sec": 0.011
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 155.29,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014163030816690791,
+        0.0036096764673516158,
+        0.0103465824554229
+      ],
+      "duration_sec": 0.82
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 156.04,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01431022090069467,
+        0.003634680010180561,
+        0.010567237406686733
+      ],
+      "duration_sec": 0.009
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 156.04,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01431022090069467,
+        0.003634680010180561,
+        0.010567237406686733
+      ],
+      "duration_sec": 0.008
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8430190682411194,
+      "sim_time_sec": 156.04,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014696031522694608,
+        0.0036750493525979327,
+        0.010624406277113904
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8465902805328369,
+      "sim_time_sec": 157.09,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.01479797924129389,
+        0.0036768788718763846,
+        0.010921560867736282
+      ],
+      "duration_sec": 1.16
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8387336730957031,
+      "sim_time_sec": 158.04,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014823983783571415,
+        0.003647901173981995,
+        0.010974438758284924
+      ],
+      "duration_sec": 1.141
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8470838665962219,
+      "sim_time_sec": 159.09,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014687813667931371,
+        0.0036247925076385796,
+        0.010737166182155075
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8511026501655579,
+      "sim_time_sec": 160.09,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014649672003219982,
+        0.003604889628370923,
+        0.010693983047434477
+      ],
+      "duration_sec": 1.162
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8466911911964417,
+      "sim_time_sec": 161.14,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014589698620037672,
+        0.0035832957321832474,
+        0.010680136344566285
+      ],
+      "duration_sec": 0.821
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 161.94,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014602031017053263,
+        0.003584150561391777,
+        0.010705774369338408
+      ],
+      "duration_sec": 0.061
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 161.94,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014602031017053263,
+        0.003584150561391777,
+        0.010705774369338408
+      ],
+      "duration_sec": 0.229
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8501694202423096,
+      "sim_time_sec": 162.19,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014754132468419945,
+        0.003598774687482936,
+        0.010890728620728998
+      ],
+      "duration_sec": 1.163
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8533170223236084,
+      "sim_time_sec": 163.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014747602063314713,
+        0.0035800452449001306,
+        0.011002731962819687
+      ],
+      "duration_sec": 1.166
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8528249263763428,
+      "sim_time_sec": 164.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014697470579138505,
+        0.0035478476105599865,
+        0.010979058845446213
+      ],
+      "duration_sec": 1.143
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8551055192947388,
+      "sim_time_sec": 165.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014713003217934562,
+        0.003545353374538148,
+        0.011040417012614115
+      ],
+      "duration_sec": 1.16
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8528448939323425,
+      "sim_time_sec": 166.24,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014654959947674628,
+        0.0035198715966349822,
+        0.010987405378466139
+      ],
+      "duration_sec": 0.353
+    },
+    {
+      "phase": "waiting_target",
+      "detail": "stopped for lost or stale vision",
+      "confidence": 0.0,
+      "sim_time_sec": 166.49,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014654959947674628,
+        0.0035198715966349822,
+        0.010987405378466139
+      ],
+      "duration_sec": 0.416
+    },
+    {
+      "phase": "track",
+      "detail": "target reacquired",
+      "confidence": 0.0,
+      "sim_time_sec": 166.89,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014654959947674628,
+        0.0035198715966349822,
+        0.010987405378466139
+      ],
+      "duration_sec": 0.257
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8591797947883606,
+      "sim_time_sec": 167.14,
+      "target_stationary": false,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014838567951051873,
+        0.0035528331768313625,
+        0.011193044576045294
+      ],
+      "duration_sec": 1.139
+    },
+    {
+      "phase": "track",
+      "detail": "visual tracking update",
+      "confidence": 0.8570699095726013,
+      "sim_time_sec": 168.14,
+      "target_stationary": true,
+      "target_valid": true,
+      "tracking_error_m": [
+        0.014987863809471702,
+        0.0035643652062489987,
+        0.011438105049290145
+      ],
+      "duration_sec": 0.0
+    }
+  ],
+  "trial": 1,
+  "sample_count": 2840
+}

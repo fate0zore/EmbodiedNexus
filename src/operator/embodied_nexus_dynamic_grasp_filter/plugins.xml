@@ -1,0 +1,5 @@
+<library path="dynamic_grasp_filter">
+  <class type="embodied_nexus_dynamic_grasp::PassthroughFilter" base_class_type="online_signal_smoothing::SmoothingBaseClass">
+    <description>Leave Servo position commands unchanged for the simulated velocity adapter.</description>
+  </class>
+</library>

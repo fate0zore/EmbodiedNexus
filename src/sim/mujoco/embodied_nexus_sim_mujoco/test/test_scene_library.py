@@ -77,6 +77,22 @@ class SceneLibraryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "arm_position_actuator.kp"):
                 library._validate_mapping("test", scene)
 
+    def test_ground_and_object_friction_validation(self):
+        """Accept explicit contact friction and reject invalid coefficients.
+
+        Returns:
+            None.
+        """
+        with tempfile.TemporaryDirectory() as temporary:
+            library = self.make_library(temporary)
+            scene = self.scene()
+            scene['ground']['friction'] = [0.003, 0.0001, 0.00001]
+            scene['objects'][0]['friction'] = [0.003, 0.0001, 0.00001]
+            library._validate_mapping('test', scene)
+            scene['objects'][0]['friction'] = [-1, 0.01, 0.01]
+            with self.assertRaisesRegex(ValueError, 'friction'):
+                library._validate_mapping('test', scene)
+
     def test_fixed_base_and_friction_solver_options_are_validated(self):
         """Accept a stationary scene and reject malformed solver settings.
 

@@ -107,6 +107,12 @@ EmbodiedNexus/
     │   ├── embodied_nexus_operator_interfaces/
     │   ├── embodied_nexus_operator/
     │   ├── embodied_nexus_operator_moveit_config/
+    │   ├── embodied_nexus_visual_servo_interfaces/
+    │   ├── embodied_nexus_visual_servo_filter/
+    │   ├── embodied_nexus_visual_servo/
+    │   ├── embodied_nexus_dynamic_grasp_interfaces/
+    │   ├── embodied_nexus_dynamic_grasp_filter/
+    │   ├── embodied_nexus_dynamic_grasp/
     │   └── docs/
     └── sim/
         ├── common/
@@ -148,7 +154,9 @@ EmbodiedNexus/
 
 设备模块通过公开接口协作，不互相导入内部实现。SDK 依赖远程协议，不依赖 ROS 或机器人端源码。普通 Python、系统和 ROS 依赖继续通过包清单声明；只有需要随项目分发的专用依赖才存入模块的 `third_party/`。
 
-`src/operator/` 按任务组织机器人算法，使用设备公开 ROS 服务、Action、相机和 TF，不导入 arm、gripper 或 sim 包的内部 Python 实现。MoveIt 配置属于对应算法模块；MoveIt 只规划，轨迹由设备节点在控制租约保护下执行。首个 Planned 抓取流程面向 MuJoCo 单盒体场景，具体边界和验收见[抓取设计](../src/operator/docs/grasp-design.md)及[MuJoCo 验收指南](../src/operator/docs/mujoco-acceptance.md)。
+`src/operator/` 按任务组织机器人算法，使用设备公开 ROS 服务、Action、相机和 TF，不导入 arm、gripper 或 sim 包的内部 Python 实现。MoveIt 配置属于对应算法模块；MoveIt 负责规划或伺服速度求解，动作由设备节点在控制租约保护下执行。首个 Planned 抓取流程面向 MuJoCo 单盒体场景，具体边界和验收见[抓取设计](../src/operator/docs/grasp-design.md)及[MuJoCo 验收指南](../src/operator/docs/mujoco-acceptance.md)。
+
+独立动态抓取任务使用公开相机和设备接口、MoveIt Servo 速度输出及独立 Action；仿真施力机构和验收器可读取真值，感知与控制节点不读取仿真真值。启动、实验范围和当前验证结果见[动态抓取指南](../src/operator/docs/dynamic-grasp.md)。
 
 设备入口：[底盘](../src/base/docs/scout-base.md)、[机械臂](../src/arm/docs/aubo-i5.md)、[相机](../src/camera/docs/camera.md)、[夹爪](../src/gripper/docs/ms42dc-gripper.md)、[雷达](../src/lidar/docs/lidar-c16.md)。开发约定统一维护在根目录 [AGENTS.md](../AGENTS.md)。
 

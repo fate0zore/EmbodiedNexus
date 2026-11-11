@@ -1,0 +1,17 @@
+string target_class
+string object_id
+string camera_id
+string arm_id
+string gripper_id
+---
+bool success
+bool grasp_verified
+string message
+geometry_msgs/PoseStamped object_pose
+geometry_msgs/PoseStamped grasp_pose
+---
+string phase
+string detail
+float32 detection_confidence
+embodied_nexus_dynamic_grasp_interfaces/DynamicTarget target
+geometry_msgs/Vector3 tracking_error_m

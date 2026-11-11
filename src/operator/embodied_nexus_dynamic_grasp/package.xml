@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>embodied_nexus_dynamic_grasp</name>
+  <version>0.1.0</version>
+  <description>Independent dynamic target grasping components.</description>
+  <maintainer email="maintainer@example.com">EmbodiedNexus</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>embodied_nexus_dynamic_grasp_interfaces</exec_depend>
+  <exec_depend>embodied_nexus_dynamic_grasp_filter</exec_depend>
+  <exec_depend>embodied_nexus_arm_interfaces</exec_depend>
+  <exec_depend>embodied_nexus_gripper_interfaces</exec_depend>
+  <exec_depend>embodied_nexus_sim_mujoco_interfaces</exec_depend>
+  <exec_depend>embodied_nexus_operator_moveit_config</exec_depend>
+  <exec_depend>embodied_nexus_sim_mujoco</exec_depend>
+  <exec_depend>embodied_nexus_sim_description</exec_depend>
+  <exec_depend>embodied_nexus_arm</exec_depend>
+  <exec_depend>embodied_nexus_gripper</exec_depend>
+  <exec_depend>embodied_nexus_camera</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>action_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>trajectory_msgs</exec_depend>
+  <exec_depend>shape_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>moveit_servo</exec_depend>
+  <exec_depend>moveit_ros_move_group</exec_depend>
+  <exec_depend>moveit_configs_utils</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>

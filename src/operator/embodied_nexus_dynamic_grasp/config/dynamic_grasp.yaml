@@ -1,0 +1,34 @@
+dynamic_grasp:
+  camera_id: camera_front
+  arm_id: arm_main
+  gripper_id: gripper_main
+  base_frame: base_link
+  tip_frame: grasp_frame
+  ground_height_base_m: -0.236
+  weights: ~/.cache/embodied-nexus/models/yoloe-11s-seg.pt
+  confidence: 0.10
+  maximum_rgb_depth_delta_sec: 0.08
+  maximum_frame_age_sec: 0.75
+  minimum_mask_points: 80
+  observation_gap_sec: 1.0
+  maximum_target_shift_m: 0.01
+  observation_joints_rad: [-0.7901906244, -0.2094643602, 0.2558252853, -1.2548296865, 1.4666098362, 1.4912766063]
+  joint_names: [aubo_shoulder_joint, aubo_upperArm_joint, aubo_foreArm_joint, aubo_wrist1_joint, aubo_wrist2_joint, aubo_wrist3_joint]
+  pregrasp_distance_m: 0.12
+  # Probe center y=0.140 m in the gripper base minus grasp-frame y=0.121875263 m.
+  finger_contact_offset_m: 0.018124737
+  lift_distance_m: 0.07
+  target_freshness_sec: 0.85
+  servo_gain: 0.15
+  servo_speed_m_sec: 0.015
+  servo_angular_speed_rad_sec: 0.1
+  servo_position_tolerance_m: 0.003
+  servo_timeout_sec: 120.0
+  lease_ttl_sec: 15.0
+  targets:
+    green cylinder:
+      shape: cylinder
+      embeddings: ~/.cache/embodied-nexus/models/yoloe-green-cylinder-text.npz
+    red rectangular box:
+      shape: box
+      embeddings: ~/.cache/embodied-nexus/models/yoloe-red-rectangular-box-text.npz

@@ -161,6 +161,7 @@ def make_scene(urdf, description_dir, camera_calibration=None, scene_config=None
         "name": "ground", "type": "plane",
         "size": " ".join(str(value) for value in ground.get("size", [20.0, 20.0, 0.1])),
         "rgba": " ".join(str(value) for value in ground.get("rgba", [0.75, 0.75, 0.75, 1.0])),
+        "friction": " ".join(str(value) for value in ground.get("friction", [1.0, 0.005, 0.0001])),
     })
     for obj in selected_scene.get("objects", []):
         attrs = {
@@ -169,7 +170,7 @@ def make_scene(urdf, description_dir, camera_calibration=None, scene_config=None
             "pos": " ".join(str(value) for value in obj.get("position", [0.0, 0.0, 0.0])),
             "euler": " ".join(str(value) for value in obj.get("rotation", [0.0, 0.0, 0.0])),
             "rgba": " ".join(str(value) for value in obj.get("rgba", [0.6, 0.6, 0.6, 1.0])),
-            "friction": "1.1 0.01 0.001",
+            "friction": " ".join(str(value) for value in obj.get("friction", [1.1, 0.01, 0.001])),
         }
         if obj["shape"] == "box":
             attrs["size"] = " ".join(str(float(value) / 2.0) for value in obj["size"])

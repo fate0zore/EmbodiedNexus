@@ -1,0 +1,136 @@
+name: 动态三维追踪测试：红色盒体
+contact_cone: elliptic
+finger_collision_geometry: convex
+finger_flex_pads:
+  enabled: false
+  style: fin_ray
+  size_m:
+  - 0.003
+  - 0.045
+  - 0.014
+  grid:
+  - 2
+  - 3
+  - 2
+  mass_kg: 0.01
+  young_pa: 1000.0
+  poisson: 0.3
+  damping: 1.0e-05
+  radius_m: 0.0002
+  fin_ray_edge_time_constant_s: 0.001
+  fin_ray_out_of_plane_stiffness_n_m: 500.0
+finger_contact_material:
+  friction:
+  - 5
+  - 0.02
+  - 0.001
+  condim: 4
+  solref:
+  - 0.004
+  - 1
+  solimp:
+  - 0.999
+  - 0.9999
+  - 0.0001
+  - 0.5
+  - 2
+finger_contact_box_half_size_m:
+- 0.01
+- 0.045
+- 0.011
+finger_contact_boxes:
+  left:
+  - position:
+    - 0.003158
+    - 0.007336
+    - -0.0112
+    rotation:
+    - 0
+    - 0
+    - 0
+    half_size:
+    - 0.018825
+    - 0.019796
+    - 0.0114
+  - position:
+    - -0.013884
+    - 0.056208
+    - -0.0112
+    rotation:
+    - 0
+    - 0
+    - 0.381773
+    half_size:
+    - 0.009478
+    - 0.042
+    - 0.008627
+  right:
+  - position:
+    - -0.003158
+    - 0.007336
+    - -0.0112
+    rotation:
+    - 0
+    - 0
+    - 0
+    half_size:
+    - 0.018825
+    - 0.019796
+    - 0.0114
+  - position:
+    - 0.013884
+    - 0.056208
+    - -0.0112
+    rotation:
+    - 0
+    - 0
+    - -0.381773
+    half_size:
+    - 0.009478
+    - 0.042
+    - 0.008627
+arm_position_actuator:
+  kp: 2500
+  kv: 80
+  max_force: 500
+initial_arm_joint_positions_rad:
+  aubo_shoulder_joint: -0.7901906244
+  aubo_upperArm_joint: -0.2094643602
+  aubo_foreArm_joint: 0.2558252853
+  aubo_wrist1_joint: -1.2548296865
+  aubo_wrist2_joint: 1.4666098362
+  aubo_wrist3_joint: 1.4912766063
+ground:
+  size:
+  - 20
+  - 20
+  - 0.1
+  rgba:
+  - 0.75
+  - 0.75
+  - 0.75
+  - 1
+objects:
+- id: target_box
+  shape: box
+  position:
+  - 0.88
+  - 0.0
+  - 0.1
+  rotation:
+  - 0.0
+  - 0.0
+  - 0.25
+  size:
+  - 0.08
+  - 0.04
+  - 0.03
+  rgba:
+  - 0.85
+  - 0.12
+  - 0.08
+  - 1.0
+  motion: dynamic
+  mass_kg: 0.08
+fixed_base: true
+noslip_iterations: 10

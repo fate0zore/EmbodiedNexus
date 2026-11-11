@@ -434,10 +434,12 @@ class SceneLibrary:
                 self._finite_vector(part["rotation"], 3, f"{field}.rotation")
                 self._positive_vector(part["half_size"], 3, f"{field}.half_size")
         ground = scene.get("ground", {})
-        if not isinstance(ground, dict) or set(ground) - {"size", "rgba"}:
-            raise ValueError("ground must contain only size and rgba")
+        if not isinstance(ground, dict) or set(ground) - {"size", "rgba", "friction"}:
+            raise ValueError("ground must contain only size, rgba, and friction")
         self._positive_vector(ground.get("size", [20.0, 20.0, 0.1]), 3, "ground.size")
         self._rgba(ground.get("rgba", [0.75, 0.75, 0.75, 1.0]), "ground.rgba")
+        if "friction" in ground:
+            self._positive_vector(ground["friction"], 3, "ground.friction")
         objects = scene.get("objects", [])
         if not isinstance(objects, list):
             raise ValueError("objects must be a list")
@@ -466,6 +468,9 @@ class SceneLibrary:
             allowed |= ({"height"} if shape == "cylinder" else set())
             allowed |= ({"mesh", "scale"} if shape == "mesh" else set())
             allowed |= {"mass_kg"} if motion == "dynamic" else set()
+            allowed |= {"friction"}
+            if "friction" in obj:
+                self._positive_vector(obj["friction"], 3, f"{field}.friction")
             if set(obj) - allowed:
                 raise ValueError(f"{field} contains fields that do not match shape {shape}")
             self._positive_vector(obj.get("position", [0.0, 0.0, 0.0]), 3, f"{field}.position", allow_negative=True)
